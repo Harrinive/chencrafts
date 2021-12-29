@@ -1,3 +1,4 @@
-from MyPkg.core.funcs import print_test
 
-print_test()
+
+from chencrafts.core.funcs import greet
+from chencrafts.version import version as __version__
