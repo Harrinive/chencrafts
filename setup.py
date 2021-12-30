@@ -19,19 +19,15 @@ setuptools.setup(name='chencrafts',
       zip_safe=False)
 
 def write_version_py(filename="chencrafts/version.py"):
-    cnt = """\
-# THIS FILE IS GENERATED FROM chencrafts SETUP.PY
-version = '%(version)s'
-"""
     if os.path.exists(filename):
         os.remove(filename)
     versionfile = open(filename, "w")
     try:
         versionfile.write(
-            cnt
-            % {
-                "version": VERSION
-            }
+            f"""\
+            # THIS FILE IS GENERATED FROM chencrafts SETUP.PY\n\n \
+            version = '{VERSION}'
+            """
         )
     finally:
         versionfile.close()
