@@ -2,3 +2,7 @@
 chencrafts.egg-info/
 chencrafts/version.py
 
+.vscode/settings.json
+chencrafts/__pycache__
+chencrafts/toolbox/__pycache__
+chencrafts/tests/__pycache__
