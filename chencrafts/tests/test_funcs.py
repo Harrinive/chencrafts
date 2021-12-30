@@ -1,5 +1,5 @@
 import numpy as np
-from chencrafts.core.funcs import merge_sort, merge_sort_kernel
+from chencrafts.toolbox.funcs import merge_sort, merge_sort_kernel
 
 ARRAY_LENGTH = 100
 example_array = np.random.rand(ARRAY_LENGTH)

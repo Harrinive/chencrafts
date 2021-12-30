@@ -4,7 +4,7 @@ import os
 VERSION = 0.1
 PACKAGES = [
     'chencrafts',
-    'chencrafts/core'
+    'chencrafts/toolbox'
 ]
 
 
