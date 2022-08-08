@@ -54,7 +54,7 @@ def QOC_inputs_tmon(
         target_states = decoded_states
 
     if rotated_target:
-        if not isinstance(gate_time, float):
+        if gate_time is None:
             raise ValueError(f"please specify the gate_time when rotating the target states")
 
         if return_array:
