@@ -29,11 +29,11 @@ def merge_sort(arr: Union[List, ndarray], ascent: bool = True) -> ndarray:
     length = len(arr)
     array = np.array(arr)
 
-    merge_sort_kernel(array, length, ascent)
+    _merge_sort_kernel(array, length, ascent)
 
     return array
 
-def merge_sort_kernel(arr: Union[List, ndarray], length: int, ascent: bool) -> None:
+def _merge_sort_kernel(arr: Union[List, ndarray], length: int, ascent: bool) -> None:
     """
     Kernel function of chencrafts.merge_sort()
     """
@@ -75,8 +75,8 @@ def merge_sort_kernel(arr: Union[List, ndarray], length: int, ascent: bool) -> N
     split_length_1 = int(length / 2)
     split_length_2 = length - split_length_1
 
-    merge_sort_kernel(arr[:split_length_1], split_length_1, ascent)
-    merge_sort_kernel(arr[split_length_1:], split_length_2, ascent)
+    _merge_sort_kernel(arr[:split_length_1], split_length_1, ascent)
+    _merge_sort_kernel(arr[split_length_1:], split_length_2, ascent)
 
     merge(arr, length, split_length_1, split_length_2, ascent)
 

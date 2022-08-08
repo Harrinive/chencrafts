@@ -1,7 +1,7 @@
 import setuptools
 import os
 
-VERSION = 0.1
+VERSION = 0.2
 PACKAGES = [
     'chencrafts',
     'chencrafts/toolbox'
@@ -23,10 +23,8 @@ def write_version_py(filename="chencrafts/version.py"):
     versionfile = open(filename, "w")
     try:
         versionfile.write(
-            f"""\
-            # THIS FILE IS GENERATED FROM chencrafts SETUP.PY\n\n \
-            version = '{VERSION}'
-            """
+            f"# THIS FILE IS GENERATED FROM chencrafts SETUP.PY\n"
+            "version = '{VERSION}'"
         )
     finally:
         versionfile.close()
