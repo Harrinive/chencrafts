@@ -29,7 +29,13 @@ def sum_of_basis(basis, coef_list) -> qt.Qobj:
     return state.unit()
 
 # ##############################################################################
-def state_sets(h_space, subsys, alpha, return_1darray=True):
+def state_sets(
+    h_space, 
+    subsys, 
+    alpha, 
+    returns=None,
+    return_1darray=True
+):
     resonator, tmon = subsys
     sys_dim, anc_dim = resonator.truncated_dim, tmon.truncated_dim
 
@@ -98,15 +104,17 @@ def state_sets(h_space, subsys, alpha, return_1darray=True):
     sys_d0_anc_1_even = sum_of_basis(drs_basis_anc_1, d_coef_alpha_anc_1 + d_coef_m_alpha_anc_1)
     sys_d1_anc_1_even = sum_of_basis(drs_basis_anc_1, d_coef_i_alpha_anc_1 + d_coef_mi_alpha_anc_1)
 
-    to_return = [
-        anc_0, anc_1,
-        sys_0_anc_0_even, sys_1_anc_0_even,
-        sys_d0_anc_0_even, sys_d1_anc_0_even,
-        sys_0_anc_1_even, sys_1_anc_1_even,
-        sys_d0_anc_1_even, sys_d1_anc_1_even,
-    ]
+    if returns is None:
+        returns = [
+            "anc_0", "anc_1",
+            "sys_0_anc_0_even", "sys_1_anc_0_even",
+            "sys_d0_anc_0_even", "sys_d1_anc_0_even",
+            "sys_0_anc_1_even", "sys_1_anc_1_even",
+            "sys_d0_anc_1_even", "sys_d1_anc_1_even",
+        ]
+    return_items = [locals()[item] for item in returns]
 
     if return_1darray:
-        return [state.data.toarray()[:, 0] for state in to_return]
+        return [state.data.toarray()[:, 0] for state in return_items]
     else:
-        return to_return
+        return return_items
