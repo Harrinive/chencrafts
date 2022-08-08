@@ -25,17 +25,35 @@ def QOC_inputs_tmon(
         anc_0, anc_1,
         sys_0_anc_0_even, sys_1_anc_0_even,
         sys_d0_anc_0_even, sys_d1_anc_0_even,
-        sys_0_anc_1_even, sys_1_anc_1_even,
-        sys_d0_anc_1_even, sys_d1_anc_1_even,
-    ) = state_sets(h_space, subsys, np.sqrt(n_bar), return_1darray=return_array)
+        sys_d20_anc_0_even, sys_d21_anc_0_even,
+        sys_1_anc_1_even,
+        sys_d1_anc_1_even,
+        sys_d21_anc_1_even,
+    ) = state_sets(
+        h_space, 
+        subsys, 
+        np.sqrt(n_bar), 
+        returns = (
+            "anc_0", "anc_1",
+            "sys_0_anc_0_even", "sys_1_anc_0_even",
+            "sys_d0_anc_0_even", "sys_d1_anc_0_even",
+            "sys_d20_anc_0_even", "sys_d21_anc_0_even",
+            "sys_1_anc_1_even",
+            "sys_d1_anc_1_even",
+            "sys_d21_anc_1_even",
+        ),
+        return_1darray = return_array
+    )
     encoded_states = [
         sys_0_anc_0_even, sys_1_anc_0_even,
-        # sys_d0_anc_0_even, sys_d1_anc_0_even,
+        sys_d0_anc_0_even, sys_d1_anc_0_even,
+        sys_d20_anc_0_even, sys_d21_anc_0_even,
     ]
     decoded_states = [
         # anc_0, anc_1,
         sys_0_anc_0_even, sys_1_anc_1_even,
-        # sys_d0_anc_0_even, sys_d1_anc_1_even,
+        sys_d0_anc_0_even, sys_d1_anc_1_even,
+        sys_d20_anc_0_even, sys_d21_anc_1_even,
     ]
     
     # forbiden_states = [

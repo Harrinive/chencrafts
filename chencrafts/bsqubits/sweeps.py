@@ -216,7 +216,7 @@ def sweep_for_params(
 def single_sweep_tmon(
     omega_s, EJ, EC, ng, g_sa,
     sys_dim, anc_ncut, anc_dim, eval_count, cpu_num,
-    Temp=None, Q_a_coef=None
+    Temp=None, Q_a_coef=None, convergence_range=(1e-8, 1e-4)
 ):
     system = scq.Oscillator(
         E_osc = omega_s,
@@ -225,14 +225,26 @@ def single_sweep_tmon(
         l_osc = 1
     )
 
-    ancilla = scq.Transmon(
-        EJ = EJ,
-        EC = EC,
-        ng = ng,
-        ncut = anc_ncut,
-        truncated_dim = anc_dim,
-        id_str = "ancilla" 
-    )
+    while True:
+        ancilla = scq.Transmon(
+            EJ = EJ,
+            EC = EC,
+            ng = ng,
+            ncut = anc_ncut,
+            truncated_dim = anc_dim,
+            id_str = "ancilla" 
+        )
+
+        _, bare_evecs = ancilla.eigensys(anc_dim)
+        conv = np.max(np.abs(bare_evecs[-1][-3:]))
+
+        if conv > convergence_range[1]:
+            anc_ncut = int(anc_ncut * 1.5)
+        elif conv < convergence_range[0]:
+            anc_ncut = int(anc_ncut / 1.5)
+            break
+        else:
+            break
 
     subsystem_list = [system, ancilla]
     h_space = scq.HilbertSpace(subsystem_list)
@@ -274,7 +286,7 @@ def single_sweep_tmon(
 
     sweep_for_params(sweep, ancilla, Q_a_coef, Temp)
 
-    return sweep
+    return sweep, anc_ncut
 
 def sweep_tmon(
     omega_s_list, EJ_list, EC_list, g_sa_list, ng,
@@ -343,7 +355,7 @@ def sweep_tmon(
 def single_sweep_fl(
     omega_s, EJ, EC, EL, flux, g_sa,
     sys_dim, cutoff, anc_dim, eval_count, cpu_num,
-    Temp=None, Q_a_coef=None
+    Temp=None, Q_a_coef=None, convergence_range=(1e-8, 1e-4),
 ):
     system = scq.Oscillator(
         E_osc = omega_s,
@@ -352,15 +364,27 @@ def single_sweep_fl(
         l_osc = 1
     )
 
-    ancilla = scq.Fluxonium(
-        EJ = EJ,
-        EC = EC,
-        EL = EL,
-        flux = flux,
-        cutoff=cutoff,
-        truncated_dim = anc_dim,
-        id_str = "ancilla" 
-    )
+    while True:
+        ancilla = scq.Fluxonium(
+            EJ = EJ,
+            EC = EC,
+            EL = EL,
+            flux = flux,
+            cutoff=cutoff,
+            truncated_dim = anc_dim,
+            id_str = "ancilla" 
+        )
+
+        _, bare_evecs = ancilla.eigensys(anc_dim)
+        conv = np.max(np.abs(bare_evecs[-1][-3:]))
+
+        if conv > convergence_range[1]:
+            cutoff = int(cutoff * 1.5)
+        elif conv < convergence_range[0]:
+            cutoff = int(cutoff / 1.5)
+            break
+        else:
+            break
 
     subsystem_list = [system, ancilla]
     h_space = scq.HilbertSpace(subsystem_list)
@@ -408,7 +432,7 @@ def single_sweep_fl(
 
     sweep_for_params(sweep, ancilla, Q_a_coef, Temp)
 
-    return sweep
+    return sweep, cutoff
 
 def sweep_fl(
     omega_s_list, EJ_list, EC_list, EL_list, flux_list, g_sa_list,
