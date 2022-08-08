@@ -1,5 +1,6 @@
 import numpy as np
 import qutip as qt
+from typing import List
 
 def coherent_coef_list(n, alpha):
     coef = np.exp(-alpha*alpha.conjugate()/2)
@@ -17,6 +18,14 @@ def d_coherent_coef_list(n, alpha):
         list.append(coef * 1j * idx)
     return np.array(list)
 
+def d2_coherent_coef_list(n, alpha):
+    coef = np.exp(-alpha*alpha.conjugate()/2)
+    list = [coef]
+    for idx in range(1, n):
+        coef *= alpha / np.sqrt(idx)
+        list.append(-coef * idx**2)
+    return np.array(list)
+
 def sum_of_basis(basis, coef_list) -> qt.Qobj:
     dims = basis[0].dims
     N = 1
@@ -27,6 +36,12 @@ def sum_of_basis(basis, coef_list) -> qt.Qobj:
     for idx in range(len(coef_list)):
         state += basis[idx] * coef_list[idx]
     return state.unit()
+
+def projector_w_basis(basis: List[qt.Qobj]):
+    projector = 0
+    for ket in basis:
+        projector = projector + ket * ket.dag()
+    return projector
 
 # ##############################################################################
 def state_sets(
@@ -74,6 +89,7 @@ def state_sets(
     anc_1 = drs_basis_anc_1[0]
 
     # even init states
+    # coeff
     coef_alpha = coherent_coef_list(basis_num_0, alpha)
     coef_m_alpha = coherent_coef_list(basis_num_0, -alpha)
     coef_i_alpha = coherent_coef_list(basis_num_0, 1j * alpha)
@@ -84,6 +100,11 @@ def state_sets(
     d_coef_i_alpha = d_coherent_coef_list(basis_num_0, 1j * alpha)
     d_coef_mi_alpha = d_coherent_coef_list(basis_num_0, -1j * alpha)
 
+    d2_coef_alpha = d2_coherent_coef_list(basis_num_0, alpha)
+    d2_coef_m_alpha = d2_coherent_coef_list(basis_num_0, -alpha)
+    d2_coef_i_alpha = d2_coherent_coef_list(basis_num_0, 1j * alpha)
+    d2_coef_mi_alpha = d2_coherent_coef_list(basis_num_0, -1j * alpha)
+
     coef_alpha_anc_1 = coherent_coef_list(basis_num_1, alpha)
     coef_m_alpha_anc_1 = coherent_coef_list(basis_num_1, -alpha)
     coef_i_alpha_anc_1 = coherent_coef_list(basis_num_1, 1j * alpha)
@@ -93,16 +114,26 @@ def state_sets(
     d_coef_m_alpha_anc_1 = d_coherent_coef_list(basis_num_1, -alpha)
     d_coef_i_alpha_anc_1 = d_coherent_coef_list(basis_num_1, 1j * alpha)
     d_coef_mi_alpha_anc_1 = d_coherent_coef_list(basis_num_1, -1j * alpha)
+    
+    d2_coef_alpha_anc_1 = d2_coherent_coef_list(basis_num_1, alpha)
+    d2_coef_m_alpha_anc_1 = d2_coherent_coef_list(basis_num_1, -alpha)
+    d2_coef_i_alpha_anc_1 = d2_coherent_coef_list(basis_num_1, 1j * alpha)
+    d2_coef_mi_alpha_anc_1 = d2_coherent_coef_list(basis_num_1, -1j * alpha)
 
+    # states
     sys_0_anc_0_even = sum_of_basis(drs_basis_anc_0, coef_alpha + coef_m_alpha)
     sys_1_anc_0_even = sum_of_basis(drs_basis_anc_0, coef_i_alpha + coef_mi_alpha)
     sys_d0_anc_0_even = sum_of_basis(drs_basis_anc_0, d_coef_alpha + d_coef_m_alpha)
     sys_d1_anc_0_even = sum_of_basis(drs_basis_anc_0, d_coef_i_alpha + d_coef_mi_alpha)
+    sys_d20_anc_0_even = sum_of_basis(drs_basis_anc_0, d2_coef_alpha + d2_coef_m_alpha)
+    sys_d21_anc_0_even = sum_of_basis(drs_basis_anc_0, d2_coef_i_alpha + d2_coef_mi_alpha)
 
     sys_0_anc_1_even = sum_of_basis(drs_basis_anc_1, coef_alpha_anc_1 + coef_m_alpha_anc_1)
     sys_1_anc_1_even = sum_of_basis(drs_basis_anc_1, coef_i_alpha_anc_1 + coef_mi_alpha_anc_1)
     sys_d0_anc_1_even = sum_of_basis(drs_basis_anc_1, d_coef_alpha_anc_1 + d_coef_m_alpha_anc_1)
     sys_d1_anc_1_even = sum_of_basis(drs_basis_anc_1, d_coef_i_alpha_anc_1 + d_coef_mi_alpha_anc_1)
+    sys_d20_anc_1_even = sum_of_basis(drs_basis_anc_1, d2_coef_alpha + d2_coef_m_alpha)
+    sys_d21_anc_1_even = sum_of_basis(drs_basis_anc_1, d2_coef_i_alpha + d2_coef_mi_alpha)
 
     if returns is None:
         returns = [
@@ -112,7 +143,8 @@ def state_sets(
             "sys_0_anc_1_even", "sys_1_anc_1_even",
             "sys_d0_anc_1_even", "sys_d1_anc_1_even",
         ]
-    return_items = [locals()[item] for item in returns]
+    local_vars = locals()
+    return_items = [local_vars[item] for item in returns]
 
     if return_1darray:
         return [state.data.toarray()[:, 0] for state in return_items]
