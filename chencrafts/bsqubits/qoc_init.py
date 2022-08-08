@@ -47,8 +47,8 @@ def QOC_inputs_tmon(
     forbiden_states = []
 
     if purpose == "encoding":
-        initial_states = decoded_states
-        target_states = encoded_states
+        initial_states = [anc_0, anc_1]
+        target_states = encoded_states[:2]
     elif purpose == "decoding":
         initial_states = encoded_states
         target_states = decoded_states
