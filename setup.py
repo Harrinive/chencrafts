@@ -7,7 +7,6 @@ PACKAGES = [
     'chencrafts/toolbox'
 ]
 
-
 setuptools.setup(name='chencrafts', 
       version=VERSION,
       description='Danyang Chen\'s personal toolbox',

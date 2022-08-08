@@ -17,13 +17,14 @@ def merge_sort(arr: Union[List, ndarray], ascent: bool = True) -> ndarray:
     
     Parameters
     ----------
-    arr: list or ndarray
-
-    ascent: bool
+    arr:
+        the array to be sorted
+    ascent: 
+        the order of the returned array
 
     Returns
     -------
-    ndarray
+        the sorted array
     """
     length = len(arr)
     array = np.array(arr)
@@ -65,17 +66,19 @@ def merge_sort_kernel(arr: Union[List, ndarray], length: int, ascent: bool) -> N
         arr[:] = new_array[:]
 
     if length == 1:
-        return
-    elif length == 2:
+        return None
+    if length == 2:
         if (arr[0] > arr[1]) == ascent:
             swap(arr)
-        return
-    else:
-        split_length_1 = int(length / 2)
-        split_length_2 = length - split_length_1
+        return None
+    
+    split_length_1 = int(length / 2)
+    split_length_2 = length - split_length_1
 
-        merge_sort_kernel(arr[:split_length_1], split_length_1, ascent)
-        merge_sort_kernel(arr[split_length_1:], split_length_2, ascent)
+    merge_sort_kernel(arr[:split_length_1], split_length_1, ascent)
+    merge_sort_kernel(arr[split_length_1:], split_length_2, ascent)
 
-        merge(arr, length, split_length_1, split_length_2, ascent)
+    merge(arr, length, split_length_1, split_length_2, ascent)
+
+    return None
     
