@@ -4,7 +4,8 @@ import os
 VERSION = 0.2
 PACKAGES = [
     'chencrafts',
-    'chencrafts/toolbox'
+    'chencrafts/toolbox',
+    'chencrafts/bsqubits',
 ]
 
 setuptools.setup(name='chencrafts', 
