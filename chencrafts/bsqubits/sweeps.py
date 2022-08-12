@@ -60,7 +60,7 @@ def sweep_for_params(
                     get_rate=True, 
                     esys=(bare_evals, bare_evecs)
                 )
-            ) * 10 / Q_a_coef
+            ) / Q_a_coef
 
         def sweep_min_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
             bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
@@ -68,7 +68,7 @@ def sweep_for_params(
 
             sys_freq = bare_evals0[1] - bare_evals0[0]
 
-            anc_freq_0x = bare_evals1[1:2] - bare_evals1[0]
+            anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
             # anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
             # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
 
@@ -258,10 +258,10 @@ def single_sweep_tmon(
     )
 
     paramvals_by_name = {
-    "omega_s": [omega_s],
-    "g_sa": [g_sa],
-    "EJ": [EJ],
-    "EC": [EC]
+        "omega_s": [omega_s],
+        "g_sa": [g_sa],
+        "EJ": [EJ],
+        "EC": [EC]
     }
     subsys_update_info =  {
         "omega_s": [system],
