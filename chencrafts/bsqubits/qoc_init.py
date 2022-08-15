@@ -14,10 +14,10 @@ def QOC_inputs_tmon(
     return_array=True,
     rotated_target=True
 ):
-    h_space, hamiltonian, H_controls, subsys = initialize_joint_system_tmon(
+    h_space, hamiltonian, H_controls = initialize_joint_system_tmon(
         omega_s=omega_s, EJ=EJ, EC=EC, ng=ng, g_sa=g_sa,
         sys_dim=sys_dim, anc_ncut=anc_ncut, anc_dim=anc_dim,
-        returns=["hilbert_space", "hamiltonian", "H_controls", "subsys"],
+        returns=["hilbert_space", "hamiltonian", "H_controls"],
         return_ndarray=return_array
     )
 
@@ -31,7 +31,6 @@ def QOC_inputs_tmon(
         sys_d21_anc_1_even,
     ) = state_sets(
         h_space, 
-        subsys, 
         np.sqrt(n_bar), 
         returns = (
             "anc_0", "anc_1",

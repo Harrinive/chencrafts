@@ -60,4 +60,7 @@ def initialize_joint_system_tmon(
         elif ret == "subsys":
             return_obj.append(subsystem_list)
 
+    if len(return_obj) == 1:
+        return return_obj[0]
+
     return return_obj

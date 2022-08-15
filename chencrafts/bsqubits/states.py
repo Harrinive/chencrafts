@@ -46,12 +46,11 @@ def projector_w_basis(basis: List[qt.Qobj]):
 # ##############################################################################
 def state_sets(
     h_space, 
-    subsys, 
     alpha, 
     returns=None,
     return_1darray=True
 ):
-    resonator, tmon = subsys
+    resonator, tmon = h_space.subsys_list
     sys_dim, anc_dim = resonator.truncated_dim, tmon.truncated_dim
 
     h_space.generate_lookup()
@@ -63,7 +62,7 @@ def state_sets(
         idx_d = h_space.dressed_index((idx_b, 0))
         if idx_d is not None:
             evec = evecs[idx_d]
-            dorminant_idx_d = idx_b * subsys[1].truncated_dim + 0
+            dorminant_idx_d = idx_b * tmon.truncated_dim + 0
             dorminant_val = evec[dorminant_idx_d, 0]
             evec /= (dorminant_val) / np.abs(dorminant_val)
             drs_basis_anc_0.append(evec)
@@ -76,7 +75,7 @@ def state_sets(
         idx_d = h_space.dressed_index((idx_b, 1))
         if idx_d is not None:
             evec = evecs[idx_d]
-            dorminant_idx_d = idx_b * subsys[1].truncated_dim + 1
+            dorminant_idx_d = idx_b * tmon.truncated_dim + 1
             dorminant_val = evec[dorminant_idx_d, 0]
             evec /= (dorminant_val) / np.abs(dorminant_val)
             drs_basis_anc_1.append(evec)
