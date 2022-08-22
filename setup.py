@@ -6,6 +6,7 @@ PACKAGES = [
     'chencrafts',
     'chencrafts/toolbox',
     'chencrafts/bsqubits',
+    'chencrafts/operations',
 ]
 
 setuptools.setup(name='chencrafts', 
