@@ -24,7 +24,7 @@ def sinusoidal(
     freq_shift = drive_amp**2 / base_ang_freq / 4
     drive_freq = base_ang_freq - freq_shift * 1
 
-    return lambda t, *args: drive_amp * np.cos(drive_freq * t)
+    return lambda t, *args, **kwargs: drive_amp * np.cos(drive_freq * t)
 
 # ##############################################################################
 def _gaussian_function(t, t_mid, sigma, amp=1):
@@ -36,14 +36,14 @@ def gaussian(
     duration, 
     tgt_mat_elem=1, 
     base_amp=1, 
-    pulse_start_time=0
+    pulse_start_time=0,
 ):  
     """
     Default is pi pulse, change base_amp if needed
     """
     t_mid = pulse_start_time + duration/2
 
-    mean_amp_scale = (odeint(
+    mean_amp_scale = odeint(
         lambda t, *args: (
             _gaussian_function(t, t_mid, sigma, 1) 
             - _gaussian_function(0, t_mid, sigma, 1)
@@ -51,23 +51,23 @@ def gaussian(
         y0 = 0,
         t = [0, t_mid],
         tfirst = True,
-    )[-1, 0] / t_mid) 
-    pulse_amp = (base_amp / mean_amp_scale) * np.pi / duration / np.abs(tgt_mat_elem)
+    )[-1, 0] / t_mid
+    pulse_amp = (base_amp / mean_amp_scale) * np.pi / duration 
 
     # set envelope to be 0 at the beginning and the end
     env_bias = _gaussian_function(0, t_mid, sigma, pulse_amp)
 
     # Bloch–Siegert shift
-    sine_drive_amp = np.pi / duration / np.abs(tgt_mat_elem)
+    sine_drive_amp = np.pi / duration
     freq_shift = (sine_drive_amp)**2 / base_ang_freq / 4
     drive_freq = base_ang_freq - freq_shift
 
-    return lambda t, *args: (_gaussian_function(
+    return lambda t, *args, **kwargs: (_gaussian_function(
         t,
         t_mid,
         sigma,
         pulse_amp
-    ) - env_bias) * np.cos(drive_freq * t)
+    ) - env_bias) * np.cos(drive_freq * t) / np.abs(tgt_mat_elem)
 
 # ##############################################################################
 def _phase_from_init(base_ang_freq, freq_func, init_t, init_val, current_t):
@@ -111,7 +111,7 @@ def drag_gaussian(
         t = [0, t_mid],
         tfirst = True,
     )[-1, 0] / t_mid) 
-    pulse_amp = (base_amp / mean_amp_scale) * np.pi / duration / np.abs(tgt_mat_elem)
+    pulse_amp = (base_amp / mean_amp_scale) * np.pi / duration
 
     mat_elem_diff = np.abs(leaking_mat_elem / tgt_mat_elem)
 
@@ -127,11 +127,12 @@ def drag_gaussian(
         )
         return base_ang_freq - detuning
 
-    def pulse_func(t, t_n_phase=None, return_xyp=False, *args):
+    def pulse_func(t, t_n_phase=None, return_xyp=False, *args, **kwargs):
         """
         An external list [time, phase] can be input and will speed up the calculation
         """
-        assert isinstance(t, float), "The input time should be a float"
+        if not isinstance(t, float):
+            raise TypeError("The input time should be a float")
 
         eps_pi = _gaussian_function(t, t_mid, sigma, pulse_amp) - env_bias
         eps_pi_dot = -_gaussian_function(t, t_mid, sigma, pulse_amp) * (t - t_mid) / sigma**2
@@ -157,8 +158,12 @@ def drag_gaussian(
             raise TypeError("The time and phase list is invalid:", t_n_phase)
         
         if not return_xyp:
-            return eps_x * np.cos(phase) + eps_y * np.sin(phase)
+            return (eps_x * np.cos(phase) + eps_y * np.sin(phase)) / np.abs(tgt_mat_elem)
         else:
-            return eps_x, eps_y, phase
+            return (
+                eps_x / np.abs(tgt_mat_elem), 
+                eps_y / np.abs(tgt_mat_elem), 
+                phase
+            )
 
     return pulse_func

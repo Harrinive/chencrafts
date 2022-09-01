@@ -1,4 +1,5 @@
 import numpy as np
+from collections import OrderedDict
 
 def generate_sweep_lists(free_variable_dict, length_dict):
     """
@@ -22,7 +23,7 @@ def generate_sweep_lists(free_variable_dict, length_dict):
             min_range, max_range = free_variable_dict[key]
             variable_list_dict[key] = np.linspace(min_range, max_range, length)
 
-    return variable_list_dict
+    return OrderedDict(variable_list_dict)
 
 def generate_variable_meshgrids(variable_list_dict, slc_dict):
     # get the changing variable name
@@ -42,4 +43,4 @@ def generate_variable_meshgrids(variable_list_dict, slc_dict):
         if slc != slice(None):
             variable_mesh_dict[key] = np.ones_like(X_mesh) * variable_list_dict[key][slc]
 
-    return variable_mesh_dict, var_name_to_mesh
+    return OrderedDict(variable_mesh_dict), var_name_to_mesh
