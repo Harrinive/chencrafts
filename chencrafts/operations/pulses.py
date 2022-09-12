@@ -1,73 +1,134 @@
+from mimetypes import init
 from statistics import median
 from typing import Callable
 import numpy as np
 from scipy.integrate import odeint
 
 # ##############################################################################
-def sinusoidal(
-    base_ang_freq,
-    duration,
-    drive_amp=None,
-    tgt_mat_elem=1, 
-):
-    """
-    Default is pi pulse, which means approximately: duration * drive_amp * tgt_mat_elem = pi. 
-    Bloch-Siegert effect is considered
+class PulseBase:
+    def __init__(
+        self,
+        base_angular_freq: float,
+        duration: float,
+        rotation_angle: float,
+        tgt_mat_elem: float, 
+        init_time: float = 0,
+    ) -> None:
+        self.base_angular_freq = base_angular_freq
+        self.duration = duration
+        self.rotation_angle = rotation_angle
+        self.tgt_mat_elem = tgt_mat_elem
+        self.init_time = init_time
 
-    The drive_amp will be automatically delected is not specified. 
-    """
-    if drive_amp is None:
-        # drive_amp = np.sqrt((np.pi / duration)**2 - (2 * base_ang_freq)**2) / tgt_mat_elem
-        drive_amp = np.pi / duration / np.abs(tgt_mat_elem)
-    
-    # Bloch–Siegert shift
-    freq_shift = drive_amp**2 / base_ang_freq / 4
-    drive_freq = base_ang_freq - freq_shift * 1
+        self.drive_amp = rotation_angle / duration 
+        self.env_amp = self.drive_amp / np.abs(tgt_mat_elem)
+        self.drive_freq = self.base_angular_freq
 
-    return lambda t, *args, **kwargs: drive_amp * np.cos(drive_freq * t)
+        return
+
+    def envelope(self, t):
+        """Only support scalar t"""
+        if not isinstance(t, float):
+            raise TypeError("The input time should be a float")
+
+        return self.env_amp
+
+    def wave(self, t) -> float:
+        """Only support scalar t"""
+        if not isinstance(t, float):
+            raise TypeError("The input time should be a float")
+
+        env = self.envelope(t)
+        t_bias = t - self.init_time
+        return env * np.cos(self.drive_freq * t_bias)
+
+# ##############################################################################
+class Sinusoidal(PulseBase):
+    def __init__(
+        self,
+        base_angular_freq: float,
+        duration: float,
+        rotation_angle: float = np.pi,
+        tgt_mat_elem: float = 1.0, 
+        init_time: float = 0,
+        with_freq_shift: bool = True,
+    ) -> None:
+        super().__init__(
+            base_angular_freq, 
+            duration, 
+            rotation_angle,
+            tgt_mat_elem, 
+            init_time,
+        )
+
+        # modify the drive freq with the Bloch–Siegert shift
+        if with_freq_shift:
+            freq_shift = self.drive_amp**2 / self.base_angular_freq / 4
+            self.drive_freq = self.base_angular_freq - freq_shift * 1
 
 # ##############################################################################
 def _gaussian_function(t, t_mid, sigma, amp=1):
     return amp * (np.exp(-(t - t_mid)**2 / 2 / sigma**2))
 
-def gaussian(
-    base_ang_freq, 
-    sigma, 
-    duration, 
-    tgt_mat_elem=1, 
-    base_amp=1, 
-    pulse_start_time=0,
-):  
-    """
-    Default is pi pulse, change base_amp if needed
-    """
-    t_mid = pulse_start_time + duration/2
-
+def _gaussian_mean_amp(duration, sigma):
+    half_duration = duration / 2
     mean_amp_scale = odeint(
         lambda t, *args: (
-            _gaussian_function(t, t_mid, sigma, 1) 
-            - _gaussian_function(0, t_mid, sigma, 1)
+            _gaussian_function(t, half_duration, sigma, 1) 
+            - _gaussian_function(0, half_duration, sigma, 1)
         ),
         y0 = 0,
-        t = [0, t_mid],
+        t = [0, half_duration],
         tfirst = True,
-    )[-1, 0] / t_mid
-    pulse_amp = (base_amp / mean_amp_scale) * np.pi / duration 
+    )[-1, 0] / half_duration
 
-    # set envelope to be 0 at the beginning and the end
-    env_bias = _gaussian_function(0, t_mid, sigma, pulse_amp)
+    return mean_amp_scale
 
-    # Bloch–Siegert shift
-    sine_drive_amp = np.pi / duration
-    freq_shift = (sine_drive_amp)**2 / base_ang_freq / 4
-    drive_freq = base_ang_freq - freq_shift
+class Gaussian(PulseBase):
+    def __init__(
+        self, 
+        base_angular_freq: float, 
+        duration: float, 
+        sigma: float, 
+        rotation_angle: float = np.pi, 
+        tgt_mat_elem: float = 1.0,
+        init_time: float = 0,
+    ) -> None:
+        super().__init__(
+            base_angular_freq, 
+            duration, 
+            rotation_angle, 
+            tgt_mat_elem,
+            init_time,
+        )
 
-    return lambda t, *args, **kwargs: (_gaussian_function(
-        t,
-        t_mid,
-        sigma,
-        pulse_amp
-    ) - env_bias) * np.cos(drive_freq * t) / np.abs(tgt_mat_elem)
+        self.sigma = sigma
+        self.t_mid = self.init_time + self.duration/2
+
+        # evaluate the effective pulse amplitude
+        mean_amp_scale = _gaussian_mean_amp(duration, sigma)
+        self.drive_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self.env_amp = self.drive_amp / np.abs(tgt_mat_elem)
+
+        # set envelope to be 0 at the beginning and the end
+        self.env_bias = _gaussian_function(0, self.duration/2, sigma, self.env_amp)
+
+        # Bloch–Siegert shift
+        sine_drive_amp = self.rotation_angle / self.duration
+        freq_shift = (sine_drive_amp)**2 / self.base_angular_freq / 4
+        self.drive_freq = self.base_angular_freq - freq_shift
+
+    def envelope(self, t):
+        """Only support scalar t"""
+        if not isinstance(t, float):
+            raise TypeError("The input time should be a float")
+
+        return _gaussian_function(
+            t,
+            self.t_mid,
+            self.sigma,
+            self.env_amp
+        ) - self.env_bias
 
 # ##############################################################################
 def _phase_from_init(base_ang_freq, freq_func, init_t, init_val, current_t):
@@ -83,87 +144,100 @@ def _phase_from_init(base_ang_freq, freq_func, init_t, init_val, current_t):
 
     return current_phase
 
-def drag_gaussian(
-    base_ang_freq, 
-    sigma, 
-    duration, 
-    tgt_mat_elem=1, 
-    leaking_mat_elem=np.sqrt(2), 
-    non_lin=0, 
-    base_amp=1, 
-    pulse_start_time=0
-) -> Callable:
-    """
-    Default is pi pulse, change base_amp if needed
-    """
-    if np.abs(non_lin) < 1 / duration:
-        raise ValueError("Non-linearity of the system should be specified and"
-            "much larger than the pulse amplitude.")
+class DRAGGaussian(PulseBase):
+    def __init__(
+        self, 
+        base_angular_freq: float, 
+        duration: float, 
+        sigma: float, 
+        non_lin: float = 0, 
+        rotation_angle: float = np.pi, 
+        tgt_mat_elem: float = 1, 
+        leaking_mat_elem: float = np.sqrt(2), 
+        init_time: float = 0
+    ) -> None:
+        if np.abs(non_lin) < 1 / duration:
+            raise ValueError("Non-linearity of the system should be specified and"
+                "much larger than the pulse amplitude.")
 
-    t_mid = pulse_start_time + duration/2
-
-    mean_amp_scale = (odeint(
-        lambda t, *args: (
-            _gaussian_function(t, t_mid, sigma, 1) 
-            - _gaussian_function(0, t_mid, sigma, 1)
-        ),
-        y0 = 0,
-        t = [0, t_mid],
-        tfirst = True,
-    )[-1, 0] / t_mid) 
-    pulse_amp = (base_amp / mean_amp_scale) * np.pi / duration
-
-    mat_elem_diff = np.abs(leaking_mat_elem / tgt_mat_elem)
-
-    # set envelope to be 0 at the beginning and the end
-    env_bias = _gaussian_function(0, t_mid, sigma, pulse_amp)
-
-    # drag pulse: detuning modification
-    def drive_freq(t, *args):
-        eps_pi_2 = (_gaussian_function(t, t_mid, sigma, pulse_amp) - env_bias)**2
-        detuning = (
-            (mat_elem_diff**2 - 4) / (4 * non_lin) * eps_pi_2
-            - (mat_elem_diff**4 - 7*mat_elem_diff**2 + 12) / (16 * non_lin**3) * eps_pi_2**2
+        super().__init__(
+            base_angular_freq, 
+            duration, 
+            rotation_angle, 
+            tgt_mat_elem, 
+            init_time,
         )
-        return base_ang_freq - detuning
 
-    def pulse_func(t, t_n_phase=None, return_xyp=False, *args, **kwargs):
-        """
-        An external list [time, phase] can be input and will speed up the calculation
-        """
+        self.sigma = sigma
+        self.non_lin = non_lin
+        self.leaking_mat_elem = leaking_mat_elem
+        self.t_mid = self.init_time + self.duration / 2
+
+        # evaluate the effective pulse amplitude
+        mean_amp_scale = _gaussian_mean_amp(duration, sigma)
+        self.drive_amp = self.rotation_angle / mean_amp_scale / self.duration
+
+        self.leaking_elem_ratio = np.abs(leaking_mat_elem / tgt_mat_elem)
+
+        # set envelope to be 0 at the beginning and the end
+        self.drive_env_bias = _gaussian_function(0, self.duration/2, sigma, self.drive_amp)
+
+        self.reset()
+
+    def reset(self):
+        self.t_n_phase = [self.init_time, 0]
+
+    def drive_freq_func(self, t, *args):
+        """Only support scalar t"""
         if not isinstance(t, float):
             raise TypeError("The input time should be a float")
 
-        eps_pi = _gaussian_function(t, t_mid, sigma, pulse_amp) - env_bias
-        eps_pi_dot = -_gaussian_function(t, t_mid, sigma, pulse_amp) * (t - t_mid) / sigma**2
+        eps_pi_2 = (_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias)**2
+        detuning = (
+            (self.leaking_elem_ratio**2 - 4) / (4 * self.non_lin) * eps_pi_2
+            - (self.leaking_elem_ratio**4 - 7*self.leaking_elem_ratio**2 + 12) / (16 * self.non_lin**3) * eps_pi_2**2
+        )
+        return self.base_angular_freq - detuning
+
+    def phase(self, t):
+        """Only support scalar t"""
+        if not isinstance(t, float):
+            raise TypeError("The input time should be a float")
+
+        init_t, init_phase = self.t_n_phase
+        phase = _phase_from_init(self.base_angular_freq, self.drive_freq_func, init_t, init_phase, t)
+        self.t_n_phase[0] = t
+        self.t_n_phase[1] = phase
+
+        return phase
+
+    def envelope(self, t):
+        """Only support scalar t"""
+        if not isinstance(t, float):
+            raise TypeError("The input time should be a float")
+
+        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias
+        eps_pi_dot = -_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) * (t - self.t_mid) / self.sigma**2
 
         eps_x = (
             eps_pi
-            + (mat_elem_diff**2 - 4) / (8 * non_lin**2) * eps_pi**3
-            - (13*mat_elem_diff**4 - 76*mat_elem_diff**2 + 112) / (128*non_lin**4) * eps_pi**5
+            + (self.leaking_elem_ratio**2 - 4) / (8 * self.non_lin**2) * eps_pi**3
+            - (13*self.leaking_elem_ratio**4 - 76*self.leaking_elem_ratio**2 + 112) / (128*self.non_lin**4) * eps_pi**5
         )
         eps_y = (
-            - eps_pi_dot / non_lin
-            + 33*(mat_elem_diff**2 - 2) / (24*non_lin**3) * eps_pi**2 * eps_pi_dot
+            - eps_pi_dot / self.non_lin
+            + 33*(self.leaking_elem_ratio**2 - 2) / (24*self.non_lin**3) * eps_pi**2 * eps_pi_dot
         )
 
-        if t_n_phase is None:
-            phase = _phase_from_init(base_ang_freq, drive_freq, 0, 0, t)
-        elif len(t_n_phase) == 2:
-            init_t, init_phase = t_n_phase
-            phase = _phase_from_init(base_ang_freq, drive_freq, init_t, init_phase, t)
-            t_n_phase[0] = t
-            t_n_phase[1] = phase
-        else:
-            raise TypeError("The time and phase list is invalid:", t_n_phase)
-        
-        if not return_xyp:
-            return (eps_x * np.cos(phase) + eps_y * np.sin(phase)) / np.abs(tgt_mat_elem)
-        else:
-            return (
-                eps_x / np.abs(tgt_mat_elem), 
-                eps_y / np.abs(tgt_mat_elem), 
-                phase
-            )
+        return eps_x, eps_y
 
-    return pulse_func
+    
+    def wave(self, t, *args, **kwargs):
+        """Only support scalar t"""
+        if not isinstance(t, float):
+            raise TypeError("The input time should be a float")
+
+        phase = self.phase(t)
+        eps_x, eps_y = self.envelope(t)
+
+        return (eps_x * np.cos(phase) + eps_y * np.sin(phase)) / np.abs(self.tgt_mat_elem)
