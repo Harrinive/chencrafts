@@ -62,6 +62,30 @@ def sweep_for_params(
                 )
             ) / Q_a_coef
 
+        def sweep_gamma_ng(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+            return (
+                ancilla.tphi_1_over_f_ng(
+                    i=0, 
+                    j=1, 
+                    get_rate=True, 
+                    esys=(bare_evals, bare_evecs)
+                )
+            ) / Q_a_coef
+
+        def sweep_gamma_cc(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+            return (
+                ancilla.tphi_1_over_f_cc(
+                    i=0, 
+                    j=1, 
+                    get_rate=True, 
+                    esys=(bare_evals, bare_evecs)
+                )
+            ) / Q_a_coef
+
         def sweep_min_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
             bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
             bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
@@ -77,6 +101,8 @@ def sweep_for_params(
         sweep.add_sweep(sweep_gamma_up, "gamma_up")
         sweep.add_sweep(sweep_gamma_down, "gamma_down")
         sweep.add_sweep(sweep_gamma_phi, "gamma_phi")
+        sweep.add_sweep(sweep_gamma_cc, "gamma_phi_cc")
+        sweep.add_sweep(sweep_gamma_ng, "gamma_phi_ng")
         sweep.add_sweep(sweep_min_detuning, "min_detuning")
         sweep.add_sweep(check_qubit_convergence, "convergence")
 

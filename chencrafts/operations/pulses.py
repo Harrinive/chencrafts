@@ -144,6 +144,39 @@ def _phase_from_init(base_ang_freq, freq_func, init_t, init_val, current_t):
 
     return current_phase
 
+# class DRAG(PulseBase):
+#     def __init__(
+#         self, 
+#         base_angular_freq: float, 
+#         duration: float, 
+#         env_func: Callable,
+#         d_env_func: Callable,
+#         order: int = 3,
+#         non_lin: float = 0, 
+#         rotation_angle: float = np.pi, 
+#         tgt_mat_elem: float = 1, 
+#         leaking_mat_elem: float = np.sqrt(2), 
+#         init_time: float = 0,
+#     ) -> None:
+#         if np.abs(non_lin) < 1 / duration:
+#             raise ValueError("Non-linearity of the system should be specified and"
+#                 "much larger than the pulse amplitude.")
+
+#         super().__init__(
+#             base_angular_freq, 
+#             duration, 
+#             rotation_angle, 
+#             tgt_mat_elem, 
+#             init_time
+#         )
+
+#         self.non_lin = non_lin
+#         self.leaking_mat_elem = leaking_mat_elem
+#         self.leaking_elem_ratio = np.abs(leaking_mat_elem / tgt_mat_elem)
+
+
+
+
 class DRAGGaussian(PulseBase):
     def __init__(
         self, 
@@ -171,13 +204,12 @@ class DRAGGaussian(PulseBase):
         self.sigma = sigma
         self.non_lin = non_lin
         self.leaking_mat_elem = leaking_mat_elem
+        self.leaking_elem_ratio = np.abs(leaking_mat_elem / tgt_mat_elem)
         self.t_mid = self.init_time + self.duration / 2
 
         # evaluate the effective pulse amplitude
         mean_amp_scale = _gaussian_mean_amp(duration, sigma)
         self.drive_amp = self.rotation_angle / mean_amp_scale / self.duration
-
-        self.leaking_elem_ratio = np.abs(leaking_mat_elem / tgt_mat_elem)
 
         # set envelope to be 0 at the beginning and the end
         self.drive_env_bias = _gaussian_function(0, self.duration/2, sigma, self.drive_amp)

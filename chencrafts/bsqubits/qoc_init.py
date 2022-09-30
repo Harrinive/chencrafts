@@ -12,7 +12,8 @@ def QOC_inputs_tmon(
     purpose,
     gate_time=None,
     return_array=True,
-    rotated_target=True
+    rotated_target=True,
+    return_h_space=False
 ):
     h_space, hamiltonian, H_controls = initialize_joint_system_tmon(
         omega_s=omega_s, EJ=EJ, EC=EC, ng=ng, g_sa=g_sa,
@@ -90,10 +91,14 @@ def QOC_inputs_tmon(
         target_states = np.array(target_states)
         forbiden_states = np.array(forbiden_states)
 
-    return (
+    return_items = (
         hamiltonian,
         H_controls,
         initial_states,
         target_states,
         forbiden_states
     )
+    if return_h_space:
+        return_items = return_items + (h_space,)
+
+    return return_items

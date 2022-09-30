@@ -1,1 +1,1 @@
-from chencrafts.toolbox.funcs import merge_sort
+from chencrafts.toolbox.data_processing import merge_sort
