@@ -4,3 +4,4 @@ from chencrafts.bsqubits.qoc_init import *
 from chencrafts.bsqubits.states import *
 from chencrafts.bsqubits.sweep_utils import *
 from chencrafts.bsqubits.sweeps import *
+from chencrafts.bsqubits.error_rates import *

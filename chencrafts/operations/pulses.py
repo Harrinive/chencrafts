@@ -33,7 +33,7 @@ class PulseBase:
 
         return self.env_amp
 
-    def wave(self, t) -> float:
+    def __call__(self, t) -> float:
         """Only support scalar t"""
         if not isinstance(t, float):
             raise TypeError("The input time should be a float")
@@ -174,9 +174,6 @@ def _phase_from_init(base_ang_freq, freq_func, init_t, init_val, current_t):
 #         self.leaking_mat_elem = leaking_mat_elem
 #         self.leaking_elem_ratio = np.abs(leaking_mat_elem / tgt_mat_elem)
 
-
-
-
 class DRAGGaussian(PulseBase):
     def __init__(
         self, 
@@ -264,7 +261,7 @@ class DRAGGaussian(PulseBase):
         return eps_x, eps_y
 
     
-    def wave(self, t, *args, **kwargs):
+    def __call__(self, t, *args, **kwargs):
         """Only support scalar t"""
         if not isinstance(t, float):
             raise TypeError("The input time should be a float")
