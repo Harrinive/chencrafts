@@ -1,13 +1,104 @@
 from collections import OrderedDict
 import numpy as np
-import scqubits as scq
-
-from scipy.constants import h, k
-from chencrafts.bsqubits import single_sweep_tmon, sweep_tmon, generate_variable_meshgrids, generate_sweep_lists, state_sets, initialize_joint_system_tmon
 
 from typing import Callable, List
 
 class ErrorChannel:
+    def __init__(
+        self, 
+        name: str, 
+        expression: Callable,
+    ):
+        self.name = name
+        self.expression = expression
+
+    def __call__(self, *args, **kwargs):
+        # input should be an array/list
+        if not (isinstance(args, list) or isinstance(args, np.ndarray)):
+            raise ValueError("Please input an array")
+
+        return self.expression(*args, **kwargs)
+
+class ErrorRate:
+    def __init__(
+        self, 
+    ):
+        self.error_channels = OrderedDict({})
+        self.channel_enable_info = OrderedDict({})
+
+    def __call__(
+        self,
+        return_dict: bool = False,
+        **kwargs
+    ):
+        """returns the total enabled error rate"""
+        if return_dict:
+            error_dict = OrderedDict({})
+        else:
+            total_error = 0
+
+        for name, error_channel in self.error_channels.items():
+            error_rate = (
+                error_channel(**kwargs)
+                * self.channel_enable_info[name]
+            )
+            
+            if return_dict:
+                error_dict[name] = error_rate
+            else:
+                total_error += error_rate
+
+        if return_dict:
+            return error_dict
+        else:
+            return total_error
+
+    def __getitem__(
+        self,
+        error_name
+    ):
+        """calculate the error rate from a single channel"""
+        return self.error_channels[error_name]
+
+    def add_channel(
+        self,
+        name: str, 
+        expression: Callable,
+    ):
+        self.error_channels[name] = ErrorChannel(
+            name,
+            expression,
+        )
+        self.channel_enable_info[name] = True
+
+    def add_existed_channel(
+        self,
+        channel: ErrorChannel,
+    ):  
+        name = channel.name
+
+        self.error_channels[name] = channel
+        self.channel_enable_info[name] = True
+
+    def disable_channel(
+        self,
+        name: str
+    ):
+        if not self.channel_enable_info[name]:
+            print(f"This channel [{name}] is already disabled")
+        self.channel_enable_info[name] = False
+
+    def enable_channel(
+        self,
+        name: str
+    ):
+        if self.channel_enable_info[name]:
+            print(f"This channel [{name}] is already enabled")
+        self.channel_enable_info[name] = True
+
+# Outdated error channel class, accept list/dict as inputs 
+# ##############################################################################
+class ErrorChannelArrIpt:
     def __init__(
         self, 
         name: str, 
@@ -87,7 +178,7 @@ class ErrorChannel:
         params = [arg_dict[arg] for arg in self.input_var_names]
         return self.expression(*params)
 
-class ErrorRate:
+class ErrorRateArrIpt:
     def __init__(
         self, 
         full_var_names: List[str],
