@@ -1,8 +1,175 @@
 import numpy as np
 import scqubits as scq
+from scipy.constants import h, k
+
+from collections import OrderedDict
 from typing import Union
 
+PI2 = np.pi * 2
 
+class DerivedVariableBase():
+    def __init__(
+        self,
+        para_dict: OrderedDict, 
+        sim_para: OrderedDict,
+        swept_para_dict: dict = {},
+    ):
+        self.para_dict = para_dict
+        self.sim_para = sim_para
+        
+        self.full_sweep_dict = swept_para_dict
+        if self.full_sweep_dict != {}:
+            # meshgrid and calculate self.para_dict_to_use
+            raise ValueError("Currently it doesn't support sweeping")
+            self.para_dict_to_use = _
+
+        else:
+            self.para_dict_to_use = self.para_dict.copy()
+
+
+        self._initialize_scq_sweep_dict([])
+
+        self.derived_dict = OrderedDict({})
+
+    def __getitem__(
+        self,
+        name,
+    ):
+        try:
+            return self.para_dict_to_use[name]
+        except KeyError:
+            pass
+
+        try:
+            return self.derived_dict[name]
+        except KeyError:
+            raise KeyError(f"{name} not found in the parameters including the derived one. "
+            "If you didn't call use `evaluate()`, try it.")
+
+    def _initialize_scq_sweep_dict(self, available_scq_sweep_name):
+        """available_scq_sweep_name can be ["omega_s", "g_sa", "EJ", "EC"], for example"""
+        self.scq_sweep_dict = OrderedDict(
+            [(key, val) for key, val in self.full_sweep_dict 
+                if key in available_scq_sweep_name]
+        )
+        self.other_sweep_dict = OrderedDict(
+            [(key, val) for key, val in self.full_sweep_dict 
+                if key not in available_scq_sweep_name]
+        )
+
+    def _meshgrid(self):
+        pass
+
+    def _sweep2float(self, sweep_data, idx=None):
+        if idx is None:
+            return sweep_data.reshape(-1)[0]
+        else:
+            return sweep_data.reshape(-1)[1]
+
+    def _sweep2grid(self, sweep_data, idx=None):
+        if idx is None:
+            return self._add_dimensions(
+                sweep_data,
+                self.full_sweep_dict,
+                self.scq_sweep_dict
+            )
+        else:
+            return self._add_dimensions(
+                sweep_data[..., idx],
+                self.full_sweep_dict,
+                self.scq_sweep_dict
+            )
+
+    def _add_dimensions(self, sweep_data, var_list_dict, sweep_name_list):
+        target_name_list = list(var_list_dict.keys())
+        size_list = [len(lst) for lst in var_list_dict.values()]
+
+        new_mesh = np.array(sweep_data).copy()
+        new_shape = np.array(list(sweep_data.shape), dtype=int)
+        for idx, var_name in enumerate(target_name_list):
+            if var_name not in sweep_name_list:
+                new_shape = np.insert(new_shape, idx, 1)    # insert a "1" to reshape data
+                new_mesh = new_mesh.reshape(new_shape)
+                new_mesh = np.repeat(new_mesh, size_list[idx], axis=idx)
+                new_shape[idx] = size_list[idx]
+
+        return new_mesh
+
+    def _n_th(self, omega, temp):
+        """omega is in the unit of GHz"""
+        return 1 / (np.exp(omega * h * 1e9 / temp / k) - 1)
+
+class DerivedVariableTmon(DerivedVariableBase):
+    def __init__(
+        self, 
+        para_dict: OrderedDict, 
+        sim_para: OrderedDict, 
+        swept_para_dict: dict = {}
+    ):
+        super().__init__(
+            para_dict, 
+            sim_para, 
+            swept_para_dict
+        )
+        
+        self._initialize_scq_sweep_dict(["omega_s", "g_sa", "EJ", "EC"])
+
+    def evaluate(
+        self,
+        convergence_range = (1e-8, 1e-4),
+        update_ncut = True,
+        return_full_para = True,
+    ):
+
+        if self.scq_sweep_dict == {}:
+            sweep = single_sweep_tmon(
+                self.para_dict,
+                self.sim_para,
+                convergence_range = convergence_range,
+                update_ncut = update_ncut,
+            )
+            sweep_warpper = self._sweep2float
+        else:
+            # full sweep
+            sweep_warpper = self._sweep2grid
+            raise ValueError("Currently it doesn't support sweeping")
+
+        self.derived_dict.update({
+            "chi_sa": PI2 * sweep_warpper(
+                sweep["chi"]["subsys1": 0, "subsys2": 1], 
+                idx=1
+            ), 
+            "K_s": PI2 * sweep_warpper(
+                sweep["kerr"]["subsys1": 0, "subsys2": 0], 
+            ), 
+            "chi_prime": PI2 * sweep_warpper(
+                sweep["chi_prime"]["subsys1": 0, "subsys2": 1], 
+                idx=1
+            ), 
+            "Gamma_up": sweep_warpper(sweep["gamma_up"]), 
+            "Gamma_down": sweep_warpper(sweep["gamma_down"]), 
+            "Gamma_phi": sweep_warpper(sweep["gamma_phi"]), 
+            "Gamma_up_ro": sweep_warpper(sweep["gamma_up"]), 
+            "Gamma_down_ro": sweep_warpper(sweep["gamma_down"]), 
+            "min_detuning": PI2 * sweep_warpper(sweep["min_detuning"]),
+        })
+
+        self.derived_dict.update({
+            "n_th": self._n_th(self["omega_s"], self["temp_s"]), 
+            "kappa_s": PI2 * self["omega_s"] / self["Q_s"]
+                + self["Gamma_down"] * (PI2 * self["g_sa"] / self["min_detuning"])**2, 
+            "T_M": self["T_W"] + self["tau_FD"] + self["tau_m"] + np.pi / self["chi_sa"]
+                + 12 * self["sigma"], 
+        })
+
+        if not return_full_para:
+            return self.derived_dict
+        else:
+            full_dict = self.para_dict.copy()
+            full_dict.update(self.derived_dict)
+            return full_dict
+
+# ##############################################################################
 def sweep_for_params(
     sweep: scq.HilbertSpace, 
     ancilla: Union[scq.Transmon, scq.Fluxonium], 

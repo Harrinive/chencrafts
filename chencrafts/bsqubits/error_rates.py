@@ -1,7 +1,11 @@
 from collections import OrderedDict
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import colormaps
+from matplotlib import rcParams
 
-from typing import Callable, List
+from typing import Callable
+from __future__ import annotations
 
 class ErrorChannel:
     def __init__(
@@ -13,12 +17,9 @@ class ErrorChannel:
         self.expression = expression
 
     def __call__(self, *args, **kwargs):
-        # input should be an array/list
-        if not (isinstance(args, list) or isinstance(args, np.ndarray)):
-            raise ValueError("Please input an array")
-
         return self.expression(*args, **kwargs)
 
+# ##############################################################################
 class ErrorRate:
     def __init__(
         self, 
@@ -38,10 +39,9 @@ class ErrorRate:
             total_error = 0
 
         for name, error_channel in self.error_channels.items():
-            error_rate = (
-                error_channel(**kwargs)
-                * self.channel_enable_info[name]
-            )
+            if not self.channel_enable_info[name]:
+                continue
+            error_rate = error_channel(**kwargs)
             
             if return_dict:
                 error_dict[name] = error_rate
@@ -59,6 +59,18 @@ class ErrorRate:
     ):
         """calculate the error rate from a single channel"""
         return self.error_channels[error_name]
+    
+    @property
+    def num(self):
+        return len(self.error_channels)
+
+    @property
+    def enable_num(self):
+        return int(np.sum(list(self.channel_enable_info.values())))
+
+    @property
+    def error_names(self):
+        return list(self.error_channels.keys())
 
     def add_channel(
         self,
@@ -69,6 +81,8 @@ class ErrorRate:
             name,
             expression,
         )
+
+        # update info
         self.channel_enable_info[name] = True
 
     def add_existed_channel(
@@ -78,7 +92,27 @@ class ErrorRate:
         name = channel.name
 
         self.error_channels[name] = channel
+        
+        # update info
         self.channel_enable_info[name] = True
+
+    def remove_channel(
+        self,
+        name
+    ):
+        try:
+            del self.error_channels[name]
+            del self.channel_enable_info[name]
+
+        except KeyError:
+            print(f"No error named {name}")
+
+    def merge_channel(
+        self,
+        other_error_rate: ErrorRate,
+    ):
+        for err in other_error_rate.error_channels.values():
+            self.add_existed_channel(err)
 
     def disable_channel(
         self,
@@ -86,7 +120,8 @@ class ErrorRate:
     ):
         if not self.channel_enable_info[name]:
             print(f"This channel [{name}] is already disabled")
-        self.channel_enable_info[name] = False
+        else:
+            self.channel_enable_info[name] = False
 
     def enable_channel(
         self,
@@ -94,179 +129,190 @@ class ErrorRate:
     ):
         if self.channel_enable_info[name]:
             print(f"This channel [{name}] is already enabled")
-        self.channel_enable_info[name] = True
-
-# Outdated error channel class, accept list/dict as inputs 
-# ##############################################################################
-class ErrorChannelArrIpt:
-    def __init__(
-        self, 
-        name: str, 
-        input_var_names: List[str], 
-        expression: Callable,
-        default_input_mode: str = "original",
-        full_var_names: List[str] = None,
-    ):
-        self.name = name
-        self.input_var_names = input_var_names
-        self.expression = expression
-
-        if default_input_mode in ["original", "full", "dict"]:
-            self.default_input_mode = default_input_mode
         else:
-            raise ValueError(f"Input mode {default_input_mode} is invalid, only use "
-            "\"original\", \"full\" and \"dict\".")
+            self.channel_enable_info[name] = True
 
-        if full_var_names is not None:
-            self.variable_full_idx = (
-                [full_var_names.index(variable) for variable in self.input_var_names]
-            )
-        else:
-            self.variable_full_idx = None
-
-    def __call__(self, args, input_mode=None):
-        # try the assigned input_mode first
-        if input_mode == "original":
-            return self._error_rate(args)
-        elif input_mode == "full":
-            return self._er_from_full(args)
-        elif input_mode == "dict":
-            return self._er_from_dict(args)
-        elif input_mode is None:
-            if self.default_input_mode == "original":
-                return self._error_rate(args)
-            elif self.default_input_mode == "full":
-                return self._er_from_full(args)
-            elif self.default_input_mode == "dict":
-                return self._er_from_dict(args)
-        else:
-            raise ValueError(f"Input mode {input_mode} is invalid, should use "
-            "None, \"original\", \"full\" and \"dict\".")
-
-    def update_full_var_names(
+    def pie_chart(
         self,
-        full_var_names: List[str],
+        figsize = (6, 3),
+        dpi = None,
+        start_angle = 60,
+        **kwargs,
     ):
-        self.variable_full_idx = (
-            [full_var_names.index(variable) for variable in self.input_var_names]
+
+        # error calculation
+        error_dict = self(**kwargs, return_dict=True)
+        error_rate_list = list(error_dict.values())
+        total_error_rate = np.sum(error_rate_list)
+
+        # color map
+        cm_pie = colormaps["rainbow"]
+        cm_pie_norm = plt.Normalize(0, self.enable_num)
+        cmap_pie = lambda x: cm_pie(cm_pie_norm(x))
+
+        # figure
+        fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(aspect="equal"), dpi=dpi)
+
+        wedges, texts = ax.pie(
+            error_rate_list, 
+            wedgeprops=dict(width=0.5), 
+            startangle=start_angle, 
+            colors=[cmap_pie(i) for i in range(self.enable_num)]
         )
 
-    def _error_rate(self, args):
-        # input should be an array/list
-        if not (isinstance(args, list) or isinstance(args, np.ndarray)):
-            raise ValueError("Please input an array")
+        bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
+        kw = dict(arrowprops=dict(arrowstyle="-"),
+                bbox=bbox_props, zorder=0, va="center")
 
-        return self.expression(*args)
+        for i, p in enumerate(wedges):
+            err = error_rate_list[i]
+            err_percent = err / total_error_rate * 100
+            if err < 3e-8:
+                continue
+            ang = (p.theta2 - p.theta1)/2. + p.theta1
+            y = np.sin(np.deg2rad(ang))
+            x = np.cos(np.deg2rad(ang))
+            horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
+            connectionstyle = "angle,angleA=0,angleB={}".format(ang)
+            kw["arrowprops"].update({"connectionstyle": connectionstyle})
+            ax.annotate(
+                f"{self.error_names[i]}: {err_percent:.0f}%", 
+                xy=(x, y), 
+                xytext=(1.35*np.sign(x), 1.4*y),
+                horizontalalignment=horizontalalignment, 
+                **kw
+            )
 
-    def _er_from_full(self, args):
-        # input should be an array/list
-        if not (isinstance(args, list) or isinstance(args, np.ndarray)):
-            raise ValueError("Please input an array")
-        if self.variable_full_idx is None:
-            raise ValueError(f"For using the full variable list as an input, "
-            "you should specify the full_var_names")
+        plt.tight_layout()
+        plt.show()
 
-        args = np.array(args)
-        params = args[self.variable_full_idx]
-        return self.expression(*params)
-
-    def _er_from_dict(self, arg_dict):
-        # input should be a dict
-        if not isinstance(arg_dict, dict):
-            raise ValueError("Please input a dictionary")
-
-        params = [arg_dict[arg] for arg in self.input_var_names]
-        return self.expression(*params)
-
-class ErrorRateArrIpt:
-    def __init__(
-        self, 
-        full_var_names: List[str],
-        default_input_mode: str = "full",
-    ):
-        self.full_var_names = full_var_names
-
-        if default_input_mode in ["original", "full", "dict"]:
-            self.default_input_mode = default_input_mode
-        else:
-            raise ValueError(f"Input mode {default_input_mode} is invalid, only use "
-            "\"original\", \"full\" and \"dict\".")
-
-        self.error_channels = OrderedDict({})
-        self.channel_enable_info = OrderedDict({})
-
-    def __call__(
+    def bar_plot(
         self,
-        args,
-        return_dict: bool = False,
-        input_mode: str = None,
+        para_dicts=None,
+        figsize = (6, 3), 
+        dpi = None,
+        labels = None,
+        **kwargs
     ):
-        """returns the total enabled error rate"""
-        if return_dict:
-            error_dict = OrderedDict({})
+        # check instance type
+        if isinstance(para_dicts, dict):
+            para_dicts = [para_dicts]
+            compare_num = 1
+        elif isinstance(para_dicts, list):
+            if isinstance(para_dicts[0], list):
+                compare_num = len(para_dicts)
+            else:
+                raise TypeError("Should input a single dictionary or a list of "
+                    "dictionaries")
+        elif para_dicts == None:
+            para_dicts = [kwargs]
+            compare_num = 1
         else:
-            total_error = 0
+            raise TypeError("Should input a single dictionary or a list of "
+                "dictionaries")
 
-        for name, error_channel in self.error_channels.items():
-            error_rate = (
-                error_channel(args, input_mode=input_mode)
-                * self.channel_enable_info[name]
+        # calculate errors
+        errors = np.zeros((compare_num, self.enable_num))
+
+        for i in range(compare_num):
+            error_dict = self(**para_dicts[i], return_dict=True)
+            for j, err in enumerate(error_dict.values()):
+                errors[i, j] = err
+
+        # plot 
+        fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
+        plot_width = 1 / (compare_num + 1)
+        plot_x = np.linspace(0, self.enable_num-1, self.enable_num) + 0.5 * plot_width
+        
+        for i in range(compare_num):
+            if labels is not None:
+                lable_to_plot = labels[i]
+            else:
+                lable_to_plot = None
+                
+            ax.bar(
+                x = plot_x + i * plot_width, 
+                height=errors[i],
+                width = plot_width,
+                align="edge",
+                label=lable_to_plot
             )
             
-            if return_dict:
-                error_dict[name] = error_rate
-            else:
-                total_error += error_rate
+        ax.set_xticks(plot_x + plot_width * compare_num / 2)
+        ax.set_xticklabels(self.error_names, rotation=45, rotation_mode="anchor", horizontalalignment="right", verticalalignment="top", fontsize=rcParams["axes.labelsize"])
+        ax.set_ylabel(r"Error Rate / GHz")
 
-        if return_dict:
-            return error_dict
-        else:
-            return total_error
+        if labels is not None:
+            ax.legend()
 
-    def __getitem__(
-        self,
-        error_name
-    ):
-        """calculate the error rate from a single channel"""
-        return self.error_channels[error_name]
+        plt.tight_layout()
+        plt.show()
 
-    def add_channel(
-        self,
-        name: str, 
-        input_var_names: List[str], 
-        expression: Callable,
-    ):
-        channel = ErrorChannel(
-            name,
-            input_var_names, 
-            expression,
-            self.default_input_mode,
-            self.full_var_names,
-        )
-        self.error_channels[name] = channel
-        self.channel_enable_info[name] = True
+# ##############################################################################
+default_channels = ErrorRate()
 
-    def add_existed_channel(
-        self,
-        channel: ErrorChannel,
-    ):  
-        name = channel.name
+default_channels.add_channel(
+    "multiple_photon_loss",
+    lambda n_bar, T_M, kappa_s, *args, **kwargs: 
+        - np.log((1 + kappa_s * n_bar * T_M) * np.exp(-n_bar * kappa_s * T_M)) / T_M
+)
+default_channels.add_channel(
+    "photon_gain", 
+    lambda n_bar, kappa_s, n_th, *args, **kwargs: 
+        kappa_s * n_bar * n_th
+)
+default_channels.add_channel(
+    "anc_prepare", 
+    lambda tau_FD, sigma, T_W, Gamma_up, Gamma_down, T_M, *args, **kwargs: 
+        Gamma_up / (Gamma_up + Gamma_down) 
+        * (1 - np.exp(-(Gamma_up + Gamma_down) * (T_W + tau_FD + 8 * sigma))) / T_M
+)
+default_channels.add_channel(
+    "anc_relax_map", 
+    lambda Gamma_down, chi_sa, T_M, *args, **kwargs: 
+        np.pi * Gamma_down / (np.abs(chi_sa) * T_M)
+)
+default_channels.add_channel(
+    "anc_dephase_map", 
+    lambda Gamma_phi, chi_sa, T_M, *args, **kwargs: 
+        np.pi * Gamma_phi / (np.abs(chi_sa) * T_M)
+)
+default_channels.add_channel(
+    "anc_relax_ro", 
+    lambda n_bar, tau_m, tau_FD, Gamma_down_ro, kappa_s, *args, **kwargs: 
+        n_bar * kappa_s * Gamma_down_ro * (tau_m + tau_FD)
+)
+default_channels.add_channel(
+    "anc_excite_ro", 
+    lambda tau_m, Gamma_up_ro, T_M, *args, **kwargs: 
+        Gamma_up_ro * tau_m / T_M
+)
+default_channels.add_channel(
+    "Kerr_dephase", 
+    lambda n_bar, K_s, T_M, kappa_s, *args, **kwargs: 
+        kappa_s * n_bar * K_s**2 * T_M**2 / 6
+)
+default_channels.add_channel(
+    "ro_infidelity", 
+    lambda n_bar, M_eg, M_ge, T_M, kappa_s, *args, **kwargs: 
+        n_bar * kappa_s * M_eg + M_ge / T_M
+)
+default_channels.add_channel(
+    "high_order_int", 
+    lambda n_bar, chi_sa, T_M, chi_prime, *args, **kwargs: 
+        n_bar * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
+)
+default_channels.add_channel(
+    "pi_pulse_error", 
+    lambda n_bar, sigma, chi_sa, T_M, *args, **kwargs: 
+        n_bar * chi_sa**2 * (4 * sigma)**2 / (2 * T_M)
+)
 
-        channel.default_input_mode = self.default_input_mode
-        channel.update_full_var_names(self.full_var_names)
+# ##############################################################################
 
-        self.error_channels[name] = channel
-        self.channel_enable_info[name] = True
+class ErrorRateTmon(ErrorRate):
+    def __init__(self):
+        super().__init__()
+        self.merge_channel(default_channels)
 
-    def disable_channel(
-        self,
-        name: str
-    ):
-        self.channel_enable_info[name] = False
-
-    def enable_channel(
-        self,
-        name: str
-    ):
-        self.channel_enable_info[name] = True
-        
+    
