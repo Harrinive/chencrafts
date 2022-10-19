@@ -27,19 +27,25 @@ def datetime_dir(
     print(f"Current save directory: {current_date_dir}")
     return current_date_dir
 
-def save_variable_list_dict(file_name, variable_list_dict, orient='index'):
+def save_variable_list_dict(file_name, variable_list_dict, orient='columns'):
+    """
+    orient = 'index' is always used when variable list are not equal in length
+    """
     pd.DataFrame.from_dict(
         variable_list_dict, 
         orient=orient
     ).to_csv(file_name)
 
-def load_variable_list_dict(file_name, throw_nan=True, orient='index'):
+def load_variable_list_dict(file_name, throw_nan=True, orient='columns'):
+    """
+    orient = 'index' should be used when variable list are not equal in length
+    """
     if orient == 'index':
         variable_list_dict = pd.read_csv(file_name, index_col=0, header=0).transpose().to_dict(orient='list')
     elif orient == 'columns':
         variable_list_dict = pd.read_csv(file_name, index_col=0, header=0).to_dict(orient='list')
     else:
-        raise ValueError("only recognize index or columns for orient")
+        raise ValueError("only recognize 'index' or 'columns' for orient")
 
     if not throw_nan:
         return OrderedDict([(key, np.array(val)) for key, val in variable_list_dict.items()])
@@ -49,3 +55,4 @@ def load_variable_list_dict(file_name, throw_nan=True, orient='index'):
         new_val = new_val[~np.isnan(val)]
         variable_list_dict[key] = new_val
     return OrderedDict(variable_list_dict)
+

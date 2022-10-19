@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import OrderedDict
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,7 +7,6 @@ from matplotlib import colormaps
 from matplotlib import rcParams
 
 from typing import Callable
-from __future__ import annotations
 
 class ErrorChannel:
     def __init__(
@@ -24,13 +25,14 @@ class ErrorRate:
     def __init__(
         self, 
     ):
-        self.error_channels = OrderedDict({})
-        self.channel_enable_info = OrderedDict({})
+        self.error_channels: dict = OrderedDict({})
+        self.channel_enable_info: dict = OrderedDict({})
 
     def __call__(
         self,
         return_dict: bool = False,
-        **kwargs
+        *args,
+        **kwargs,
     ):
         """returns the total enabled error rate"""
         if return_dict:
@@ -41,7 +43,7 @@ class ErrorRate:
         for name, error_channel in self.error_channels.items():
             if not self.channel_enable_info[name]:
                 continue
-            error_rate = error_channel(**kwargs)
+            error_rate = error_channel(*args, **kwargs)
             
             if return_dict:
                 error_dict[name] = error_rate
@@ -58,7 +60,13 @@ class ErrorRate:
         error_name
     ):
         """calculate the error rate from a single channel"""
-        return self.error_channels[error_name]
+        if isinstance(error_name, str):
+            return self.error_channels[error_name]
+        elif isinstance(error_name, list) or isinstance(error_name, tuple):
+            new_rate = ErrorRate()
+            for name in error_name:
+                new_rate.add_existed_channel(self[name])
+            return new_rate
     
     @property
     def num(self):
@@ -173,7 +181,7 @@ class ErrorRate:
             y = np.sin(np.deg2rad(ang))
             x = np.cos(np.deg2rad(ang))
             horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
-            connectionstyle = "angle,angleA=0,angleB={}".format(ang)
+            connectionstyle = f"angle,angleA=0,angleB={ang}"
             kw["arrowprops"].update({"connectionstyle": connectionstyle})
             ax.annotate(
                 f"{self.error_names[i]}: {err_percent:.0f}%", 
@@ -188,7 +196,7 @@ class ErrorRate:
 
     def bar_plot(
         self,
-        para_dicts=None,
+        para_dicts = None,
         figsize = (6, 3), 
         dpi = None,
         labels = None,
@@ -232,14 +240,21 @@ class ErrorRate:
                 
             ax.bar(
                 x = plot_x + i * plot_width, 
-                height=errors[i],
+                height = errors[i],
                 width = plot_width,
-                align="edge",
-                label=lable_to_plot
+                align = "edge",
+                label = lable_to_plot
             )
             
         ax.set_xticks(plot_x + plot_width * compare_num / 2)
-        ax.set_xticklabels(self.error_names, rotation=45, rotation_mode="anchor", horizontalalignment="right", verticalalignment="top", fontsize=rcParams["axes.labelsize"])
+        ax.set_xticklabels(
+            self.error_names, 
+            rotation=45, 
+            rotation_mode="anchor", 
+            horizontalalignment="right", 
+            verticalalignment="top", 
+            fontsize=rcParams["axes.labelsize"]
+        )
         ax.set_ylabel(r"Error Rate / GHz")
 
         if labels is not None:
@@ -308,11 +323,17 @@ default_channels.add_channel(
         n_bar * chi_sa**2 * (4 * sigma)**2 / (2 * T_M)
 )
 
-# ##############################################################################
+def manual_constr(g_sa, min_detuning, detuning_lower_bound, constr_amp, *args, **kwargs):
+    detuning_undersize = 2 * np.pi * (g_sa * detuning_lower_bound - min_detuning)
+    return constr_amp * detuning_undersize * np.heaviside(detuning_undersize, 0)
 
+manual_constr = ErrorChannel(
+    "manual_constr",
+    manual_constr
+)
+
+# ##############################################################################
 class ErrorRateTmon(ErrorRate):
     def __init__(self):
         super().__init__()
         self.merge_channel(default_channels)
-
-    

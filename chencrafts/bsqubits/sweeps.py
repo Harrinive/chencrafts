@@ -10,8 +10,8 @@ PI2 = np.pi * 2
 class DerivedVariableBase():
     def __init__(
         self,
-        para_dict: OrderedDict, 
-        sim_para: OrderedDict,
+        para_dict: dict, 
+        sim_para: dict,
         swept_para_dict: dict = {},
     ):
         self.para_dict = para_dict
@@ -33,7 +33,7 @@ class DerivedVariableBase():
 
     def __getitem__(
         self,
-        name,
+        name: str,
     ):
         try:
             return self.para_dict_to_use[name]
@@ -158,7 +158,7 @@ class DerivedVariableTmon(DerivedVariableBase):
             "n_th": self._n_th(self["omega_s"], self["temp_s"]), 
             "kappa_s": PI2 * self["omega_s"] / self["Q_s"]
                 + self["Gamma_down"] * (PI2 * self["g_sa"] / self["min_detuning"])**2, 
-            "T_M": self["T_W"] + self["tau_FD"] + self["tau_m"] + np.pi / self["chi_sa"]
+            "T_M": self["T_W"] + self["tau_FD"] + self["tau_m"] + np.pi / np.abs(self["chi_sa"])
                 + 12 * self["sigma"], 
         })
 
@@ -257,6 +257,18 @@ def sweep_for_params(
             return
 
         def sweep_min_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+            bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
+            bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+
+            sys_freq = bare_evals0[1] - bare_evals0[0]
+
+            anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
+            # anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
+            # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
+
+            return np.min(np.abs(anc_freq_0x - sys_freq))
+
+        def sweep_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
             bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
             bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
 
@@ -488,7 +500,7 @@ def single_sweep_tmon(
     sweep_for_params(sweep, ancilla, para)
 
     if update_ncut:
-        para["anc_ncut"] = anc_ncut
+        sim_para["anc_ncut"] = anc_ncut
 
     return sweep
 
