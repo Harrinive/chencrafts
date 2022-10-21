@@ -234,9 +234,11 @@ class ErrorRate:
         
         for i in range(compare_num):
             if labels is not None:
-                lable_to_plot = labels[i]
+                total = np.sum(errors[i, :])
+                lable_to_plot = labels[i] + f": {total:.2e}"
             else:
-                lable_to_plot = None
+                total = np.sum(errors[i, :])
+                lable_to_plot = f"E{i:d}: {total:.2e}"
                 
             ax.bar(
                 x = plot_x + i * plot_width, 
@@ -257,8 +259,7 @@ class ErrorRate:
         )
         ax.set_ylabel(r"Error Rate / GHz")
 
-        if labels is not None:
-            ax.legend()
+        ax.legend()
 
         plt.tight_layout()
         plt.show()

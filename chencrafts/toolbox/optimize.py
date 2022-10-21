@@ -1,21 +1,27 @@
+from __future__ import annotations
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.optimize import (
-    minimize, 
-    differential_evolution, 
+    minimize,
+    differential_evolution,
     shgo,
-    brute, 
-    basinhopping, 
-    dual_annealing, 
-    NonlinearConstraint
+    brute,
+    basinhopping,
+    dual_annealing,
+    NonlinearConstraint,
 )
 from collections import OrderedDict
 from typing import Callable, Dict, List, Tuple, Union
 
+from tqdm.notebook import tqdm
+
 from chencrafts.bsqubits.error_rates import manual_constr
-from chencrafts.toolbox.save import save_variable_list_dict, load_variable_list_dict
+from chencrafts.toolbox.save import path_decorator, save_variable_list_dict, load_variable_list_dict
+from chencrafts.toolbox.plot import IntCmap, filter
 
 # ##############################################################################
 TARGET_NORMALIZE = 1e-7
+
 
 def nan_2_flat_val(full_variables, possible_nan_value):
     """
@@ -25,6 +31,7 @@ def nan_2_flat_val(full_variables, possible_nan_value):
         return full_variables["n_bar"] * full_variables["kappa_s"]
     else:
         return possible_nan_value
+
 
 def nan_2_constr(full_variables, possible_nan_value):
     """
@@ -39,13 +46,15 @@ def nan_2_constr(full_variables, possible_nan_value):
         return possible_nan_value
 
 # ##############################################################################
-class OptimizeTraj():
+
+
+class OptTraj():
     def __init__(
         self,
         para_name: List[str],
         para_traj: np.ndarray,
         target_traj: np.ndarray,
-        constr_traj: np.ndarray = None,
+        constr_traj: np.ndarray,
     ):
         self.para_name = para_name
         self.para_traj = para_traj
@@ -55,16 +64,33 @@ class OptimizeTraj():
         self.length = self.para_traj.shape[0]
 
     @classmethod
-    def from_file(file_name):
-        load_variable_list_dict(file_name, throw_nan=False)
+    def from_file(cls, file_name):
+        traj_dict = load_variable_list_dict(file_name, throw_nan=False)
+
+        para_name = [name for name in traj_dict.keys() if name not in [
+            "target", "constr"]]
+
+        para_shape = [len(traj_dict[para_name[0]]), len(para_name)]
+        para_traj = np.zeros(para_shape)
+        for idx, name in enumerate(para_name):
+            para_traj[:, idx] = traj_dict[name]
+
+        instance = cls(
+            para_name,
+            para_traj,
+            traj_dict["target"],
+            traj_dict["constr"],
+        )
+
+        return instance
 
     def __getitem__(self, name):
         idx = self.para_name.index(name)
         return self.para_traj[:, idx]
 
-    def _x_arr_2_dict(self, x: Union[np.ndarray, List]):
+    def _x_arr_2_dict(self, x: np.ndarray | List):
         return OrderedDict(zip(self.para_name, x))
-    
+
     def _x_dict_2_arr(self, x: dict):
         return [x[name] for name in self.para_name]
 
@@ -76,8 +102,16 @@ class OptimizeTraj():
     def init_para(self):
         return self._x_arr_2_dict(self.para_traj[0, :])
 
+    @property
+    def final_target(self):
+        return self.target_traj[-1]
+
+    @property
+    def init_target(self):
+        return self.target_traj[0]
+
     def copy(self):
-        new_result = OptimizeTraj(
+        new_result = OptTraj(
             self.para_traj.copy(),
             self.target_traj.copy(),
             self.constr_traj.copy(),
@@ -99,18 +133,161 @@ class OptimizeTraj():
         traj_dict["constr"] = self.constr_traj
         return traj_dict
 
+    def _normalize_para(self, para_range_dict: dict = {}):
+        new_var = self.para_traj.copy()
+
+        for var, (low, high) in para_range_dict.items():
+            idx = self.para_name.index(var)
+            new_var[:, idx] = (new_var[:, idx] - low) / (high - low)
+
+        return new_var
+
+    def plot(self, para_range_dict: dict = {}):
+        # need further updating: use twin y axis for the target_traj
+        normalized_para = self._normalize_para(para_range_dict)
+        max_target = np.max(self.target_traj)
+
+        plt.plot(range(self.length), normalized_para, label=self.para_name)
+        plt.plot(range(self.length), self.target_traj /
+                 max_target, label="normed_target")
+        plt.plot(range(self.length), self.constr_traj /
+                 max_target, label="normed_constr")
+        plt.legend()
+        plt.xlabel("Iterations")
+        plt.ylabel("Normalized Parameters")
+        plt.show()
+
     def save(self, file_name):
-        save_variable_list_dict(file_name, self.to_dict(), 'index')
+        save_variable_list_dict(file_name, self.to_dict())
+
+
+class MultiTraj():
+    def __init__(
+        self,
+    ):
+        self.traj_list: List[OptTraj] = []
+        self.length = 0
+
+    @classmethod
+    def from_list(
+        cls,
+        traj_list: List[OptTraj],
+    ):
+        new_list = cls()
+        for traj in traj_list:
+            new_list.append(traj)
+        return new_list
+
+    @classmethod
+    def from_file(
+        cls,
+        path,
+    ):
+        multi_traj = cls()
+
+        path = path_decorator(path)
+
+        idx = 0
+        while True:
+            try:
+                traj = OptTraj.from_file(f"{path}{idx}.csv")
+                multi_traj.append(traj)
+                idx += 1
+            except FileNotFoundError:
+                return multi_traj
+
+    def __getitem__(
+        self,
+        idx,
+    ) -> OptTraj | MultiTraj:
+        if isinstance(idx, int):
+            return self.traj_list[idx]
+        elif isinstance(idx, slice):
+            return MultiTraj.from_list(self.traj_list[idx])
+        else:
+            raise TypeError(f"Only accept int and slice as index")
+
+    def _target_list(self):
+        target_list = []
+        for traj in self.traj_list:
+            target_list.append(traj.final_target)
+
+        return target_list
+
+    def append(
+        self,
+        traj: OptTraj,
+    ):
+        self.traj_list.append(traj)
+        self.length += 1
+
+    def save(
+        self,
+        path,
+    ):
+        path = path_decorator(path)
+        for idx in range(self.length):
+            self[idx].save(f"{path}{idx}.csv")
+
+    def best_traj(self, select_num=1) -> OptTraj | MultiTraj:
+        sort = np.argsort(self._target_list())
+        new_traj = MultiTraj()
+        for sorted_idx in range(select_num):
+            idx = int(sort[sorted_idx])
+            new_traj.append(self[idx])
+
+        if select_num == 1:
+            return new_traj[0]
+        else:
+            return new_traj
+
+    def plot_target(self, ylim=(1e-7, 6e-6)):
+        fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
+
+        best = self.best_traj()
+        cmap = IntCmap(self.length)
+        for idx, traj in enumerate(self.traj_list):
+            if traj == best:
+                filter_name = "emph"
+            else:
+                filter_name = "trans"
+
+            ax.plot(
+                range(traj.length),
+                traj.target_traj,
+                label=f"traj {idx}",
+                color=filter(cmap(idx), filter_name),
+                zorder=-1
+            )
+            ax.scatter(
+                [traj.length - 1],
+                [traj.target_traj[-1]],
+                color=filter(cmap(idx), filter_name),
+                zorder=-1
+            )
+
+        ax.set_ylim(*ylim)
+        # ax.set_title("error rates")
+        ax.set_xlabel("Iterations")
+        ax.set_ylabel("Total Error Rate / GHz")
+        # ax.set_legend()
+        ax.grid()
+
+        plt.tight_layout()
+        # plt.savefig("./figures/C2QA slides/error rates w iteration small.png")
+        plt.show()
 
 # ##############################################################################
-class Optimize():
+
+
+class Optimization():
     def __init__(
         self,
         fixed_variables: OrderedDict[str, float],
         free_variable_ranges: OrderedDict[str, List[float]],
         target_func: Callable,
         target_kwargs: dict = {},
-        optimizer: str = "L-BFGS-B",          
+        optimizer: str = "L-BFGS-B",
     ):
         """
         The target function should be like: 
@@ -121,18 +298,18 @@ class Optimize():
         self.free_variables = free_variable_ranges
         self._update_free_name_list()
 
-        # the value stored in self.default_variables is dynamic - it is always 
+        # the value stored in self.default_variables is dynamic - it is always
         # the same as the one stored in self.fixed_variables
         self.default_variables = fixed_variables.copy()
         for key, (low, high) in self.free_variables.items():
-            self.default_variables[key] = (low + high) / 2    
+            self.default_variables[key] = (low + high) / 2
 
         self.target_func = target_func
         self.target_kwargs = target_kwargs
 
         self.optimizer = optimizer
-        assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell", 
-            "shgo", "differential evolution"]
+        assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell",
+                                  "shgo", "differential evolution"]
 
     def _update_free_name_list(self):
         self.free_name_list = list(self.free_variables.keys())
@@ -144,7 +321,7 @@ class Optimize():
     ):
         if variable not in self.default_variables.keys():
             raise KeyError(f"{variable} is not in the default variable dict. "
-            "Please consider re-initializing an optimize object including this variable.")
+                           "Please consider re-initializing an optimize object including this variable.")
 
     def _fix(
         self,
@@ -169,7 +346,7 @@ class Optimize():
 
     def fix(
         self,
-        variables = None,
+        variables=None,
         **kwargs,
     ):
         """
@@ -225,20 +402,20 @@ class Optimize():
 
         if not isinstance(variables, dict):
             raise ValueError(f"Only accept dict as the input.")
-        
+
         for key, val in variables.items():
             self._free(key, val)
 
-        if fix_rest: 
-            remaining_var = [var for var in self.free_variables.keys() 
-                if var not in variables.keys()]
+        if fix_rest:
+            remaining_var = [var for var in self.free_variables.keys()
+                             if var not in variables.keys()]
             self.fix(remaining_var)
 
         self._update_free_name_list()
 
     def _normalize_input(self, variables: dict):
         new_var = variables.copy()
-        
+
         for var, range in self.free_variables.items():
             low, high = range
             new_var[var] = (new_var[var] - low) / (high - low)
@@ -247,7 +424,7 @@ class Optimize():
 
     def _denormalize_input(self, variables: dict):
         new_var = variables.copy()
-        
+
         for var, range in self.free_variables.items():
             low, high = range
             new_var[var] = new_var[var] * (high - low) + low
@@ -259,12 +436,18 @@ class Optimize():
 
     def _denormalize_output(self, output):
         return output * TARGET_NORMALIZE
-    
-    def _x_arr_2_dict(self, x: Union[np.ndarray, List]):
+
+    def _x_arr_2_dict(self, x: np.ndarray | List):
         return OrderedDict(zip(self.free_name_list, x))
-    
+
     def _x_dict_2_arr(self, x: dict):
         return [x[name] for name in self.free_name_list]
+
+    def target(self, free_var: dict | List):
+        """
+        Input: free variable dict
+        """
+        return self.target_func(self.fixed_variables | free_var, **self.target_kwargs)
 
     def _opt_func(self, x):
         """
@@ -274,18 +457,16 @@ class Optimize():
         x_dict = self._x_arr_2_dict(x)
         denorm_x = self._denormalize_input(x_dict)
 
-        target = self.target_func(self.fixed_variables | denorm_x, **self.target_kwargs)            
-
-        target = self._normalize_output(target)
+        target = self._normalize_output(self.target(denorm_x))
 
         return target
 
     def opt_init(
-        self, 
-        x_dict: dict = {}, 
-        check_func: Callable = lambda *args, **kwargs: True, 
+        self,
+        x_dict: dict = {},
+        check_func: Callable = lambda *args, **kwargs: True,
         check_kwargs: dict = {}
-    ):
+    ) -> OptTraj:
         """
         check legal initialization func: check_func(full_dict, **check_kwargs)
         """
@@ -296,7 +477,8 @@ class Optimize():
                     high=1,
                     size=len(self.free_name_list)
                 )
-                norm_init_dict = OrderedDict(zip(self.free_name_list, norm_init))
+                norm_init_dict = OrderedDict(
+                    zip(self.free_name_list, norm_init))
                 denorm_init_dict = self._denormalize_input(norm_init_dict)
                 if check_func(self.fixed_variables | denorm_init_dict, **check_kwargs):
                     return denorm_init_dict
@@ -310,7 +492,7 @@ class Optimize():
         self,
         init_x: dict = {},
         call_back: Callable = None,
-        check_func: Callable = lambda x: True, 
+        check_func: Callable = lambda x: True,
         check_kwargs: dict = {}
     ):
         """
@@ -319,7 +501,8 @@ class Optimize():
         Check legal initialization func: check_func(full_dict, **check_kwargs)
         """
         if init_x == {}:
-            init_x = self.opt_init(check_func=check_func, check_kwargs=check_kwargs)
+            init_x = self.opt_init(check_func=check_func,
+                                   check_kwargs=check_kwargs)
 
         init_x_arr = self._x_dict_2_arr(self._normalize_input(init_x))
 
@@ -327,20 +510,21 @@ class Optimize():
             x_dict = self._x_arr_2_dict(x)
             denorm_x = self._denormalize_input(x_dict)
 
-            target = self.target_func(self.fixed_variables | denorm_x, **self.target_kwargs)
+            target = self.target_func(
+                self.fixed_variables | denorm_x, **self.target_kwargs)
             constr = 0
 
             return denorm_x, target, constr
 
         init_denorm_x, init_target, init_constr = evaluate_record(init_x_arr)
-        result = OptimizeTraj(
+        result = OptTraj(
             self.free_name_list,
             np.array([self._x_dict_2_arr(init_denorm_x)]),
             np.array([init_target]),
             np.array([init_constr]),
         )
 
-        def opt_call_back(x, convergence=None): 
+        def opt_call_back(x, convergence=None):
             denorm_x, target, constr = evaluate_record(x)
 
             result.append(
@@ -351,7 +535,7 @@ class Optimize():
 
             if call_back is not None:
                 call_back(
-                    denorm_x.copy(), 
+                    denorm_x.copy(),
                     target,
                     constr,
                 )
@@ -359,25 +543,51 @@ class Optimize():
         opt_bounds = [[0.0, 1.0]] * len(self.free_name_list)
         if self.optimizer in ("L-BFGS-B", "Nelder-Mead", "Powell"):
             scipy_res = minimize(
-                self._opt_func, 
-                x0=init_x_arr, 
-                bounds=opt_bounds, 
-                callback=opt_call_back, 
-                method=self.optimizer, 
+                self._opt_func,
+                x0=init_x_arr,
+                bounds=opt_bounds,
+                callback=opt_call_back,
+                method=self.optimizer,
                 # options={"maxls": 20}
             )
         elif self.optimizer == "shgo":
             scipy_res = shgo(
-                self._opt_func, 
-                bounds=opt_bounds, 
-                callback=opt_call_back, 
+                self._opt_func,
+                bounds=opt_bounds,
+                callback=opt_call_back,
             )
         elif self.optimizer == "differential evolution":
             scipy_res = differential_evolution(
-                self._opt_func, 
-                bounds=opt_bounds, 
-                callback=opt_call_back, 
+                self._opt_func,
+                bounds=opt_bounds,
+                callback=opt_call_back,
             )
 
         return result
 
+
+class MultiOpt():
+    def __init__(
+        self,
+        optimize: Optimization,
+    ):
+        self.optimize = optimize
+
+    def run(
+        self,
+        run_num,
+        call_back: Callable = None,
+        check_func: Callable = lambda x: True,
+        check_kwargs: dict = {},
+    ):
+        multi_result = MultiTraj()
+        for _ in tqdm(range(run_num)):
+            result = self.optimize.run(
+                init_x={},
+                call_back=call_back,
+                check_func=check_func,
+                check_kwargs=check_kwargs,
+            )
+            multi_result.append(result)
+
+        return multi_result
