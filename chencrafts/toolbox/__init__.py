@@ -12,6 +12,8 @@ from chencrafts.toolbox.save import (
     datetime_dir,
     save_variable_list_dict,
     load_variable_list_dict,
+    save_variable_dict,
+    load_variable_dict,
 )
 from chencrafts.toolbox.plot import (
     filter,

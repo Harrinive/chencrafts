@@ -1,12 +1,20 @@
 import scqubits as scq
 import numpy as np
+import qutip as qt
+
+from typing import Dict
 
 def initialize_joint_system_tmon(
-    omega_s, EJ, EC, ng, g_sa,
-    sys_dim, anc_ncut, anc_dim, 
+    para: Dict,
+    sim_para: Dict,
     returns=["hilbert_space"],
     return_ndarray=False
 ):
+    omega_s, EJ, EC, ng, g_sa, = [para[key] 
+        for key in ["oemga_s", "EJ", "EC", "ng", "g_sa"]]
+    sys_dim, anc_ncut, anc_dim = [sim_para[key] 
+        for key in ["sys_dim", "anc_ncut", "anc_dim"]]
+    
     system = scq.Oscillator(
         E_osc = omega_s,
         truncated_dim = sys_dim,

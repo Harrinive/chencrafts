@@ -2,6 +2,8 @@ import numpy as np
 import qutip as qt
 from typing import List
 
+from scqubits import HilbertSpace
+
 def coherent_coef_list(n, alpha):
     coef = np.exp(-alpha*alpha.conjugate()/2)
     list = [coef]
@@ -45,8 +47,8 @@ def projector_w_basis(basis: List[qt.Qobj]):
 
 # ##############################################################################
 def state_sets(
-    h_space, 
-    alpha, 
+    h_space: HilbertSpace, 
+    alpha: float, 
     returns=None,
     return_1darray=True
 ):
