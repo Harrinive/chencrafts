@@ -142,6 +142,7 @@ class ErrorRate:
 
     def pie_chart(
         self,
+        ax = None,
         figsize = (6, 3),
         dpi = None,
         start_angle = 60,
@@ -159,7 +160,8 @@ class ErrorRate:
         cmap_pie = lambda x: cm_pie(cm_pie_norm(x))
 
         # figure
-        fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(aspect="equal"), dpi=dpi)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(aspect="equal"), dpi=dpi)
 
         wedges, texts = ax.pie(
             error_rate_list, 
@@ -191,11 +193,13 @@ class ErrorRate:
                 **kw
             )
 
-        plt.tight_layout()
-        plt.show()
+        if ax is None:
+            plt.tight_layout()
+            plt.show()
 
     def bar_plot(
         self,
+        ax = None,
         para_dicts = None,
         figsize = (6, 3), 
         dpi = None,
@@ -228,7 +232,8 @@ class ErrorRate:
                 errors[i, j] = err
 
         # plot 
-        fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
         plot_width = 1 / (compare_num + 1)
         plot_x = np.linspace(0, self.enable_num-1, self.enable_num) + 0.5 * plot_width
         
@@ -261,8 +266,9 @@ class ErrorRate:
 
         ax.legend()
 
-        plt.tight_layout()
-        plt.show()
+        if ax is None:
+            plt.tight_layout()
+            plt.show()
 
 # ##############################################################################
 default_channels = ErrorRate()

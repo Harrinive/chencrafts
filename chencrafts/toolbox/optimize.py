@@ -46,8 +46,6 @@ def nan_2_constr(full_variables, possible_nan_value):
         return possible_nan_value
 
 # ##############################################################################
-
-
 class OptTraj():
     def __init__(
         self,
@@ -147,15 +145,44 @@ class OptTraj():
         normalized_para = self._normalize_para(para_range_dict)
         max_target = np.max(self.target_traj)
 
-        plt.plot(range(self.length), normalized_para, label=self.para_name)
-        plt.plot(range(self.length), self.target_traj /
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
+
+        ax.plot(range(self.length), normalized_para, label=self.para_name)
+        ax.plot(range(self.length), self.target_traj /
                  max_target, label="normed_target")
-        plt.plot(range(self.length), self.constr_traj /
+        ax.plot(range(self.length), self.constr_traj /
                  max_target, label="normed_constr")
-        plt.legend()
-        plt.xlabel("Iterations")
-        plt.ylabel("Normalized Parameters")
-        plt.show()
+        ax.legend()
+        ax.set_xlabel("Iterations")
+        ax.set_ylabel("Normalized Parameters")
+
+        if ax is None:
+            plt.show()
+
+    def plot_2d(
+        self, 
+        ax, 
+        x_name,
+        y_name,
+        c: str = "white",
+        destination_only: bool = True, 
+        background_interp: Callable = None,
+    ):
+        x = self[x_name]
+        y = self[y_name]
+
+        if not destination_only:
+            ax.plot(x, y, c=c, alpha=0.3)
+        ax.scatter(x[-1], y[-1], c=c, s=8)
+
+        if background_interp is not None:
+            val = background_interp(x[-1], y[-1])
+            if np.abs(val) >= 1e-2 and np.abs(val) < 1e2: 
+                text = f"  {val:.3f}"
+            else:
+                text = f"  {val:.1e}"
+            ax.text(x[-1], y[-1], text, ha="left", va="center", c=c, fontsize=7)
 
     def save(self, file_name):
         save_variable_list_dict(file_name, self.to_dict())
@@ -179,7 +206,7 @@ class MultiTraj():
         return new_list
 
     @classmethod
-    def from_file(
+    def from_folder(
         cls,
         path,
     ):
@@ -241,8 +268,9 @@ class MultiTraj():
         else:
             return new_traj
 
-    def plot_target(self, ylim=(1e-7, 6e-6)):
-        fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
+    def plot_target(self, ax=None, ylim=(1e-7, 6e-6)):
+        if ax is None:
+            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
 
         best = self.best_traj()
         cmap = IntCmap(self.length)
@@ -273,13 +301,12 @@ class MultiTraj():
         # ax.set_legend()
         ax.grid()
 
-        plt.tight_layout()
-        # plt.savefig("./figures/C2QA slides/error rates w iteration small.png")
-        plt.show()
+        if ax is None:
+            # plt.savefig("./figures/C2QA slides/error rates w iteration small.png")
+            plt.tight_layout()
+            plt.show()
 
 # ##############################################################################
-
-
 class Optimization():
     def __init__(
         self,
