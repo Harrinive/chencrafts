@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 from matplotlib import colormaps
+from matplotlib.axes import Axes
 
 import numpy as np
 
@@ -59,7 +60,7 @@ def plot_dictionary_2d(
 
     ax_row, ax_col = 0, 0
     for key, full_value in dict.items():
-        ax = axs[ax_row, ax_col]
+        ax: Axes = axs[ax_row, ax_col]
         value = full_value[slc][slc_2d]
 
         # base value
@@ -67,8 +68,8 @@ def plot_dictionary_2d(
             cax = ax.pcolormesh(X_mesh, Y_mesh, value, vmin=vmin, vmax=vmax)
         except (ValueError, IndexError):
             print("Error, Value to be plotted has the shape", value.shape, ", key: ", key)
-        except TypeError:
-            print("TypeError, key: ", key)
+        # except TypeError:
+        #     print("TypeError, key: ", key, "value: ", value, "X, Y mesh", X_mesh, Y_mesh)
 
         # contour
         if contour_levels > 0 and np.std(value) > 1e-14:

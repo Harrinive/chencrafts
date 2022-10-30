@@ -1,562 +1,306 @@
 import numpy as np
 import scqubits as scq
+import qutip as qt
+import matplotlib.pyplot as plt
+
+from typing import Dict
+
+from chencrafts.toolbox.data_processing import NSArray
 
 PI2 = np.pi * 2
 
 # ##############################################################################
-def sweep_for_params(
-    sweep: scq.HilbertSpace, 
-    ancilla: scq.Transmon | scq.Fluxonium, 
-    para_dict,
+def _sweep_tmon(
+    sweep: scq.ParameterSweep,
+    ancilla: scq.Transmon,
+    para_dict: Dict[str, float],
 ):
     Temp = para_dict["temp_a"]
     Q_tphi_coef = para_dict["Q_tphi_coef"]
     Q_t1_coef = para_dict["Q_t1_coef"]
 
-    scq.settings.T1_DEFAULT_WARNING = False
-    scq.settings.PROGRESSBAR_DISABLED = True
+    def sweep_gamma_up(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+        bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        return ancilla.t1_capacitive(
+            i=0, 
+            j=1, 
+            get_rate=True, 
+            total=False, 
+            T=Temp, 
+            esys=(bare_evals, bare_evecs), 
+        ) / Q_t1_coef
+    sweep.add_sweep(sweep_gamma_up, "gamma_up")
 
-    if isinstance(ancilla, scq.Transmon):
+    def sweep_gamma_down(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+        bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        return ancilla.t1_capacitive(
+            i=1, 
+            j=0, 
+            get_rate=True, 
+            total=False, 
+            T=Temp, 
+            esys=(bare_evals, bare_evecs),
+        ) / Q_t1_coef
+    sweep.add_sweep(sweep_gamma_down, "gamma_down")
 
-        def check_qubit_convergence(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = np.array(paramsweep["bare_evecs"]["subsys": 1][paramindex_tuple])
-            return np.max(np.abs(bare_evecs[-1][-3:]))
+    def sweep_gamma_phi(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+        bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        return (
+            ancilla.tphi_1_over_f_ng(
+                i=0, 
+                j=1, 
+                get_rate=True, 
+                esys=(bare_evals, bare_evecs)
+            ) + ancilla.tphi_1_over_f_cc(
+                i=0, 
+                j=1, 
+                get_rate=True, 
+                esys=(bare_evals, bare_evecs)
+            )
+        ) / Q_tphi_coef
+    sweep.add_sweep(sweep_gamma_phi, "gamma_phi")
 
-        def sweep_gamma_up(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-            return ancilla.t1_capacitive(
+    # def sweep_gamma_ng(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+    #     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+    #     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+    #     return (
+    #         ancilla.tphi_1_over_f_ng(
+    #             i=0, 
+    #             j=1, 
+    #             get_rate=True, 
+    #             esys=(bare_evals, bare_evecs)
+    #         )
+    #     ) / Q_a_coef
+    # sweep.add_sweep(sweep_gamma_cc, "gamma_phi_cc")
+
+    # def sweep_gamma_cc(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+    #     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+    #     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+    #     return (
+    #         ancilla.tphi_1_over_f_cc(
+    #             i=0, 
+    #             j=1, 
+    #             get_rate=True, 
+    #             esys=(bare_evals, bare_evecs)
+    #         )
+    #     ) / Q_a_coef
+    # sweep.add_sweep(sweep_gamma_ng, "gamma_phi_ng")
+
+    # def sweep_state(paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, **kwargs):
+    #     """
+    #     Get the logical zero state for each parameter
+    #     """
+
+    #     evals = paramsweep["evals"][paramindex_tuple]
+    #     evecs = paramsweep["evecs"][paramindex_tuple]
+
+    #     h_space = paramsweep.hilbertspace
+    #     dims = [subsys.truncated_dim for subsys in h_space.subsys_list]
+    #     paramsweep._update_hilbertspace(paramsweep, *paramvals_tuple)
+
+    #     h_space.generate_lookup(dressed_esys=(evals, evecs))
+    #     drs_idx = h_space.dressed_index((3, 0))
+    #     state = evecs[drs_idx]
+
+    #     qt.plot_fock_distribution(qt.ptrace(state, 0))
+    #     plt.show()
+
+    #     return 0
+    # sweep.add_sweep(sweep_state, "test")
+
+    # def sweep_n_bar(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+    #     """
+    #     The overlap between dressed states
+    #     """
+    #     return
+
+    # def test_sweep(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+    #     print(paramvals_tuple)
+    #     return paramvals_tuple[-1]
+    # sweep.add_sweep(test_sweep, "test_sweep")
+    
+    def sweep_min_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
+        bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+
+        sys_freq = bare_evals0[1] - bare_evals0[0]
+
+        anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
+        # anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
+        # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
+
+        return np.min(np.abs(anc_freq_0x - sys_freq))
+    sweep.add_sweep(sweep_min_detuning, "min_detuning")
+
+    def sweep_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
+        bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+
+        sys_freq = bare_evals0[1] - bare_evals0[0]
+
+        anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
+        # anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
+        # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
+
+        return np.min(np.abs(anc_freq_0x - sys_freq))
+        
+
+def _sweep_fl(
+    sweep: scq.ParameterSweep,
+    ancilla: scq.Transmon,
+    para_dict: Dict[str, float],
+):
+    Temp = para_dict["temp_a"]
+    Q_tphi_coef = para_dict["Q_tphi_coef"]
+    Q_t1_coef = para_dict["Q_t1_coef"]
+
+    def sweep_gamma_up(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+        bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        return (
+            ancilla.t1_capacitive(
+                i = 0, 
+                j = 1, 
+                get_rate = True, 
+                total = False, 
+                T = Temp, 
+                esys = (bare_evals, bare_evecs), 
+            ) + ancilla.t1_inductive(
                 i=0, 
                 j=1, 
                 get_rate=True, 
                 total=False, 
                 T=Temp, 
                 esys=(bare_evals, bare_evecs), 
-            ) / Q_t1_coef
-
-        def sweep_gamma_down(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-            return ancilla.t1_capacitive(
-                i=1, 
-                j=0, 
+            # ) + ancilla.t1_charge_impedance(
+            #     i = 0,
+            #     j = 1,
+            #     get_rate=True, 
+            #     total = False,
+            #     T=Temp, 
+            #     esys=(bare_evals, bare_evecs), 
+            ) + ancilla.t1_flux_bias_line(
+                i = 0,
+                j = 1,
                 get_rate=True, 
-                total=False, 
+                total = False,
                 T=Temp, 
-                esys=(bare_evals, bare_evecs),
-            ) / Q_t1_coef
+                esys=(bare_evals, bare_evecs), 
+            ) + ancilla.t1_quasiparticle_tunneling(
+                i = 0,
+                j = 1,
+                get_rate=True, 
+                total = False,
+                T=Temp, 
+                esys=(bare_evals, bare_evecs), 
+            )
+        ) / Q_t1_coef
 
-        def sweep_gamma_phi(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-            return (
-                ancilla.tphi_1_over_f_ng(
-                    i=0, 
-                    j=1, 
-                    get_rate=True, 
-                    esys=(bare_evals, bare_evecs)
-                ) + ancilla.tphi_1_over_f_cc(
-                    i=0, 
-                    j=1, 
-                    get_rate=True, 
-                    esys=(bare_evals, bare_evecs)
-                )
-            ) / Q_tphi_coef
+    def sweep_gamma_down(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+        bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        return (
+            ancilla.t1_capacitive(
+                i = 1, 
+                j = 0, 
+                get_rate = True, 
+                total = False, 
+                T = Temp, 
+                esys = (bare_evals, bare_evecs), 
+            ) + ancilla.t1_inductive(
+                i = 1, 
+                j = 0, 
+                get_rate = True, 
+                total = False, 
+                T = Temp, 
+                esys=(bare_evals, bare_evecs), 
+            # ) + ancilla.t1_charge_impedance(
+            #     i = 1,
+            #     j = 0,
+            #     get_rate = True, 
+            #     total = False,
+            #     T=Temp, 
+            #     esys=(bare_evals, bare_evecs), 
+            ) + ancilla.t1_flux_bias_line(
+                i = 1,
+                j = 0,
+                get_rate=True, 
+                total = False,
+                T=Temp, 
+                esys=(bare_evals, bare_evecs), 
+            ) + ancilla.t1_quasiparticle_tunneling(
+                i = 1,
+                j = 0,
+                get_rate=True, 
+                total = False,
+                T=Temp, 
+                esys=(bare_evals, bare_evecs), 
+            )
+        ) / Q_t1_coef
 
-        # def sweep_gamma_ng(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-        #     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-        #     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-        #     return (
-        #         ancilla.tphi_1_over_f_ng(
-        #             i=0, 
-        #             j=1, 
-        #             get_rate=True, 
-        #             esys=(bare_evals, bare_evecs)
-        #         )
-        #     ) / Q_a_coef
+    def sweep_gamma_phi(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+        bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        return (
+            ancilla.tphi_1_over_f_flux(
+                i=0, 
+                j=1, 
+                get_rate=True, 
+                esys=(bare_evals, bare_evecs)
+            ) + ancilla.tphi_1_over_f_cc(
+                i=0, 
+                j=1, 
+                get_rate=True, 
+                esys=(bare_evals, bare_evecs)
+            )
+        ) / Q_tphi_coef
 
-        # def sweep_gamma_cc(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-        #     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-        #     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-        #     return (
-        #         ancilla.tphi_1_over_f_cc(
-        #             i=0, 
-        #             j=1, 
-        #             get_rate=True, 
-        #             esys=(bare_evals, bare_evecs)
-        #         )
-        #     ) / Q_a_coef
+    def sweep_min_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
+        bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
 
-        def sweep_drs_coef(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            """
-            The overlap between dressed states
-            """
-            return
+        sys_freq = bare_evals0[1] - bare_evals0[0]
 
-        def sweep_min_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
-            bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
+        anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
+        # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
 
-            sys_freq = bare_evals0[1] - bare_evals0[0]
+        return np.min(np.abs(np.concatenate([
+            anc_freq_0x - sys_freq,
+            anc_freq_1x - sys_freq,
+            # anc_freq_2x - sys_freq,
+        ], axis=0)))
 
-            anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
-            # anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
-            # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
+    sweep.add_sweep(sweep_gamma_up, "gamma_up")
+    sweep.add_sweep(sweep_gamma_down, "gamma_down")
+    sweep.add_sweep(sweep_gamma_phi, "gamma_phi")
+    sweep.add_sweep(sweep_min_detuning, "min_detuning")
 
-            return np.min(np.abs(anc_freq_0x - sys_freq))
 
-        def sweep_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
-            bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
 
-            sys_freq = bare_evals0[1] - bare_evals0[0]
+def sweep_for_params(
+    sweep: scq.ParameterSweep, 
+    ancilla: scq.Transmon | scq.Fluxonium, 
+    para_dict,
+):
 
-            anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
-            # anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
-            # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
+    scq.settings.T1_DEFAULT_WARNING = False
+    scq.settings.PROGRESSBAR_DISABLED = True
 
-            return np.min(np.abs(anc_freq_0x - sys_freq))
-            
-        sweep.add_sweep(sweep_gamma_up, "gamma_up")
-        sweep.add_sweep(sweep_gamma_down, "gamma_down")
-        sweep.add_sweep(sweep_gamma_phi, "gamma_phi")
-        # sweep.add_sweep(sweep_gamma_cc, "gamma_phi_cc")
-        # sweep.add_sweep(sweep_gamma_ng, "gamma_phi_ng")
-        sweep.add_sweep(sweep_min_detuning, "min_detuning")
-        sweep.add_sweep(check_qubit_convergence, "convergence")
+    def check_qubit_convergence(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
+        bare_evecs = np.array(paramsweep["bare_evecs"]["subsys": 1][paramindex_tuple])
+        return np.max(np.abs(bare_evecs[-1][-3:]))
+    sweep.add_sweep(check_qubit_convergence, "convergence")
 
+    if isinstance(ancilla, scq.Transmon):
+        _sweep_tmon(
+            sweep, ancilla, para_dict
+        )
+        
     elif isinstance(ancilla, scq.Fluxonium):
-
-        def check_qubit_convergence(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = np.array(paramsweep["bare_evecs"]["subsys": 1][paramindex_tuple])
-            return np.max(np.abs(bare_evecs[-1][-3:]))
-
-        def sweep_gamma_up(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-            return (
-                ancilla.t1_capacitive(
-                    i = 0, 
-                    j = 1, 
-                    get_rate = True, 
-                    total = False, 
-                    T = Temp, 
-                    esys = (bare_evals, bare_evecs), 
-                ) + ancilla.t1_inductive(
-                    i=0, 
-                    j=1, 
-                    get_rate=True, 
-                    total=False, 
-                    T=Temp, 
-                    esys=(bare_evals, bare_evecs), 
-                # ) + ancilla.t1_charge_impedance(
-                #     i = 0,
-                #     j = 1,
-                #     get_rate=True, 
-                #     total = False,
-                #     T=Temp, 
-                #     esys=(bare_evals, bare_evecs), 
-                ) + ancilla.t1_flux_bias_line(
-                    i = 0,
-                    j = 1,
-                    get_rate=True, 
-                    total = False,
-                    T=Temp, 
-                    esys=(bare_evals, bare_evecs), 
-                ) + ancilla.t1_quasiparticle_tunneling(
-                    i = 0,
-                    j = 1,
-                    get_rate=True, 
-                    total = False,
-                    T=Temp, 
-                    esys=(bare_evals, bare_evecs), 
-                )
-            ) / Q_t1_coef
-
-        def sweep_gamma_down(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-            return (
-                ancilla.t1_capacitive(
-                    i = 1, 
-                    j = 0, 
-                    get_rate = True, 
-                    total = False, 
-                    T = Temp, 
-                    esys = (bare_evals, bare_evecs), 
-                ) + ancilla.t1_inductive(
-                    i = 1, 
-                    j = 0, 
-                    get_rate = True, 
-                    total = False, 
-                    T = Temp, 
-                    esys=(bare_evals, bare_evecs), 
-                # ) + ancilla.t1_charge_impedance(
-                #     i = 1,
-                #     j = 0,
-                #     get_rate = True, 
-                #     total = False,
-                #     T=Temp, 
-                #     esys=(bare_evals, bare_evecs), 
-                ) + ancilla.t1_flux_bias_line(
-                    i = 1,
-                    j = 0,
-                    get_rate=True, 
-                    total = False,
-                    T=Temp, 
-                    esys=(bare_evals, bare_evecs), 
-                ) + ancilla.t1_quasiparticle_tunneling(
-                    i = 1,
-                    j = 0,
-                    get_rate=True, 
-                    total = False,
-                    T=Temp, 
-                    esys=(bare_evals, bare_evecs), 
-                )
-            ) / Q_t1_coef
-
-        def sweep_gamma_phi(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-            bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-            return (
-                ancilla.tphi_1_over_f_flux(
-                    i=0, 
-                    j=1, 
-                    get_rate=True, 
-                    esys=(bare_evals, bare_evecs)
-                ) + ancilla.tphi_1_over_f_cc(
-                    i=0, 
-                    j=1, 
-                    get_rate=True, 
-                    esys=(bare_evals, bare_evecs)
-                )
-            ) / Q_tphi_coef
-
-        def sweep_min_detuning(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-            bare_evals0 = paramsweep["bare_evals"]["subsys":0][paramindex_tuple]
-            bare_evals1 = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
-
-            sys_freq = bare_evals0[1] - bare_evals0[0]
-
-            anc_freq_0x = bare_evals1[1:3] - bare_evals1[0]
-            anc_freq_1x = bare_evals1[2:3] - bare_evals1[1]
-            # anc_freq_2x = bare_evals1[3:4] - bare_evals1[2]
-
-            return np.min(np.abs(np.concatenate([
-                anc_freq_0x - sys_freq,
-                anc_freq_1x - sys_freq,
-                # anc_freq_2x - sys_freq,
-            ], axis=0)))
-
-        sweep.add_sweep(sweep_gamma_up, "gamma_up")
-        sweep.add_sweep(sweep_gamma_down, "gamma_down")
-        sweep.add_sweep(sweep_gamma_phi, "gamma_phi")
-        sweep.add_sweep(sweep_min_detuning, "min_detuning")
-        sweep.add_sweep(check_qubit_convergence, "convergence")
-
-# ################################ Transmon ####################################
-def single_sweep_tmon(
-    para,
-    sim_para,
-    convergence_range = (1e-8, 1e-4),
-    update_ncut = True,
-):
-    omega_s, EJ, EC, ng, g_sa = [para[key] 
-        for key in ["omega_s", "EJ", "EC", "ng", "g_sa"]]
-    sys_dim, anc_ncut, anc_dim, eval_count, num_cpus = [sim_para[key] 
-        for key in ["sys_dim", "anc_ncut", "anc_dim", "sweep_eval_count", "num_cpus"]]
-
-    # build system and ancilla
-    system = scq.Oscillator(
-        E_osc = omega_s,
-        truncated_dim = sys_dim,
-        id_str = "system",
-        l_osc = 1
-    )
-
-    while True:
-        ancilla = scq.Transmon(
-            EJ = EJ,
-            EC = EC,
-            ng = ng,
-            ncut = anc_ncut,
-            truncated_dim = anc_dim,
-            id_str = "ancilla" 
+        _sweep_fl(
+            sweep, ancilla, para_dict
         )
-
-        _, bare_evecs = ancilla.eigensys(anc_dim)
-        conv = np.max(np.abs(bare_evecs[-1][-3:]))
-
-        if conv > convergence_range[1]:
-            anc_ncut = int(anc_ncut * 1.5)
-        elif conv < convergence_range[0]:
-            anc_ncut = int(anc_ncut / 1.5)
-            break
-        else:
-            break
-
-    subsystem_list = [system, ancilla]
-    h_space = scq.HilbertSpace(subsystem_list)
-
-    h_space.add_interaction(
-        g = g_sa,
-        op1 = system.n_operator,
-        op2 = ancilla.n_operator,
-        add_hc = False,
-        id_str = "sys-anc"
-    )
-
-    # "sweep" for variables 
-    paramvals_by_name = {
-        "omega_s": [omega_s],
-        "g_sa": [g_sa],
-        "EJ": [EJ],
-        "EC": [EC]
-    }
-    subsys_update_info =  {
-        "omega_s": [system],
-        "g_sa": [],
-        "EJ": [ancilla],
-        "EC": [ancilla]
-    }
-    def update_h_space(omega_s, g_sa, EJ, EC):
-        system.E_osc = omega_s
-        h_space.interaction_list[0].g_strength = g_sa
-        ancilla.EJ = EJ
-        ancilla.EC = EC
-
-    sweep = scq.ParameterSweep(
-        hilbertspace = h_space,
-        paramvals_by_name = paramvals_by_name,
-        update_hilbertspace = update_h_space,
-        evals_count = eval_count,
-        subsys_update_info = subsys_update_info,
-        num_cpus = num_cpus
-    )
-
-    sweep_for_params(sweep, ancilla, para)
-
-    if update_ncut:
-        sim_para["anc_ncut"] = anc_ncut
-
-    return sweep
-
-def sweep_tmon(
-    para,
-    swept_para,
-    sim_para,
-):
-    """
-    Only support sweeping with four list: omega_s, EJ, EC, g_sa
-    """
-
-    ng = para["ng"]
-    omega_s_list, EJ_list, EC_list, g_sa_list = [swept_para[key]
-        for key in ["omega_s", "EJ", "EC", "g_sa"]]
-    sys_dim, anc_ncut, anc_dim, eval_count, num_cpus = [sim_para[key] 
-        for key in ["sys_dim", "anc_ncut", "anc_dim", "sweep_eval_count", "num_cpus"]]
-
-    system = scq.Oscillator(
-        E_osc = omega_s_list[0],
-        truncated_dim = sys_dim,
-        id_str = "system",
-        l_osc = 1
-    )
-
-    ancilla = scq.Transmon(
-        EJ = EJ_list[0],
-        EC = EC_list[0],
-        ng = ng,
-        ncut = anc_ncut,
-        truncated_dim = anc_dim,
-        id_str = "ancilla" 
-    )
-
-    subsystem_list = [system, ancilla]
-    h_space = scq.HilbertSpace(subsystem_list)
-
-    h_space.add_interaction(
-        g = g_sa_list[0],
-        op1 = system.n_operator,
-        op2 = ancilla.n_operator,
-        add_hc = False,
-        id_str = "sys-anc"
-    )
-
-    subsys_update_info =  {
-        "omega_s": [system],
-        "g_sa": [],
-        "EJ": [ancilla],
-        "EC": [ancilla]
-    }
-    def update_h_space(omega_s, g_sa, EJ, EC):
-        system.E_osc = omega_s
-        h_space.interaction_list[0].g_strength = g_sa
-        ancilla.EJ = EJ
-        ancilla.EC = EC
-
-    sweep = scq.ParameterSweep(
-        hilbertspace = h_space,
-        paramvals_by_name = swept_para,
-        update_hilbertspace = update_h_space,
-        evals_count = eval_count,
-        subsys_update_info = subsys_update_info,
-        num_cpus = num_cpus
-    )
-
-    sweep_for_params(sweep, ancilla, para)
-
-    return sweep
-
-# ################################ Fluxonium ###################################
-def single_sweep_fl(
-    omega_s, EJ, EC, EL, flux, g_sa,
-    sys_dim, cutoff, anc_dim, eval_count, cpu_num,
-    Temp=None, Q_a_coef=None, convergence_range=(1e-8, 1e-4),
-):
-    system = scq.Oscillator(
-        E_osc = omega_s,
-        truncated_dim = sys_dim,
-        id_str = "system",
-        l_osc = 1
-    )
-
-    while True:
-        ancilla = scq.Fluxonium(
-            EJ = EJ,
-            EC = EC,
-            EL = EL,
-            flux = flux,
-            cutoff=cutoff,
-            truncated_dim = anc_dim,
-            id_str = "ancilla" 
-        )
-
-        _, bare_evecs = ancilla.eigensys(anc_dim)
-        conv = np.max(np.abs(bare_evecs[-1][-3:]))
-
-        if conv > convergence_range[1]:
-            cutoff = int(cutoff * 1.5)
-        elif conv < convergence_range[0]:
-            cutoff = int(cutoff / 1.5)
-            break
-        else:
-            break
-
-    subsystem_list = [system, ancilla]
-    h_space = scq.HilbertSpace(subsystem_list)
-
-    h_space.add_interaction(
-        g = g_sa,
-        op1 = system.n_operator,
-        op2 = ancilla.n_operator,
-        add_hc = False,
-        id_str = "sys-anc"
-    )
-
-    paramvals_by_name = {
-        "omega_s": [omega_s],
-        "g_sa": [g_sa],
-        "EJ": [EJ],
-        "EC": [EC],
-        "EL": [EL],
-        "flux": [flux],
-    }
-    subsys_update_info =  {
-        "omega_s": [system],
-        "g_sa": [],
-        "EJ": [ancilla],
-        "EC": [ancilla],
-        "EL": [ancilla],
-        "flux": [ancilla],
-    }
-    def update_h_space(omega_s, g_sa, EJ, EC, EL, flux):
-        system.E_osc = omega_s
-        h_space.interaction_list[0].g_strength = g_sa
-        ancilla.EJ = EJ
-        ancilla.EC = EC
-        ancilla.EL = EL
-        ancilla.flux = flux
-
-    sweep = scq.ParameterSweep(
-        hilbertspace=h_space,
-        paramvals_by_name=paramvals_by_name,
-        update_hilbertspace=update_h_space,
-        evals_count=eval_count,
-        subsys_update_info=subsys_update_info,
-        num_cpus=cpu_num
-    )
-
-    sweep_for_params(sweep, ancilla, Q_a_coef, Temp)
-
-    return sweep, cutoff
-
-def sweep_fl(
-    omega_s_list, EJ_list, EC_list, EL_list, flux_list, g_sa_list,
-    sys_dim, cutoff, anc_dim, eval_count, cpu_num,
-    Temp=None, Q_a_coef=None
-):
-    system = scq.Oscillator(
-        E_osc = omega_s_list[0],
-        truncated_dim = sys_dim,
-        id_str = "system",
-        l_osc = 1
-    )
-
-    ancilla = scq.Fluxonium(
-        EJ = EJ_list[0],
-        EC = EC_list[0],
-        EL = EL_list[0],
-        flux = flux_list[0],
-        cutoff=cutoff,
-        truncated_dim = anc_dim,
-        id_str = "ancilla" 
-    )
-
-    subsystem_list = [system, ancilla]
-    h_space = scq.HilbertSpace(subsystem_list)
-
-    h_space.add_interaction(
-        g = g_sa_list[0],
-        op1 = system.n_operator,
-        op2 = ancilla.n_operator,
-        add_hc = False,
-        id_str = "sys-anc"
-    )
-
-    paramvals_by_name = {
-        "omega_s": omega_s_list,
-        "g_sa": g_sa_list,
-        "EJ": EJ_list,
-        "EC": EC_list,
-        "EL": EL_list,
-        "flux": flux_list,
-    }
-    subsys_update_info =  {
-        "omega_s": [system],
-        "g_sa": [],
-        "EJ": [ancilla],
-        "EC": [ancilla],
-        "EL": [ancilla],
-        "flux": [ancilla],
-    }
-    def update_h_space(omega_s, g_sa, EJ, EC, EL, flux):
-        system.E_osc = omega_s
-        h_space.interaction_list[0].g_strength = g_sa
-        ancilla.EJ = EJ
-        ancilla.EC = EC
-        ancilla.EL = EL
-        ancilla.flux = flux
-
-    sweep = scq.ParameterSweep(
-        hilbertspace=h_space,
-        paramvals_by_name=paramvals_by_name,
-        update_hilbertspace=update_h_space,
-        evals_count=eval_count,
-        subsys_update_info=subsys_update_info,
-        num_cpus=cpu_num
-    )
-
-    sweep_for_params(sweep, ancilla, Q_a_coef, Temp)
-
-    return sweep

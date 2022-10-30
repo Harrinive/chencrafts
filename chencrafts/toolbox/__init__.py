@@ -1,4 +1,8 @@
-from chencrafts.toolbox.data_processing import merge_sort
+from chencrafts.toolbox.data_processing import (
+    DimensionModify,
+    NSArray,
+    nd_interpolation,
+)
 from chencrafts.toolbox.optimize import (
     Optimization, 
     MultiOpt,

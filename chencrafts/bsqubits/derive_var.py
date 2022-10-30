@@ -1,16 +1,16 @@
 import numpy as np
 from scipy.constants import h, k
+import scqubits as scq
 
 from collections import OrderedDict
 from typing import List, Dict
 
-from chencrafts.bsqubits.sweeps import (
-    single_sweep_tmon,
-    sweep_tmon,
-)
 from chencrafts.toolbox.data_processing import (
     NSArray,
     DimensionModify
+)
+from chencrafts.bsqubits.ec_systems import (
+    JointSystemTmon,
 )
 
 PI2 = np.pi * 2
@@ -26,7 +26,8 @@ class DerivedVariableBase():
         self.para_dict = para
         self.sim_para = sim_para
         
-        self.sweep_para_dict = swept_para_dict
+        self.sweep_para_dict = OrderedDict([(key, np.array(val)) 
+        for key, val in swept_para_dict.items()])
 
         # output
         if self.sweep_para_dict != {}:
@@ -76,20 +77,6 @@ class DerivedVariableBase():
 
         return scq_sweep_shape
 
-    def _scq_sweep_input_para(self) -> OrderedDict:
-        """
-        For multi-dimensional sweep, the sweep function need all value in the swept_para
-        to be a list
-        """
-        swept_para = OrderedDict({})
-        for var_name in self.scq_available_var:
-            if var_name in self.sweep_para_dict.keys():
-                swept_para[var_name] = self.sweep_para_dict[var_name]
-            else:
-                swept_para[var_name] = [self.para_dict[var_name]]
-
-        return swept_para
-
     def _meshgrid(self):
         variable_mesh_dict = OrderedDict(zip(
             self.sweep_para_dict.keys(),
@@ -118,19 +105,23 @@ class DerivedVariableBase():
     def _n_th(self, omega, temp):
         """omega is in the unit of GHz"""
         return 1 / (np.exp(omega * h * 1e9 / temp / k) - 1)
+    
+    @property
+    def full_para(self):
+        return self.para_dict_to_use | self.derived_dict
 
     def keys(self):
-        return list(self.para_dict_to_use.keys()) + list(self.derived_dict.keys())
+        return self.full_para.keys()
     
     def values(self):
-        return list(self.para_dict_to_use.values()) + list(self.derived_dict.values())
+        return self.full_para.values()
 
     def items(self):
-        return list(self.para_dict_to_use.items()) + list(self.derived_dict.items())
+        return self.full_para.items()
 
 
 class DerivedVariableTmon(DerivedVariableBase):
-    scq_available_var = ["omega_s", "g_sa", "EJ", "EC"]     # Order is important!!
+    scq_available_var = JointSystemTmon.sweep_available_name     # Order is important!!
 
     def __init__(
         self, 
@@ -152,45 +143,53 @@ class DerivedVariableTmon(DerivedVariableBase):
     ):
 
         if np.allclose(list(self._scq_sweep_shape.values()), 1):
-            sweep = single_sweep_tmon(
+            self.system = JointSystemTmon(
                 self.para_dict,
                 self.sim_para,
+                {},
                 convergence_range = convergence_range,
                 update_ncut = update_ncut,
             )
+
         else:
-            swept_para = self._scq_sweep_input_para()
-            sweep = sweep_tmon(
+            self.system = JointSystemTmon(
                 self.para_dict,
-                swept_para,
                 self.sim_para,
+                self.sweep_para_dict,
+                convergence_range = None,
+                update_ncut = False,
             )
+
+        self.sweep = self.system.sweep()
 
         self.derived_dict.update({
             "chi_sa": PI2 * self._sweep_wrapper(
-                sweep["chi"]["subsys1": 0, "subsys2": 1][..., 1], 
+                self.sweep["chi"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
             "K_s": PI2 * self._sweep_wrapper(
-                sweep["kerr"]["subsys1": 0, "subsys2": 0], 
+                self.sweep["kerr"]["subsys1": 0, "subsys2": 0], 
             ), 
             "chi_prime": PI2 * self._sweep_wrapper(
-                sweep["chi_prime"]["subsys1": 0, "subsys2": 1][..., 1], 
+                self.sweep["chi_prime"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
-            "Gamma_up": self._sweep_wrapper(sweep["gamma_up"]), 
-            "Gamma_down": self._sweep_wrapper(sweep["gamma_down"]), 
-            "Gamma_phi": self._sweep_wrapper(sweep["gamma_phi"]), 
-            "Gamma_up_ro": self._sweep_wrapper(sweep["gamma_up"]), 
-            "Gamma_down_ro": self._sweep_wrapper(sweep["gamma_down"]), 
-            "min_detuning": PI2 * self._sweep_wrapper(sweep["min_detuning"]),
+            "Gamma_up": self._sweep_wrapper(self.sweep["gamma_up"]), 
+            "Gamma_down": self._sweep_wrapper(self.sweep["gamma_down"]), 
+            "Gamma_phi": self._sweep_wrapper(self.sweep["gamma_phi"]), 
+            "Gamma_up_ro": self._sweep_wrapper(self.sweep["gamma_up"]), 
+            "Gamma_down_ro": self._sweep_wrapper(self.sweep["gamma_down"]), 
+            "min_detuning": PI2 * self._sweep_wrapper(self.sweep["min_detuning"]),
         })
 
         self.derived_dict.update({
+            "n_bar": self["disp"],
             "n_th": self._n_th(self["omega_s"], self["temp_s"]), 
             "kappa_s": PI2 * self["omega_s"] / self["Q_s"]
                 + self["Gamma_down"] * (PI2 * self["g_sa"] / self["min_detuning"])**2, 
-            "T_M": self["T_W"] + self["tau_FD"] + self["tau_m"] + np.pi / np.abs(self["chi_sa"])
-                + 12 * self["sigma"], 
+            "T_M": self["T_W"] + self["tau_FD"] + self["tau_m"] 
+                + np.pi / np.abs(self["chi_sa"]) + 12 * self["sigma"], 
         })
+
+        self._sweep_jump_rate()
 
         if not return_full_para:
             return self.derived_dict
@@ -198,3 +197,7 @@ class DerivedVariableTmon(DerivedVariableBase):
             full_dict = self.para_dict_to_use.copy()
             full_dict.update(self.derived_dict)
             return full_dict
+
+    def _sweep_jump_rate(self):
+        sweep_dict = self.sweep.param_info
+

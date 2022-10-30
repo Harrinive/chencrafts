@@ -82,7 +82,7 @@ class OptTraj():
 
         return instance
 
-    def __getitem__(self, name):
+    def __getitem__(self, name) -> np.ndarray:
         idx = self.para_name.index(name)
         return self.para_traj[:, idx]
 
@@ -93,22 +93,22 @@ class OptTraj():
         return [x[name] for name in self.para_name]
 
     @property
-    def final_para(self):
+    def final_para(self) -> np.ndarray:
         return self._x_arr_2_dict(self.para_traj[-1, :])
 
     @property
-    def init_para(self):
+    def init_para(self) -> np.ndarray:
         return self._x_arr_2_dict(self.para_traj[0, :])
 
     @property
-    def final_target(self):
+    def final_target(self) -> float:
         return self.target_traj[-1]
 
     @property
-    def init_target(self):
+    def init_target(self) -> float:
         return self.target_traj[0]
 
-    def copy(self):
+    def copy(self) -> "OptTraj":
         new_result = OptTraj(
             self.para_traj.copy(),
             self.target_traj.copy(),
@@ -116,7 +116,7 @@ class OptTraj():
         )
         return new_result
 
-    def append(self, para_dict: dict, target: float, constr: float):
+    def append(self, para_dict: dict, target: float, constr: float) -> None:
         para_arr = self._x_dict_2_arr(para_dict)
         self.para_traj = np.append(self.para_traj, [para_arr], axis=0)
         self.target_traj = np.append(self.target_traj, target)
@@ -131,7 +131,7 @@ class OptTraj():
         traj_dict["constr"] = self.constr_traj
         return traj_dict
 
-    def _normalize_para(self, para_range_dict: dict = {}):
+    def _normalize_para(self, para_range_dict: dict = {}) -> np.ndarray:
         new_var = self.para_traj.copy()
 
         for var, (low, high) in para_range_dict.items():
@@ -140,13 +140,14 @@ class OptTraj():
 
         return new_var
 
-    def plot(self, para_range_dict: dict = {}):
+    def plot(self, para_range_dict: dict = {}) -> None:
         # need further updating: use twin y axis for the target_traj
         normalized_para = self._normalize_para(para_range_dict)
         max_target = np.max(self.target_traj)
 
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
+            need_show = True
 
         ax.plot(range(self.length), normalized_para, label=self.para_name)
         ax.plot(range(self.length), self.target_traj /
@@ -157,7 +158,7 @@ class OptTraj():
         ax.set_xlabel("Iterations")
         ax.set_ylabel("Normalized Parameters")
 
-        if ax is None:
+        if need_show:
             plt.show()
 
     def plot_2d(
@@ -168,7 +169,7 @@ class OptTraj():
         c: str = "white",
         destination_only: bool = True, 
         background_interp: Callable = None,
-    ):
+    ) -> None:
         x = self[x_name]
         y = self[y_name]
 
@@ -199,7 +200,7 @@ class MultiTraj():
     def from_list(
         cls,
         traj_list: List[OptTraj],
-    ):
+    ) -> "MultiTraj":
         new_list = cls()
         for traj in traj_list:
             new_list.append(traj)
@@ -209,7 +210,7 @@ class MultiTraj():
     def from_folder(
         cls,
         path,
-    ):
+    ) -> "MultiTraj":
         multi_traj = cls()
 
         path = path_decorator(path)
@@ -234,7 +235,7 @@ class MultiTraj():
         else:
             raise TypeError(f"Only accept int and slice as index")
 
-    def _target_list(self):
+    def _target_list(self) -> List[float]:
         target_list = []
         for traj in self.traj_list:
             target_list.append(traj.final_target)
@@ -244,14 +245,14 @@ class MultiTraj():
     def append(
         self,
         traj: OptTraj,
-    ):
+    ) -> None:
         self.traj_list.append(traj)
         self.length += 1
 
     def save(
         self,
         path,
-    ):
+    ) -> None:
         path = path_decorator(path)
         for idx in range(self.length):
             self[idx].save(f"{path}{idx}.csv")
@@ -271,6 +272,7 @@ class MultiTraj():
     def plot_target(self, ax=None, ylim=(1e-7, 6e-6)):
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
+            need_show = True
 
         best = self.best_traj()
         cmap = IntCmap(self.length)
@@ -301,7 +303,7 @@ class MultiTraj():
         # ax.set_legend()
         ax.grid()
 
-        if ax is None:
+        if need_show:
             # plt.savefig("./figures/C2QA slides/error rates w iteration small.png")
             plt.tight_layout()
             plt.show()
@@ -340,7 +342,7 @@ class Optimization():
 
     def _update_free_name_list(self):
         self.free_name_list = list(self.free_variables.keys())
-        print(f"Current order of input: {self.free_name_list}")
+        # print(f"Current order of input: {self.free_name_list}")
 
     def _check_exist(
         self,

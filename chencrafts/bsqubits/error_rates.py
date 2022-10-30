@@ -162,6 +162,7 @@ class ErrorRate:
         # figure
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(aspect="equal"), dpi=dpi)
+            need_show = True
 
         wedges, texts = ax.pie(
             error_rate_list, 
@@ -193,7 +194,7 @@ class ErrorRate:
                 **kw
             )
 
-        if ax is None:
+        if need_show:
             plt.tight_layout()
             plt.show()
 
@@ -234,6 +235,8 @@ class ErrorRate:
         # plot 
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
+            need_show = True
+
         plot_width = 1 / (compare_num + 1)
         plot_x = np.linspace(0, self.enable_num-1, self.enable_num) + 0.5 * plot_width
         
@@ -266,7 +269,7 @@ class ErrorRate:
 
         ax.legend()
 
-        if ax is None:
+        if need_show:
             plt.tight_layout()
             plt.show()
 

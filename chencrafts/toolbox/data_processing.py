@@ -96,6 +96,12 @@ class NSArray(NamedSlotsNdarray):
 
         return super().__getitem__(index)
 
+    def reshape(self, *args, **kwargs):
+        """
+        Reshape breaks the structure of the naming method, return a normal ndarray
+        """
+        return np.array(super().reshape(*args, **kwargs))
+
 
 def nd_interpolation(
     coord: List[np.ndarray],
@@ -126,6 +132,7 @@ def nd_interpolation(
     )
 
     return interp
+
 
 def merge_sort(arr: Union[List, np.ndarray], ascent: bool = True) -> np.ndarray:
     """
