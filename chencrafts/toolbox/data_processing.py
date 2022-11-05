@@ -79,9 +79,15 @@ class DimensionModify():
 class NSArray(NamedSlotsNdarray):
     def __new__(
         cls, 
-        input_array: np.ndarray, 
-        values_by_name: Dict[str, np.ndarray]
+        input_array: np.ndarray | float, 
+        values_by_name: Dict[str, np.ndarray] = None
     ) -> "NamedSlotsNdarray":
+        if isinstance(input_array, float | int):
+            return super().__new__(cls, np.array(input_array), {})
+        elif values_by_name is None:
+            raise ValueError("value_by_name shouldn't be None unless your input "
+            "arra is actually a float number.")
+
         return super().__new__(cls, input_array, values_by_name)
 
     def __getitem__(self, index):

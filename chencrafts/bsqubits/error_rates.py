@@ -274,60 +274,61 @@ class ErrorRate:
             plt.show()
 
 # ##############################################################################
-default_channels = ErrorRate()
+# some default error rate
+tmon_channels_no_purcell = ErrorRate()
 
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "multiple_photon_loss",
     lambda n_bar, T_M, kappa_s, *args, **kwargs: 
         - np.log((1 + kappa_s * n_bar * T_M) * np.exp(-n_bar * kappa_s * T_M)) / T_M
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "photon_gain", 
     lambda n_bar, kappa_s, n_th, *args, **kwargs: 
         kappa_s * n_bar * n_th
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "anc_prepare", 
     lambda tau_FD, sigma, T_W, Gamma_up, Gamma_down, T_M, *args, **kwargs: 
         Gamma_up / (Gamma_up + Gamma_down) 
         * (1 - np.exp(-(Gamma_up + Gamma_down) * (T_W + tau_FD + 8 * sigma))) / T_M
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "anc_relax_map", 
     lambda Gamma_down, chi_sa, T_M, *args, **kwargs: 
         np.pi * Gamma_down / (np.abs(chi_sa) * T_M)
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "anc_dephase_map", 
     lambda Gamma_phi, chi_sa, T_M, *args, **kwargs: 
         np.pi * Gamma_phi / (np.abs(chi_sa) * T_M)
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "anc_relax_ro", 
     lambda n_bar, tau_m, tau_FD, Gamma_down_ro, kappa_s, *args, **kwargs: 
         n_bar * kappa_s * Gamma_down_ro * (tau_m + tau_FD)
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "anc_excite_ro", 
     lambda tau_m, Gamma_up_ro, T_M, *args, **kwargs: 
         Gamma_up_ro * tau_m / T_M
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "Kerr_dephase", 
     lambda n_bar, K_s, T_M, kappa_s, *args, **kwargs: 
         kappa_s * n_bar * K_s**2 * T_M**2 / 6
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "ro_infidelity", 
     lambda n_bar, M_eg, M_ge, T_M, kappa_s, *args, **kwargs: 
         n_bar * kappa_s * M_eg + M_ge / T_M
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "high_order_int", 
     lambda n_bar, chi_sa, T_M, chi_prime, *args, **kwargs: 
         n_bar * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
 )
-default_channels.add_channel(
+tmon_channels_no_purcell.add_channel(
     "pi_pulse_error", 
     lambda n_bar, sigma, chi_sa, T_M, *args, **kwargs: 
         n_bar * chi_sa**2 * (4 * sigma)**2 / (2 * T_M)
@@ -342,8 +343,68 @@ manual_constr = ErrorChannel(
     manual_constr
 )
 
+# ------------------------------------------------------------------------------
+tmon_channels_purcell = ErrorRate()
+
+tmon_channels_purcell.add_channel(
+    "multiple_photon_loss",
+    lambda cavity_loss, T_M, *args, **kwargs: 
+        - np.log((1 + cavity_loss * T_M) * np.exp(-cavity_loss * T_M)) / T_M
+)
+tmon_channels_purcell.add_channel(
+    "photon_gain", 
+    lambda cavity_loss, n_th, *args, **kwargs: 
+        cavity_loss * n_th
+)
+tmon_channels_purcell.add_channel(
+    "anc_prepare", 
+    lambda tau_FD, sigma, T_W, Gamma_up, Gamma_down, T_M, *args, **kwargs: 
+        Gamma_up / (Gamma_up + Gamma_down) 
+        * (1 - np.exp(-(Gamma_up + Gamma_down) * (T_W + tau_FD + 8 * sigma))) / T_M
+)
+tmon_channels_purcell.add_channel(
+    "anc_relax_map", 
+    lambda Gamma_down, chi_sa, T_M, *args, **kwargs: 
+        np.pi * Gamma_down / (np.abs(chi_sa) * T_M)
+)
+tmon_channels_purcell.add_channel(
+    "anc_dephase_map", 
+    lambda Gamma_phi, chi_sa, T_M, *args, **kwargs: 
+        np.pi * Gamma_phi / (np.abs(chi_sa) * T_M)
+)
+tmon_channels_purcell.add_channel(
+    "anc_relax_ro", 
+    lambda cavity_loss, tau_m, tau_FD, Gamma_down_ro, *args, **kwargs: 
+        cavity_loss * Gamma_down_ro * (tau_m + tau_FD)
+)
+tmon_channels_purcell.add_channel(
+    "anc_excite_ro", 
+    lambda tau_m, Gamma_up_ro, T_M, *args, **kwargs: 
+        Gamma_up_ro * tau_m / T_M
+)
+tmon_channels_purcell.add_channel(
+    "Kerr_dephase", 
+    lambda cavity_loss, K_s, T_M, *args, **kwargs: 
+        cavity_loss * K_s**2 * T_M**2 / 6
+)
+tmon_channels_purcell.add_channel(
+    "ro_infidelity", 
+    lambda cavity_loss, M_eg, M_ge, T_M, *args, **kwargs: 
+        cavity_loss * M_eg + M_ge / T_M
+)
+tmon_channels_purcell.add_channel(
+    "high_order_int", 
+    lambda n_bar, chi_sa, T_M, chi_prime, *args, **kwargs: 
+        n_bar * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
+)
+tmon_channels_purcell.add_channel(
+    "pi_pulse_error", 
+    lambda n_bar, sigma, chi_sa, T_M, *args, **kwargs: 
+        n_bar * chi_sa**2 * (4 * sigma)**2 / (2 * T_M)
+)
+
 # ##############################################################################
 class ErrorRateTmon(ErrorRate):
     def __init__(self):
         super().__init__()
-        self.merge_channel(default_channels)
+        self.merge_channel(tmon_channels_purcell)

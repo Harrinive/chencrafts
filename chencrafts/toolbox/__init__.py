@@ -4,12 +4,12 @@ from chencrafts.toolbox.data_processing import (
     nd_interpolation,
 )
 from chencrafts.toolbox.optimize import (
-    Optimization, 
-    MultiOpt,
     nan_2_flat_val, 
     nan_2_constr, 
     OptTraj,
     MultiTraj,
+    Optimization, 
+    MultiOpt,
 )
 from chencrafts.toolbox.save import (
     path_decorator,

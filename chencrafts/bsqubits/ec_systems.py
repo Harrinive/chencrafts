@@ -8,8 +8,7 @@ from typing import Dict, List, Tuple
 
 from collections import OrderedDict
 
-from chencrafts.bsqubits.sweeps import _sweep_tmon
-from chencrafts.bsqubits.states import dressed_basis
+from chencrafts.bsqubits.basis_n_states import dressed_basis
 
 class JointSystemBase():
     base_para_name = []
@@ -26,14 +25,14 @@ class JointSystemBase():
         self.sim_para = sim_para
         self.swept_para = swept_para
 
-        self.base_para_value = []
-
         self.return_array = return_array
 
-        self.subsys: List[Qubit] = []
-        self.h_space = scq.HilbertSpace(self.subsys)
+        self.base_para_value: List[float] 
+        self.subsys: List[Qubit]
+        self.h_space: scq.HilbertSpace
 
     def _base_para_initialize(self, para):
+        self.base_para_value = []
         for name in self.base_para_name:
             try: 
                 self.base_para_value.append(para[name])
@@ -54,11 +53,22 @@ class JointSystemBase():
         else:
             return qobj
 
-    def _bare_oprt(self, oprt: np.ndarray | str | qt.Qobj, sys) -> qt.Qobj:
+    def _bare_oprt(
+        self, 
+        oprt: np.ndarray | str | qt.Qobj, 
+        sys: Qubit, 
+        bare_esys: Tuple[np.ndarray, np.ndarray] = None
+    ) -> qt.Qobj:
         if isinstance(oprt, str): 
             op_func = getattr(sys, oprt)
             oprt = op_func()
-        return scq.identity_wrap(oprt, sys, self.subsys)
+
+        if bare_esys is not None:
+            evecs = bare_esys[1]
+        else:
+            evecs = None
+        
+        return scq.identity_wrap(oprt, sys, self.subsys, evecs=evecs)
 
     def _scq_sweep_input_para(self) -> OrderedDict:
         """
@@ -71,8 +81,6 @@ class JointSystemBase():
                 swept_para[var_name] = self.swept_para[var_name]
             else:
                 swept_para[var_name] = [self.para[var_name]]
-
-        
 
         return swept_para
 
@@ -105,7 +113,55 @@ class JointSystemBase():
         )
 
 
-class JointSystemTmon(JointSystemBase):
+class CavityAncSystem(JointSystemBase):
+    def __init__(
+        self, para: Dict[str, float], 
+        sim_para: Dict[str, float], 
+        swept_para: Dict[str, List[float]] = {}, 
+        return_array=False
+    ):
+        super().__init__(
+            para, 
+            sim_para, 
+            swept_para, 
+            return_array
+        )
+
+        self.system: Qubit
+        self.ancilla: Qubit
+        self.subsys: List[Qubit]
+
+    @property
+    def hamiltonian(self) -> np.ndarray | qt.Qobj:
+        return self._qobj_wrapper(self.h_space.hamiltonian())
+
+    def a_s(
+        self,
+        sys_bare_esys: Tuple[np.ndarray, np.ndarray] = None,
+    ) -> np.ndarray | qt.Qobj:
+        """
+        Annihilation operator for the system
+        """
+        a = self._bare_oprt("annihilation_operator", self.system, sys_bare_esys)
+        return self._qobj_wrapper(a)
+
+    def proj_a(self, ket_fock_num, bra_fock_num) -> np.ndarray | qt.Qobj:
+        """
+        projector for the ancilla from one eigen-basis to another,  
+        it doesn't need to know what the eigenstate in bare basis
+        """
+        proj = qt.projection(
+            self.ancilla.truncated_dim, 
+            ket_fock_num,
+            bra_fock_num,
+        )
+        return qt.tensor(
+            qt.qeye(self.system.truncated_dim),
+            proj
+        )
+
+
+class CavityTmonSys(CavityAncSystem):
     base_para_name = ["omega_s", "EJ", "EC", "ng", "g_sa"]
     sweep_available_name = ["omega_s", "g_sa", "EJ", "EC"]
 
@@ -131,7 +187,7 @@ class JointSystemTmon(JointSystemBase):
         )
 
         if h_space is None:
-            self._base_para_initialize(para)
+            self._base_para_initialize(self.para)
             self._h_space_initalize(sim_para, convergence_range, update_ncut)
         else:
             self.h_space = h_space
@@ -193,27 +249,21 @@ class JointSystemTmon(JointSystemBase):
             add_hc = False,
             id_str = "sys-anc"
         )
-
+    
     @property
-    def hamiltonian(self) -> np.ndarray | qt.Qobj:
-        return self._qobj_wrapper(self.h_space.hamiltonian())
-
-    @property
-    def controls(self) -> List[np.ndarray | qt.Qobj]:
-        n_anc = self._bare_oprt("n_operator", self.ancilla)
+    def controls(
+        self, 
+        anc_bare_esys: Tuple[np.ndarray, np.ndarray] = None,
+    ) -> List[np.ndarray | qt.Qobj]:
+        n_anc = self._bare_oprt("n_operator", self.ancilla, anc_bare_esys)
         oprts = [n_anc]
         return [self._qobj_wrapper(op) for op in oprts]
 
     @property
-    def a_s(self) -> np.ndarray | qt.Qobj:
-        """
-        Annihilation operator for the system
-        """
-        a = self._bare_oprt("annihilation_operator", self.system)
-        return self._qobj_wrapper(a)
-
-    @property
-    def a_a(self) -> np.ndarray | qt.Qobj:
+    def a_a(
+        self,
+        anc_esys: Tuple[np.ndarray, np.ndarray] = None,
+    ) -> np.ndarray | qt.Qobj:
         """
         Annihilation operator for the ancilla
         Currently it is generated by adding the off diagonal charge matrix element 
@@ -222,7 +272,10 @@ class JointSystemTmon(JointSystemBase):
         n_anc_data = self.ancilla.n_operator()
 
         # transform to energy eigen basis
-        _, evecs = self.ancilla.eigensys(evals_count=self.ancilla.truncated_dim)
+        if anc_esys is None:
+            _, evecs = self.ancilla.eigensys(evals_count=self.ancilla.truncated_dim)
+        else:
+            _, evecs = anc_esys
         n_anc_data = evecs.T @ n_anc_data @ evecs
 
         mat_elems = n_anc_data.diagonal(1)
@@ -231,9 +284,6 @@ class JointSystemTmon(JointSystemBase):
         a = qt.qdiags(mat_elems, 1)
         a = qt.tensor(qt.identity(self.system.truncated_dim), a)
         return self._qobj_wrapper(a)
-
-    def a_a_2lvl(self) -> np.ndarray | qt.Qobj:
-        pass
 
     def detuning(self):
         """
@@ -251,6 +301,14 @@ class JointSystemTmon(JointSystemBase):
 
     def sweep(self,) -> scq.ParameterSweep:
         # "sweep" for variables on omega_s, g_sa, EJ and EC
+
+        if self.sim_para["sweep_eval_count"] >= np.prod(self.dim_list):
+            raise ValueError(f"""
+                Too much sweep_eval_count 
+                ({self.sim_para["sweep_eval_count"]:d}) for 
+                a {np.prod(self.dim_list):d}-dimensional system
+            """)
+
         paramvals_by_name = self._scq_sweep_input_para()
 
         subsys_update_info =  {
@@ -270,7 +328,5 @@ class JointSystemTmon(JointSystemBase):
             subsys_update_info = subsys_update_info,
             num_cpus = self.sim_para["num_cpus"]
         )
-
-        _sweep_tmon(sweep, self.ancilla, self.para)
 
         return sweep
