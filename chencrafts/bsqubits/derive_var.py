@@ -29,7 +29,7 @@ def _n_th(freq, temp):
 
 class DerivedVariableBase():
     scq_available_var: List[str] = []
-    default_para: Dict[str: float] = {}
+    default_para: Dict[str, float] = {}
     def __init__(
         self,
         para: dict[str, float], 
@@ -240,7 +240,7 @@ class DerivedVariableBase():
 
 class DerivedVariableTmon(DerivedVariableBase):
     scq_available_var = CavityTmonSys.sweep_available_name     # Order is important!!
-    default_para: Dict[str: float] = dict(
+    default_para: Dict[str, float] = dict(
         n_th_base = 0.0,
     )
 
@@ -262,7 +262,10 @@ class DerivedVariableTmon(DerivedVariableBase):
         update_ncut = True,
         return_full_para = True,
     ):
-
+        """
+        At this level, every energy should be in the angular frequency unit except 
+        especial statement. 
+        """
         # evaluate eigensystem using scq.ParameterSweep
         if np.allclose(list(self._scq_sweep_shape.values()), 1):
             self.system = CavityTmonSys(
@@ -303,6 +306,7 @@ class DerivedVariableTmon(DerivedVariableBase):
                 self.sweep["chi_prime"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
         ))
+        self.derived_dict["alpha"] = PI2 * (self["det_12_GHz"] - self["det_01_GHz"])
 
         # Evaluate extra sweep over parameter outside of the self.scq_available_var
         a_s = self.system.a_s()
@@ -323,12 +327,17 @@ class DerivedVariableTmon(DerivedVariableBase):
             Gamma_down_ro = self["Gamma_down"].copy(),
             kappa_s = PI2 * self["omega_s"] / self["Q_s"],
             n_th = _n_th(self["omega_s"], self["temp_s"]) + self["n_th_base"], 
-            T_M = self["T_W"] + self["tau_FD"] + self["tau_m"] 
-                + np.pi / np.abs(self["chi_sa"]) + 12 * self["sigma"], 
+            sigma = self["sigma*alpha"] / np.abs(self["alpha"])
         ))
         self.derived_dict.update(dict(
-            cavity_loss = self["kappa_s"] * self["n_bar"] 
-                + self["Gamma_down"] * self["anc_excitation"]
+            pulse_time = self["sigma"] * np.abs(self["pulse/sigma"]),
+            eff_pulse_time = self["sigma"] * np.abs(self["pulse_eff/sigma"]),
+            cavity_loss = self["kappa_s"] * self["n_bar"] * (1 + self["n_th"])
+                + self["Gamma_down"] * self["anc_excitation"],
+        ))
+        self.derived_dict.update(dict(
+            T_M = self["T_W"] + self["tau_FD"] + self["tau_m"] 
+                + np.pi / np.abs(self["chi_sa"]) + 3 * self["pulse_time"], 
         ))
         
         if not return_full_para:

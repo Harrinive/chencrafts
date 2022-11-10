@@ -47,13 +47,15 @@ def sweep_loss_rate(
     return np.array([pure_cavity_loss, inverse_purcell])
 tmon_sweep_dict[("n_bar", "anc_excitation")] = (sweep_loss_rate, ("disp", ))
 
-def sweep_anc_relaxation(
+def sweep_tmon_relaxation(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
     temp_a, Q_t1_coef, Q_tphi_coef, **kwargs):
 
-    ancilla = paramsweep.hilbertspace.subsys_list[1]
+    ancilla: scq.Transmon = paramsweep.hilbertspace.subsys_list[1]
     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+
+    default_Q = 5e5
 
     gamma_up = ancilla.t1_capacitive(
         i=0, 
@@ -62,6 +64,7 @@ def sweep_anc_relaxation(
         total=False, 
         T=temp_a, 
         esys=(bare_evals, bare_evecs), 
+        Q_cap = default_Q,
     ) / Q_t1_coef
 
     gamma_down = ancilla.t1_capacitive(
@@ -71,6 +74,7 @@ def sweep_anc_relaxation(
         total=False, 
         T=temp_a, 
         esys=(bare_evals, bare_evecs),
+        Q_cap = default_Q,
     ) / Q_t1_coef
 
     gamma_phi_ng = ancilla.tphi_1_over_f_ng(
@@ -91,7 +95,7 @@ def sweep_anc_relaxation(
 
 tmon_sweep_dict[
     ("Gamma_down", "Gamma_up", "Gamma_phi_ng", "Gamma_phi_cc")
-    ] = (sweep_anc_relaxation, ("temp_a", "Q_t1_coef", "Q_tphi_coef"))
+    ] = (sweep_tmon_relaxation, ("temp_a", "Q_t1_coef", "Q_tphi_coef"))
 
 
 # ##############################################################################

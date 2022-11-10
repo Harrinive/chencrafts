@@ -358,9 +358,9 @@ tmon_channels_purcell.add_channel(
 )
 tmon_channels_purcell.add_channel(
     "anc_prepare", 
-    lambda tau_FD, sigma, T_W, Gamma_up, Gamma_down, T_M, *args, **kwargs: 
+    lambda T_W, Gamma_up, Gamma_down, T_M, *args, **kwargs: 
         Gamma_up / (Gamma_up + Gamma_down) 
-        * (1 - np.exp(-(Gamma_up + Gamma_down) * (T_W + tau_FD + 8 * sigma))) / T_M
+        * (1 - np.exp(-(Gamma_up + Gamma_down) * T_W)) / T_M
 )
 tmon_channels_purcell.add_channel(
     "anc_relax_map", 
@@ -399,8 +399,8 @@ tmon_channels_purcell.add_channel(
 )
 tmon_channels_purcell.add_channel(
     "pi_pulse_error", 
-    lambda n_bar, sigma, chi_sa, T_M, *args, **kwargs: 
-        n_bar * chi_sa**2 * (4 * sigma)**2 / (2 * T_M)
+    lambda n_bar, eff_pulse_time, chi_sa, T_M, *args, **kwargs: 
+        n_bar * chi_sa**2 * eff_pulse_time**2 / T_M
 )
 
 # ##############################################################################
