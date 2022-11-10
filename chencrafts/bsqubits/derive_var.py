@@ -23,12 +23,13 @@ def _var_dict_2_shape_dict(var_dict):
         shape_dict[key] = len(val)
     return shape_dict
 
-def _n_th(omega, temp):
-        """omega is in the unit of GHz"""
-        return 1 / (np.exp(omega * h * 1e9 / temp / k) - 1)
+def _n_th(freq, temp):
+    """freq is in the unit of GHz, temp is in the unit of K"""
+    return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1)
 
 class DerivedVariableBase():
     scq_available_var: List[str] = []
+    default_para: Dict[str: float] = {}
     def __init__(
         self,
         para: dict[str, float], 
@@ -44,10 +45,10 @@ class DerivedVariableBase():
         # output
         if self.sweep_para_dict != {}:
             # self.para_dict_to_use is a meshgrid if the user want to sweep 
-            self.para_dict_to_use = self._meshgrid()
+            self.para_dict_to_use = self._meshgrid(self._merge_default())
         else:
             self.para_dict_to_use = OrderedDict([(key, NSArray(val)) 
-                for key, val in self.para_dict.items()])
+                for key, val in self._merge_default().items()])
         self.derived_dict = OrderedDict({})
 
         # dimension modify
@@ -88,7 +89,10 @@ class DerivedVariableBase():
 
         return scq_sweep_shape
 
-    def _meshgrid(self):
+    def _merge_default(self):
+        return self.default_para | self.para_dict
+
+    def _meshgrid(self, var_dict):
         variable_mesh_dict = OrderedDict(zip(
             self.sweep_para_dict.keys(),
             np.meshgrid(*self.sweep_para_dict.values(), indexing="ij")
@@ -96,7 +100,8 @@ class DerivedVariableBase():
         
         full_para_mesh = OrderedDict({})
         shape = list(variable_mesh_dict.values())[0].shape
-        for key, val in self.para_dict.items():
+
+        for key, val in var_dict.items():
             if key in self.sweep_para_dict.keys():
                 mesh = variable_mesh_dict[key]
             else:
@@ -192,7 +197,6 @@ class DerivedVariableBase():
 
         return data
 
-
     def _evaluate_extra_sweep_from_dict(
         self, 
         sweep_dict: Dict[str, Tuple[Callable, Tuple[str]]], 
@@ -236,6 +240,9 @@ class DerivedVariableBase():
 
 class DerivedVariableTmon(DerivedVariableBase):
     scq_available_var = CavityTmonSys.sweep_available_name     # Order is important!!
+    default_para: Dict[str: float] = dict(
+        n_th_base = 0.0,
+    )
 
     def __init__(
         self, 
@@ -278,6 +285,14 @@ class DerivedVariableTmon(DerivedVariableBase):
 
         # Store the data that directly come from the sweep
         self.derived_dict.update(dict(
+            det_01_GHz = self._sweep_wrapper(
+                self.sweep["bare_evals"][1][..., 1] 
+                - self.sweep["bare_evals"][1][..., 0]
+            ) - self["omega_s"],
+            det_12_GHz = self._sweep_wrapper(
+                self.sweep["bare_evals"][1][..., 2] 
+                - self.sweep["bare_evals"][1][..., 1]
+            ) - self["omega_s"],
             chi_sa = PI2 * self._sweep_wrapper(
                 self.sweep["chi"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
@@ -307,7 +322,7 @@ class DerivedVariableTmon(DerivedVariableBase):
             Gamma_up_ro = self["Gamma_up"].copy(),
             Gamma_down_ro = self["Gamma_down"].copy(),
             kappa_s = PI2 * self["omega_s"] / self["Q_s"],
-            n_th = _n_th(self["omega_s"], self["temp_s"]), 
+            n_th = _n_th(self["omega_s"], self["temp_s"]) + self["n_th_base"], 
             T_M = self["T_W"] + self["tau_FD"] + self["tau_m"] 
                 + np.pi / np.abs(self["chi_sa"]) + 12 * self["sigma"], 
         ))

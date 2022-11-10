@@ -308,6 +308,7 @@ class MultiTraj():
             plt.tight_layout()
             plt.show()
 
+
 # ##############################################################################
 class Optimization():
     def __init__(

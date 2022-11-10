@@ -227,27 +227,3 @@ def _sweep_fl(
     sweep.add_sweep(sweep_gamma_phi, "gamma_phi")
     sweep.add_sweep(sweep_min_detuning, "min_detuning")
 
-
-def sweep_for_params(
-    sweep: scq.ParameterSweep, 
-    ancilla: scq.Transmon | scq.Fluxonium, 
-    para_dict,
-):
-
-    scq.settings.T1_DEFAULT_WARNING = False
-    scq.settings.PROGRESSBAR_DISABLED = True
-
-    def check_qubit_convergence(paramsweep, paramindex_tuple, paramvals_tuple, **kwargs):
-        bare_evecs = np.array(paramsweep["bare_evecs"]["subsys": 1][paramindex_tuple])
-        return np.max(np.abs(bare_evecs[-1][-3:]))
-    sweep.add_sweep(check_qubit_convergence, "convergence")
-
-    if isinstance(ancilla, scq.Transmon):
-        _sweep_tmon(
-            sweep, ancilla, para_dict
-        )
-        
-    elif isinstance(ancilla, scq.Fluxonium):
-        _sweep_fl(
-            sweep, ancilla, para_dict
-        )

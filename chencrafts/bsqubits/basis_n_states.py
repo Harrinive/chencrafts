@@ -63,6 +63,8 @@ def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[float]]) -> qt.Qobj:
 
     return state.unit()
 
+
+
 def dressed_basis(
     h_space: scq.HilbertSpace, 
     dim_list: List[float], 
@@ -94,3 +96,15 @@ def projector_w_basis(basis: List[qt.Qobj]) -> qt.Qobj:
     for ket in basis:
         projector = projector + ket * ket.dag()
     return projector
+
+def oprt_in_basis(oprt: qt.Qobj, states):
+    length = len(states)
+
+    data = np.zeros((length, length), dtype=complex)
+    for j in range(length):
+        for k in range(j, length):
+            elem = oprt.matrix_element(states[j], states[k])
+            data[j, k] = elem
+            data[k, j] = elem.conjugate()
+
+    return qt.Qobj(data)

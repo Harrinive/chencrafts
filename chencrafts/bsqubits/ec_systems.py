@@ -53,7 +53,7 @@ class JointSystemBase():
         else:
             return qobj
 
-    def _bare_oprt(
+    def bare_oprt(
         self, 
         oprt: np.ndarray | str | qt.Qobj, 
         sys: Qubit, 
@@ -142,7 +142,7 @@ class CavityAncSystem(JointSystemBase):
         """
         Annihilation operator for the system
         """
-        a = self._bare_oprt("annihilation_operator", self.system, sys_bare_esys)
+        a = self.bare_oprt("annihilation_operator", self.system, sys_bare_esys)
         return self._qobj_wrapper(a)
 
     def proj_a(self, ket_fock_num, bra_fock_num) -> np.ndarray | qt.Qobj:
@@ -255,7 +255,7 @@ class CavityTmonSys(CavityAncSystem):
         self, 
         anc_bare_esys: Tuple[np.ndarray, np.ndarray] = None,
     ) -> List[np.ndarray | qt.Qobj]:
-        n_anc = self._bare_oprt("n_operator", self.ancilla, anc_bare_esys)
+        n_anc = self.bare_oprt("n_operator", self.ancilla, anc_bare_esys)
         oprts = [n_anc]
         return [self._qobj_wrapper(op) for op in oprts]
 
