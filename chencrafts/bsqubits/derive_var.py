@@ -29,7 +29,7 @@ def _n_th(freq, temp):
 
 class DerivedVariableBase():
     scq_available_var: List[str] = []
-    default_para: Dict[str: float] = {}
+    default_para: Dict[str, float] = {}
     def __init__(
         self,
         para: dict[str, float], 
@@ -240,7 +240,7 @@ class DerivedVariableBase():
 
 class DerivedVariableTmon(DerivedVariableBase):
     scq_available_var = CavityTmonSys.sweep_available_name     # Order is important!!
-    default_para: Dict[str: float] = dict(
+    default_para: Dict[str, float] = dict(
         n_th_base = 0.0,
     )
 

@@ -35,22 +35,21 @@ class ErrorRate:
         **kwargs,
     ):
         """returns the total enabled error rate"""
+        total_error = 0
         if return_dict:
             error_dict = OrderedDict({})
-        else:
-            total_error = 0
 
         for name, error_channel in self.error_channels.items():
             if not self.channel_enable_info[name]:
                 continue
             error_rate = error_channel(*args, **kwargs)
             
+            total_error += error_rate
             if return_dict:
                 error_dict[name] = error_rate
-            else:
-                total_error += error_rate
 
         if return_dict:
+            error_dict["total"] = total_error
             return error_dict
         else:
             return total_error
