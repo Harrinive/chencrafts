@@ -57,15 +57,15 @@ def sweep_tmon_relaxation(
 
     default_Q = 5e5
 
-    gamma_up = ancilla.t1_capacitive(
-        i=0, 
-        j=1, 
-        get_rate=True, 
-        total=False, 
-        T=temp_a, 
-        esys=(bare_evals, bare_evecs), 
-        Q_cap = default_Q,
-    ) / Q_t1_coef
+    # gamma_up = ancilla.t1_capacitive(
+    #     i=0, 
+    #     j=1, 
+    #     get_rate=True, 
+    #     total=False, 
+    #     T=temp_a, 
+    #     esys=(bare_evals, bare_evecs), 
+    #     Q_cap = default_Q,
+    # ) / Q_t1_coef
 
     gamma_down = ancilla.t1_capacitive(
         i=1, 
@@ -91,10 +91,10 @@ def sweep_tmon_relaxation(
         esys=(bare_evals, bare_evecs)
     ) / Q_tphi_coef
 
-    return np.array([gamma_down, gamma_up, gamma_phi_ng, gamma_phi_cc])
+    return np.array([gamma_down, gamma_phi_ng, gamma_phi_cc])
 
 tmon_sweep_dict[
-    ("Gamma_down", "Gamma_up", "Gamma_phi_ng", "Gamma_phi_cc")
+    ("Gamma_down", "Gamma_phi_ng", "Gamma_phi_cc")
     ] = (sweep_tmon_relaxation, ("temp_a", "Q_t1_coef", "Q_tphi_coef"))
 
 

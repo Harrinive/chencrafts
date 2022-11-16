@@ -19,9 +19,16 @@ from chencrafts.bsqubits.error_rates import manual_constr
 from chencrafts.toolbox.save import path_decorator, save_variable_list_dict, load_variable_list_dict
 from chencrafts.toolbox.plot import IntCmap, filter
 
+
+# ##############################################################################
+def sample_from_range(range_dict: Dict) -> Dict[float]:
+    new_dict = {}
+    for key, (low, high) in range_dict.items():
+        new_dict[key] = np.random.uniform(low, high)
+    return new_dict
+
 # ##############################################################################
 TARGET_NORMALIZE = 1e-7
-
 
 def nan_2_flat_val(full_variables, possible_nan_value):
     """
@@ -93,11 +100,11 @@ class OptTraj():
         return [x[name] for name in self.para_name]
 
     @property
-    def final_para(self) -> np.ndarray:
+    def final_para(self) -> Dict[str, float]:
         return self._x_arr_2_dict(self.para_traj[-1, :])
 
     @property
-    def init_para(self) -> np.ndarray:
+    def init_para(self) -> Dict[str, float]:
         return self._x_arr_2_dict(self.para_traj[0, :])
 
     @property
@@ -110,6 +117,7 @@ class OptTraj():
 
     def copy(self) -> "OptTraj":
         new_result = OptTraj(
+            self.para_name,
             self.para_traj.copy(),
             self.target_traj.copy(),
             self.constr_traj.copy(),
@@ -140,11 +148,12 @@ class OptTraj():
 
         return new_var
 
-    def plot(self, para_range_dict: dict = {}) -> None:
+    def plot(self, para_range_dict: dict = {}, ax = None) -> None:
         # need further updating: use twin y axis for the target_traj
         normalized_para = self._normalize_para(para_range_dict)
         max_target = np.max(self.target_traj)
 
+        need_show = False
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
             need_show = True
@@ -251,7 +260,7 @@ class MultiTraj():
 
     def save(
         self,
-        path,
+        path: str,
     ) -> None:
         path = path_decorator(path)
         for idx in range(self.length):
@@ -270,6 +279,7 @@ class MultiTraj():
             return new_traj
 
     def plot_target(self, ax=None, ylim=(1e-7, 6e-6)):
+        need_show = False
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
             need_show = True

@@ -246,9 +246,9 @@ class DerivedVariableTmon(DerivedVariableBase):
 
     def __init__(
         self, 
-        para: OrderedDict, 
-        sim_para: OrderedDict, 
-        swept_para_dict: dict = {},
+        para: Dict[str, float], 
+        sim_para: Dict[str, float], 
+        swept_para_dict: Dict = {},
     ):
         super().__init__(
             para, 
@@ -288,6 +288,10 @@ class DerivedVariableTmon(DerivedVariableBase):
 
         # Store the data that directly come from the sweep
         self.derived_dict.update(dict(
+            omega_a = self._sweep_wrapper(
+                self.sweep["bare_evals"][1][..., 1] 
+                - self.sweep["bare_evals"][1][..., 0]
+            ),
             det_01_GHz = self._sweep_wrapper(
                 self.sweep["bare_evals"][1][..., 1] 
                 - self.sweep["bare_evals"][1][..., 0]
@@ -323,21 +327,24 @@ class DerivedVariableTmon(DerivedVariableBase):
         # Evaluate the derived variables that can be simply calculated by elementary functions
         self.derived_dict.update(dict(
             Gamma_phi = self["Gamma_phi_ng"] + self["Gamma_phi_cc"],
-            Gamma_up_ro = self["Gamma_up"].copy(),
             Gamma_down_ro = self["Gamma_down"].copy(),
             kappa_s = PI2 * self["omega_s"] / self["Q_s"],
-            n_th = _n_th(self["omega_s"], self["temp_s"]) + self["n_th_base"], 
+            n_th_s = _n_th(self["omega_s"], self["temp_s"]) + self["n_th_base"], 
+            n_th_a = _n_th(self["omega_a"], self["temp_a"]) + self["n_th_base"], 
             sigma = self["sigma*alpha"] / np.abs(self["alpha"])
         ))
         self.derived_dict.update(dict(
             pulse_time = self["sigma"] * np.abs(self["pulse/sigma"]),
             eff_pulse_time = self["sigma"] * np.abs(self["pulse_eff/sigma"]),
-            cavity_loss = self["kappa_s"] * self["n_bar"] * (1 + self["n_th"])
+            cavity_loss = self["kappa_s"] * self["n_bar"] * (1 + self["n_th_s"])
                 + self["Gamma_down"] * self["anc_excitation"],
+            cavity_gain = self["kappa_s"] * self["n_bar"] * self["n_th_s"],
+            Gamma_up = self["Gamma_down"] * self["n_th_a"],
         ))
         self.derived_dict.update(dict(
             T_M = self["T_W"] + self["tau_FD"] + self["tau_m"] 
                 + np.pi / np.abs(self["chi_sa"]) + 3 * self["pulse_time"], 
+            Gamma_up_ro = self["Gamma_up"].copy(),
         ))
         
         if not return_full_para:

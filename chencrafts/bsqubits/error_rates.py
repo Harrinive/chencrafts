@@ -352,8 +352,8 @@ tmon_channels_purcell.add_channel(
 )
 tmon_channels_purcell.add_channel(
     "photon_gain", 
-    lambda cavity_loss, n_th, *args, **kwargs: 
-        cavity_loss * n_th
+    lambda cavity_gain, *args, **kwargs: 
+        cavity_gain
 )
 tmon_channels_purcell.add_channel(
     "anc_prepare", 

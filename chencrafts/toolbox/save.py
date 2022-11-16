@@ -18,6 +18,8 @@ def datetime_dir(
     save_dir="./",
     dir_suffix=None,
 ):
+    save_dir = path_decorator(save_dir)
+    
     current_time = time.localtime()
     current_month_dir = save_dir + time.strftime("%h/", current_time)
     current_date_dir = current_month_dir + \
