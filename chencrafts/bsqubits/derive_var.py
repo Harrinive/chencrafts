@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.constants import h, k
+from scipy.special import erfc
 import scqubits as scq
 
 from collections import OrderedDict
@@ -26,6 +27,21 @@ def _var_dict_2_shape_dict(var_dict):
 def _n_th(freq, temp):
     """freq is in the unit of GHz, temp is in the unit of K"""
     return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1)
+
+def _readout_error(disp, relax_rate, int_time) -> NSArray:
+    SNR = 2 * np.abs(disp) * np.sqrt(relax_rate * int_time)
+    return 0.5 * erfc(SNR / 2)
+
+def _addit_rate_ro(kappa_down, n_ro, n_crit, lambda_2, kappa_r, kappa_phi) -> Tuple[NSArray]:
+    k_down_ro = (kappa_down * (1 - (n_ro + 0.5) / 2 / n_crit) 
+        + lambda_2 * kappa_r + 2 * lambda_2 * kappa_phi * (n_ro + 1))
+    k_up_ro = 2 * lambda_2 * kappa_phi * n_ro
+    return k_down_ro, k_up_ro
+
+def _shot_noise(kappa_r, chi_ar, n_th_r) -> NSArray:
+    return kappa_r / 2 * (np.sqrt(
+        (1 + 1j * chi_ar / kappa_r)**2 + 4j * chi_ar * n_th_r / kappa_r
+    ) - 1).real
 
 class DerivedVariableBase():
     scq_available_var: List[str] = []
@@ -62,7 +78,7 @@ class DerivedVariableBase():
     def __getitem__(
         self,
         name: str,
-    ):
+    ) -> NSArray:
         try:
             return self.para_dict_to_use[name]
         except KeyError:
@@ -199,7 +215,7 @@ class DerivedVariableBase():
 
     def _evaluate_extra_sweep_from_dict(
         self, 
-        sweep_dict: Dict[str, Tuple[Callable, Tuple[str]]], 
+        sweep_func_dict: Dict[str, Tuple[Callable, Tuple[str]]], 
         kwargs: Dict
     ):
         """
@@ -207,7 +223,7 @@ class DerivedVariableBase():
         dict values is a tuple: (function, input_names)  
         the function should return a np.array object
         """
-        for out_var_name, (func, in_var_name) in sweep_dict.items():
+        for out_var_name, (func, in_var_name) in sweep_func_dict.items():
             sweep_dict = {}
             for key in in_var_name:
                 if key in self.sweep_para_dict.keys():
@@ -288,7 +304,7 @@ class DerivedVariableTmon(DerivedVariableBase):
 
         # Store the data that directly come from the sweep
         self.derived_dict.update(dict(
-            omega_a = self._sweep_wrapper(
+            omega_a_GHz = self._sweep_wrapper(
                 self.sweep["bare_evals"][1][..., 1] 
                 - self.sweep["bare_evals"][1][..., 0]
             ),
@@ -310,7 +326,7 @@ class DerivedVariableTmon(DerivedVariableBase):
                 self.sweep["chi_prime"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
         ))
-        self.derived_dict["alpha"] = PI2 * (self["det_12_GHz"] - self["det_01_GHz"])
+        self.derived_dict["2*K_a"] = PI2 * (self["det_12_GHz"] - self["det_01_GHz"])
 
         # Evaluate extra sweep over parameter outside of the self.scq_available_var
         a_s = self.system.a_s()
@@ -325,33 +341,68 @@ class DerivedVariableTmon(DerivedVariableBase):
         )
 
         # Evaluate the derived variables that can be simply calculated by elementary functions
+        # 1st level
         self.derived_dict.update(dict(
-            Gamma_phi = self["Gamma_phi_ng"] + self["Gamma_phi_cc"],
-            Gamma_down_ro = self["Gamma_down"].copy(),
+            # bare decoherence rate
             kappa_s = PI2 * self["omega_s"] / self["Q_s"],
+            kappa_a = self["kappa_cap"],
+            kappa_phi = self["kappa_phi_ng"] + self["kappa_phi_cc"],
             n_th_s = _n_th(self["omega_s"], self["temp_s"]) + self["n_th_base"], 
-            n_th_a = _n_th(self["omega_a"], self["temp_a"]) + self["n_th_base"], 
-            sigma = self["sigma*alpha"] / np.abs(self["alpha"])
+            n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"]) + self["n_th_base"], 
+            # readout
+            chi_ar = self["chi_ar/kappa_r"] * self["kappa_r"],
+            sigma = self["sigma*2*K_a"] / np.abs(self["2*K_a"])
         ))
+        # 2nd level
+        lambda_2 = np.abs(self["chi_ar"] / self["2*K_a"])
+        n_crit = (1 / 4 / lambda_2)
+        n_ro = self["n_ro/n_crit"] * n_crit
+        kappa_down_ro, kappa_up_ro = _addit_rate_ro(
+            self["kappa_a"], n_ro, n_crit, lambda_2, self["kappa_r"], self["kappa_phi"]
+        )
         self.derived_dict.update(dict(
-            pulse_time = self["sigma"] * np.abs(self["pulse/sigma"]),
-            eff_pulse_time = self["sigma"] * np.abs(self["pulse_eff/sigma"]),
-            cavity_loss = self["kappa_s"] * self["n_bar"] * (1 + self["n_th_s"])
-                + self["Gamma_down"] * self["anc_excitation"],
-            cavity_gain = self["kappa_s"] * self["n_bar"] * self["n_th_s"],
-            Gamma_up = self["Gamma_down"] * self["n_th_a"],
+            # readout
+            lambda_ro = lambda_2,
+            n_crit = n_crit,
+            n_ro = n_ro,
+            kappa_down_ro = kappa_down_ro,
+            kappa_up_ro = kappa_up_ro,
+            # additional coherence rates
+            kappa_phi_r = _shot_noise(self["kappa_r"], self["chi_ar"], self["n_th_r"]),
+            kappa_a_r = lambda_2 * self["kappa_r"],
+            # pulse
+            tau_p = self["sigma"] * np.abs(self["tau_p/sigma"]),
+            tau_p_eff = self["sigma"] * np.abs(self["tau_p_eff/sigma"]),
         ))
+        # 3rd level
+        M_ge = _readout_error(
+            np.sqrt(self["n_ro"]), 
+            self["kappa_r"], 
+            self["tau_m"]
+        )
         self.derived_dict.update(dict(
+            # readout
+            M_ge = M_ge,
+            M_eg = M_ge.copy(),
+            # total decoherence rate
+            gamma_down = self["kappa_s"] * self["n_bar_s"] * (1 + self["n_th_s"]) 
+                + self["kappa_a"] * self["n_bar_a"],
+            gamma_up = self["kappa_s"] * (self["n_bar_s"] + 1) * self["n_th_s"] 
+                + self["kappa_a"] * self["n_bar_a"] * self["n_th_a"],
+            Gamma_down = self["kappa_a"] + self["kappa_a_r"],
+            Gamma_up = (self["kappa_a"] + self["kappa_a_r"]) * self["n_th_a"],
+            Gamma_phi = self["kappa_phi"] + self["kappa_phi_r"],
+            Gamma_down_ro = self["kappa_a"] + self["kappa_down_ro"],
+            Gamma_up_ro = self["kappa_a"] * self["n_th_a"] + self["kappa_up_ro"],
+            # other
             T_M = self["T_W"] + self["tau_FD"] + self["tau_m"] 
-                + np.pi / np.abs(self["chi_sa"]) + 3 * self["pulse_time"], 
-            Gamma_up_ro = self["Gamma_up"].copy(),
+                + np.pi / np.abs(self["chi_sa"]) + 3 * self["tau_p"], 
         ))
-        
+
         if not return_full_para:
             return self.derived_dict
         else:
             full_dict = self.para_dict_to_use.copy()
             full_dict.update(self.derived_dict)
             return full_dict
-
 

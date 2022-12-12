@@ -150,6 +150,7 @@ class ErrorRate:
 
         # error calculation
         error_dict = self(**kwargs, return_dict=True)
+        del error_dict["total"]
         error_rate_list = list(error_dict.values())
         total_error_rate = np.sum(error_rate_list)
 
@@ -228,6 +229,7 @@ class ErrorRate:
 
         for i in range(compare_num):
             error_dict = self(**para_dicts[i], return_dict=True)
+            del error_dict["total"]
             for j, err in enumerate(error_dict.values()):
                 errors[i, j] = err
 
@@ -343,67 +345,67 @@ manual_constr = ErrorChannel(
 )
 
 # ------------------------------------------------------------------------------
-tmon_channels_purcell = ErrorRate()
+basic_channels = ErrorRate()
 
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "multiple_photon_loss",
-    lambda cavity_loss, T_M, *args, **kwargs: 
-        - np.log((1 + cavity_loss * T_M) * np.exp(-cavity_loss * T_M)) / T_M
+    lambda gamma_down, T_M, *args, **kwargs: 
+        - np.log((1 + gamma_down * T_M) * np.exp(-gamma_down * T_M)) / T_M
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "photon_gain", 
-    lambda cavity_gain, *args, **kwargs: 
-        cavity_gain
+    lambda gamma_up, *args, **kwargs: 
+        gamma_up
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "anc_prepare", 
-    lambda T_W, Gamma_up, Gamma_down, T_M, *args, **kwargs: 
+    lambda T_W, Gamma_up, Gamma_down, T_M, tau_FD, *args, **kwargs: 
         Gamma_up / (Gamma_up + Gamma_down) 
-        * (1 - np.exp(-(Gamma_up + Gamma_down) * T_W)) / T_M
+        * (1 - np.exp(-(Gamma_up + Gamma_down) * (T_W + tau_FD))) / T_M
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "anc_relax_map", 
     lambda Gamma_down, chi_sa, T_M, *args, **kwargs: 
         np.pi * Gamma_down / (np.abs(chi_sa) * T_M)
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "anc_dephase_map", 
     lambda Gamma_phi, chi_sa, T_M, *args, **kwargs: 
         np.pi * Gamma_phi / (np.abs(chi_sa) * T_M)
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "anc_relax_ro", 
-    lambda cavity_loss, tau_m, tau_FD, Gamma_down_ro, *args, **kwargs: 
-        cavity_loss * Gamma_down_ro * (tau_m + tau_FD)
+    lambda gamma_down, tau_m, tau_FD, Gamma_down_ro, Gamma_down, *args, **kwargs: 
+        gamma_down * Gamma_down_ro * tau_m + gamma_down * Gamma_down * tau_FD
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "anc_excite_ro", 
     lambda tau_m, Gamma_up_ro, T_M, *args, **kwargs: 
         Gamma_up_ro * tau_m / T_M
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "Kerr_dephase", 
-    lambda cavity_loss, K_s, T_M, *args, **kwargs: 
-        cavity_loss * K_s**2 * T_M**2 / 6
+    lambda gamma_down, K_s, T_M, *args, **kwargs: 
+        gamma_down * K_s**2 * T_M**2 / 6
 )
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "ro_infidelity", 
-    lambda cavity_loss, M_eg, M_ge, T_M, *args, **kwargs: 
-        cavity_loss * M_eg + M_ge / T_M
+    lambda gamma_down, M_eg, M_ge, T_M, *args, **kwargs: 
+        gamma_down * M_eg + M_ge / T_M
 )
-tmon_channels_purcell.add_channel(
-    "high_order_int", 
-    lambda n_bar, chi_sa, T_M, chi_prime, *args, **kwargs: 
-        n_bar * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
-)
-tmon_channels_purcell.add_channel(
+basic_channels.add_channel(
     "pi_pulse_error", 
-    lambda n_bar, eff_pulse_time, chi_sa, T_M, *args, **kwargs: 
-        n_bar * chi_sa**2 * eff_pulse_time**2 / T_M
+    lambda n_bar_s, tau_p_eff, chi_sa, T_M, *args, **kwargs: 
+        n_bar_s * chi_sa**2 * tau_p_eff**2 / T_M
+)
+basic_channels.add_channel(
+    "high_order_int", 
+    lambda n_bar_s, chi_sa, T_M, chi_prime, *args, **kwargs: 
+        n_bar_s * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
 )
 
 # ##############################################################################
 class ErrorRateTmon(ErrorRate):
     def __init__(self):
         super().__init__()
-        self.merge_channel(tmon_channels_purcell)
+        self.merge_channel(basic_channels)

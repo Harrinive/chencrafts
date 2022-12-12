@@ -6,22 +6,14 @@ import numpy as np
 import pandas as pd
 
 
-def path_decorator(path):
-    if not path[-1] == "/" and not path[-1] == "\\":
-        new_path = path + "/"
-    else: 
-        new_path = path
-    return new_path
-
-
 def datetime_dir(
     save_dir="./",
     dir_suffix=None,
 ):
-    save_dir = path_decorator(save_dir)
+    save_dir = os.path.normpath(save_dir)
     
     current_time = time.localtime()
-    current_month_dir = save_dir + time.strftime("%h/", current_time)
+    current_month_dir = save_dir + time.strftime("/%h/", current_time)
     current_date_dir = current_month_dir + \
         time.strftime("%d_%H-%M", current_time)
 
@@ -56,7 +48,6 @@ def load_variable_dict(file_name):
     new_dict = dict([(key, val[0]) for key, val in list_dict.items()])
     return new_dict
 
-
 def save_variable_list_dict(file_name, variable_list_dict, orient='columns'):
     """
     orient = 'index' is always used when variable list are not equal in length
@@ -65,7 +56,6 @@ def save_variable_list_dict(file_name, variable_list_dict, orient='columns'):
         variable_list_dict,
         orient=orient,
     ).to_csv(file_name)
-
 
 def load_variable_list_dict(file_name, throw_nan=True, orient='columns'):
     """

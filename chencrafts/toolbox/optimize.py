@@ -14,9 +14,15 @@ from collections import OrderedDict
 from typing import Callable, Dict, List, Tuple, Union
 
 from tqdm.notebook import tqdm
+import os
 
 from chencrafts.bsqubits.error_rates import manual_constr
-from chencrafts.toolbox.save import path_decorator, save_variable_list_dict, load_variable_list_dict
+from chencrafts.toolbox.save import (
+    save_variable_list_dict, 
+    load_variable_list_dict, 
+    save_variable_dict,
+    load_variable_dict,
+)
 from chencrafts.toolbox.plot import IntCmap, filter
 
 
@@ -32,21 +38,21 @@ TARGET_NORMALIZE = 1e-7
 
 def nan_2_flat_val(full_variables, possible_nan_value):
     """
-    The full_variables should contain "n_bar" and "kappa_s"
+    The full_variables should contain "kappa_s" and "disp"
     """
     if np.isnan(possible_nan_value):
-        return full_variables["n_bar"] * full_variables["kappa_s"]
+        return (full_variables["disp"])**2 * full_variables["kappa_s"]
     else:
         return possible_nan_value
 
 
 def nan_2_constr(full_variables, possible_nan_value):
     """
-    The full_variables should contain "n_bar", "kappa_s", "g_sa", 
+    The full_variables should contain "disp", "kappa_s", "g_sa", 
     "min_detuning", "detuning_lower_bound", "constr_amp"
     """
     if np.isnan(possible_nan_value):
-        base_val = full_variables["n_bar"] * full_variables["kappa_s"]
+        base_val = (full_variables["disp"])**2 * full_variables["kappa_s"]
         val = base_val + manual_constr(**full_variables)
         return val
     else:
@@ -60,6 +66,7 @@ class OptTraj():
         para_traj: np.ndarray,
         target_traj: np.ndarray,
         constr_traj: np.ndarray,
+        fixed_para: Dict[str, float] = {},
     ):
         self.para_name = para_name
         self.para_traj = para_traj
@@ -68,8 +75,10 @@ class OptTraj():
 
         self.length = self.para_traj.shape[0]
 
+        self.fixed_para = fixed_para
+
     @classmethod
-    def from_file(cls, file_name):
+    def from_file(cls, file_name, fixed_para_file_name = None):
         traj_dict = load_variable_list_dict(file_name, throw_nan=False)
 
         para_name = [name for name in traj_dict.keys() if name not in [
@@ -80,11 +89,17 @@ class OptTraj():
         for idx, name in enumerate(para_name):
             para_traj[:, idx] = traj_dict[name]
 
+        if fixed_para_file_name is not None:
+            fixed_para = load_variable_dict(fixed_para_file_name)
+        else:
+            fixed_para = {}
+
         instance = cls(
             para_name,
             para_traj,
             traj_dict["target"],
             traj_dict["constr"],
+            fixed_para
         )
 
         return instance
@@ -100,12 +115,18 @@ class OptTraj():
         return [x[name] for name in self.para_name]
 
     @property
-    def final_para(self) -> Dict[str, float]:
-        return self._x_arr_2_dict(self.para_traj[-1, :])
+    def final_para(self, full=False) -> Dict[str, float]:
+        if full:
+            return self._x_arr_2_dict(self.para_traj[-1, :]) | self.fixed_para
+        else:
+            return self._x_arr_2_dict(self.para_traj[-1, :])
 
     @property
-    def init_para(self) -> Dict[str, float]:
-        return self._x_arr_2_dict(self.para_traj[0, :])
+    def init_para(self, full=False) -> Dict[str, float]:
+        if full: 
+            self._x_arr_2_dict(self.para_traj[0, :]) | self.fixed_para
+        else:
+            return self._x_arr_2_dict(self.para_traj[0, :])
 
     @property
     def final_target(self) -> float:
@@ -121,6 +142,7 @@ class OptTraj():
             self.para_traj.copy(),
             self.target_traj.copy(),
             self.constr_traj.copy(),
+            self.fixed_para.copy(),
         )
         return new_result
 
@@ -194,8 +216,10 @@ class OptTraj():
                 text = f"  {val:.1e}"
             ax.text(x[-1], y[-1], text, ha="left", va="center", c=c, fontsize=7)
 
-    def save(self, file_name):
+    def save(self, file_name, fixed_para_file_name = None):
         save_variable_list_dict(file_name, self.to_dict())
+        if fixed_para_file_name is not None:
+            save_variable_dict(fixed_para_file_name, self.fixed_para)
 
 
 class MultiTraj():
@@ -219,15 +243,22 @@ class MultiTraj():
     def from_folder(
         cls,
         path,
+        with_fixed = True,
     ) -> "MultiTraj":
         multi_traj = cls()
 
-        path = path_decorator(path)
+        path = os.path.normpath(path)
+        if with_fixed:
+            fixed_path = f"{path}/fixed.csv"
+        else:
+            fixed_path = None
 
         idx = 0
         while True:
             try:
-                traj = OptTraj.from_file(f"{path}{idx}.csv")
+                traj_path = f"{path}/{idx}.csv"
+
+                traj = OptTraj.from_file(traj_path, fixed_path)
                 multi_traj.append(traj)
                 idx += 1
             except FileNotFoundError:
@@ -262,9 +293,12 @@ class MultiTraj():
         self,
         path: str,
     ) -> None:
-        path = path_decorator(path)
+        """
+        Assume all of the OptTraj have the same fixed_para
+        """
+        path = os.path.normpath(path)
         for idx in range(self.length):
-            self[idx].save(f"{path}{idx}.csv")
+            self[idx].save(f"{path}/{idx}.csv")
 
     def best_traj(self, select_num=1) -> OptTraj | MultiTraj:
         sort = np.argsort(self._target_list())

@@ -35,7 +35,6 @@ def sweep_loss_rate(
             basis[idx] = None
 
     # get a cat state, now uses logical plus state
-
     alpha = np.sqrt(disp)
 
     logical_plus = cat(basis, [(1, alpha), (1, -alpha), (1, 1j * alpha), (1, -1j * alpha)])
@@ -45,17 +44,20 @@ def sweep_loss_rate(
     inverse_purcell = qt.expect(sig_p_sig_m, logical_plus)
 
     return np.array([pure_cavity_loss, inverse_purcell])
-tmon_sweep_dict[("n_bar", "anc_excitation")] = (sweep_loss_rate, ("disp", ))
+tmon_sweep_dict[("n_bar_s", "n_bar_a")] = (sweep_loss_rate, ("disp", ))
 
 def sweep_tmon_relaxation(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
-    temp_a, Q_t1_coef, Q_tphi_coef, **kwargs):
+    temp_a, Q_cap=5e5, A_ng=1e-4, A_cc=1e-7, **kwargs):
 
     ancilla: scq.Transmon = paramsweep.hilbertspace.subsys_list[1]
     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
 
-    default_Q = 5e5
+    # default: 
+    # "A_flux": 1e-6,  # Flux noise strength. Units: Phi_0
+    # "A_ng": 1e-4,  # Charge noise strength. Units of charge e
+    # "A_cc": 1e-7,  # Critical current noise strength. Units of critical current I_c
 
     # gamma_up = ancilla.t1_capacitive(
     #     i=0, 
@@ -74,28 +76,30 @@ def sweep_tmon_relaxation(
         total=False, 
         T=temp_a, 
         esys=(bare_evals, bare_evecs),
-        Q_cap = default_Q,
-    ) / Q_t1_coef
+        Q_cap = Q_cap,
+    )
 
     gamma_phi_ng = ancilla.tphi_1_over_f_ng(
+        A_noise=A_ng,
         i=0, 
         j=1, 
         get_rate=True, 
         esys=(bare_evals, bare_evecs)
-    )/ Q_tphi_coef
-        
+    )
+
     gamma_phi_cc = ancilla.tphi_1_over_f_cc(
+        A_noise=A_cc,
         i=0, 
         j=1, 
         get_rate=True, 
         esys=(bare_evals, bare_evecs)
-    ) / Q_tphi_coef
+    )
 
     return np.array([gamma_down, gamma_phi_ng, gamma_phi_cc])
 
 tmon_sweep_dict[
-    ("Gamma_down", "Gamma_phi_ng", "Gamma_phi_cc")
-    ] = (sweep_tmon_relaxation, ("temp_a", "Q_t1_coef", "Q_tphi_coef"))
+    ("kappa_cap", "kappa_phi_ng", "kappa_phi_cc")
+] = (sweep_tmon_relaxation, ("temp_a", "Q_cap", "A_ng", "A_cc"))
 
 
 # ##############################################################################

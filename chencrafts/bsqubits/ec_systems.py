@@ -111,7 +111,7 @@ class JointSystemBase():
             self.dim_list,
             esys
         )
-
+        
 
 class CavityAncSystem(JointSystemBase):
     def __init__(
@@ -294,10 +294,10 @@ class CavityTmonSys(CavityAncSystem):
         return self.para["omega_s"] - (evals[1] - evals[0])
 
     def _update_h_space(self, omega_s, g_sa, EJ, EC, **kwargs):
-            self.system.E_osc = omega_s
-            self.h_space.interaction_list[0].g_strength = g_sa
-            self.ancilla.EJ = EJ
-            self.ancilla.EC = EC
+        self.system.E_osc = omega_s
+        self.h_space.interaction_list[0].g_strength = g_sa
+        self.ancilla.EJ = EJ
+        self.ancilla.EC = EC
 
     def sweep(self,) -> scq.ParameterSweep:
         # "sweep" for variables on omega_s, g_sa, EJ and EC
