@@ -1,6 +1,5 @@
 import time
 import os
-from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -71,10 +70,10 @@ def load_variable_list_dict(file_name, throw_nan=True, orient='columns'):
         raise ValueError("only recognize 'index' or 'columns' for orient")
 
     if not throw_nan:
-        return OrderedDict([(key, np.array(val)) for key, val in variable_list_dict.items()])
+        return dict([(key, np.array(val)) for key, val in variable_list_dict.items()])
 
     for key, val in variable_list_dict.items():
         new_val = np.array(val)
         new_val = new_val[~np.isnan(val)]
         variable_list_dict[key] = new_val
-    return OrderedDict(variable_list_dict)
+    return variable_list_dict

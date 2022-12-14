@@ -34,17 +34,25 @@ def sweep_loss_rate(
         else:
             basis[idx] = None
 
-    # get a cat state, now uses logical plus state
-    alpha = np.sqrt(disp)
-
-    logical_plus = cat(basis, [(1, alpha), (1, -alpha), (1, 1j * alpha), (1, -1j * alpha)])
+    # get a state for calculating decay rate, now uses logical plus state
+    logical_plus = cat(basis, [(1, disp), (1, -disp), (1, 1j * disp), (1, -1j * disp)])
+    fock_1 = basis[1]
 
     # evaluate photon loss rate
-    pure_cavity_loss = qt.expect(a_dag_a, logical_plus)
-    inverse_purcell = qt.expect(sig_p_sig_m, logical_plus)
+    cavity_excitation_l = qt.expect(a_dag_a, logical_plus)
+    qubit_excitation_l = qt.expect(sig_p_sig_m, logical_plus)
+    cavity_excitation_f = qt.expect(a_dag_a, fock_1)
+    qubit_excitation_f = qt.expect(sig_p_sig_m, fock_1)
 
-    return np.array([pure_cavity_loss, inverse_purcell])
-tmon_sweep_dict[("n_bar_s", "n_bar_a")] = (sweep_loss_rate, ("disp", ))
+    return np.array([
+        cavity_excitation_l, 
+        qubit_excitation_l, 
+        cavity_excitation_f, 
+        qubit_excitation_f
+    ])
+tmon_sweep_dict[(
+    "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
+)] = (sweep_loss_rate, ("disp", ))
 
 def sweep_tmon_relaxation(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 

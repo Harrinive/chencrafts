@@ -10,7 +10,7 @@ from scipy.optimize import (
     dual_annealing,
     NonlinearConstraint,
 )
-from collections import OrderedDict
+
 from typing import Callable, Dict, List, Tuple, Union
 
 from tqdm.notebook import tqdm
@@ -109,7 +109,7 @@ class OptTraj():
         return self.para_traj[:, idx]
 
     def _x_arr_2_dict(self, x: np.ndarray | List):
-        return OrderedDict(zip(self.para_name, x))
+        return dict(zip(self.para_name, x))
 
     def _x_dict_2_arr(self, x: dict):
         return [x[name] for name in self.para_name]
@@ -153,8 +153,8 @@ class OptTraj():
         self.constr_traj = np.append(self.constr_traj, constr)
         self.length += 1
 
-    def to_dict(self) -> OrderedDict:
-        traj_dict = OrderedDict({})
+    def to_dict(self) -> Dict:
+        traj_dict = {}
         for idx, key in enumerate(self.para_name):
             traj_dict[key] = self.para_traj[:, idx]
         traj_dict["target"] = self.target_traj
@@ -177,7 +177,7 @@ class OptTraj():
 
         need_show = False
         if ax is None:
-            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
+            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=150)
             need_show = True
 
         ax.plot(range(self.length), normalized_para, label=self.para_name)
@@ -298,7 +298,10 @@ class MultiTraj():
         """
         path = os.path.normpath(path)
         for idx in range(self.length):
-            self[idx].save(f"{path}/{idx}.csv")
+            self[idx].save(
+                f"{path}/{idx}.csv", 
+                fixed_para_file_name=f"{path}/fixed.csv"
+            )
 
     def best_traj(self, select_num=1) -> OptTraj | MultiTraj:
         sort = np.argsort(self._target_list())
@@ -315,7 +318,7 @@ class MultiTraj():
     def plot_target(self, ax=None, ylim=(1e-7, 6e-6)):
         need_show = False
         if ax is None:
-            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=300)
+            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=150)
             need_show = True
 
         best = self.best_traj()
@@ -357,8 +360,8 @@ class MultiTraj():
 class Optimization():
     def __init__(
         self,
-        fixed_variables: OrderedDict[str, float],
-        free_variable_ranges: OrderedDict[str, List[float]],
+        fixed_variables: Dict[str, float],
+        free_variable_ranges: Dict[str, List[float]],
         target_func: Callable,
         target_kwargs: dict = {},
         optimizer: str = "L-BFGS-B",
@@ -512,7 +515,7 @@ class Optimization():
         return output * TARGET_NORMALIZE
 
     def _x_arr_2_dict(self, x: np.ndarray | List):
-        return OrderedDict(zip(self.free_name_list, x))
+        return dict(zip(self.free_name_list, x))
 
     def _x_dict_2_arr(self, x: dict):
         return [x[name] for name in self.free_name_list]
@@ -551,7 +554,7 @@ class Optimization():
                     high=1,
                     size=len(self.free_name_list)
                 )
-                norm_init_dict = OrderedDict(
+                norm_init_dict = dict(
                     zip(self.free_name_list, norm_init))
                 denorm_init_dict = self._denormalize_input(norm_init_dict)
                 if check_func(self.fixed_variables | denorm_init_dict, **check_kwargs):

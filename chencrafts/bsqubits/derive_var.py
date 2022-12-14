@@ -3,7 +3,7 @@ from scipy.constants import h, k
 from scipy.special import erfc
 import scqubits as scq
 
-from collections import OrderedDict
+import warnings
 from typing import List, Dict, Callable, Tuple
 
 from chencrafts.toolbox.data_processing import (
@@ -16,10 +16,11 @@ from chencrafts.bsqubits.ec_systems import (
 from chencrafts.bsqubits.basis_n_states import cat
 from chencrafts.bsqubits.sweeps import tmon_sweep_dict
 
+
 PI2 = np.pi * 2
 
 def _var_dict_2_shape_dict(var_dict):
-    shape_dict = OrderedDict({})
+    shape_dict = {}
     for key, val in var_dict.items():
         shape_dict[key] = len(val)
     return shape_dict
@@ -55,17 +56,17 @@ class DerivedVariableBase():
         # independent parameters: fixed + simulation + varied
         self.para_dict = para
         self.sim_para = sim_para
-        self.sweep_para_dict = OrderedDict([(key, np.array(val)) 
-        for key, val in swept_para_dict.items()])
+        self.sweep_para_dict = dict([(key, np.array(val)) 
+            for key, val in swept_para_dict.items()])
 
         # output
         if self.sweep_para_dict != {}:
             # self.para_dict_to_use is a meshgrid if the user want to sweep 
             self.para_dict_to_use = self._meshgrid(self._merge_default())
         else:
-            self.para_dict_to_use = OrderedDict([(key, NSArray(val)) 
+            self.para_dict_to_use = dict([(key, NSArray(val)) 
                 for key, val in self._merge_default().items()])
-        self.derived_dict = OrderedDict({})
+        self.derived_dict = {}
 
         # dimension modify
         self._scq_sweep_shape = self._init_scq_sweep_shape()
@@ -90,13 +91,13 @@ class DerivedVariableBase():
             raise KeyError(f"{name} not found in the parameters including the derived one. "
             "If you didn't call use `evaluate()`, try it.")
 
-    def _init_scq_sweep_shape(self) -> OrderedDict:
+    def _init_scq_sweep_shape(self) -> Dict:
         """
         available_scq_sweep_name is a class constant, 
         for example, it can be ["omega_s", "g_sa", "EJ", "EC"]
         """
 
-        scq_sweep_shape = OrderedDict({})
+        scq_sweep_shape = {}
         for key in self.scq_available_var:
             if key in self.sweep_para_dict.keys():
                 scq_sweep_shape[key] = len(self.sweep_para_dict[key])
@@ -109,12 +110,12 @@ class DerivedVariableBase():
         return self.default_para | self.para_dict
 
     def _meshgrid(self, var_dict):
-        variable_mesh_dict = OrderedDict(zip(
+        variable_mesh_dict = dict(zip(
             self.sweep_para_dict.keys(),
             np.meshgrid(*self.sweep_para_dict.values(), indexing="ij")
         ))
         
-        full_para_mesh = OrderedDict({})
+        full_para_mesh = {}
         shape = list(variable_mesh_dict.values())[0].shape
 
         for key, val in var_dict.items():
@@ -148,6 +149,7 @@ class DerivedVariableBase():
     
     @property
     def full_para(self):
+        
         return self.para_dict_to_use | self.derived_dict
 
     def keys(self):
@@ -351,8 +353,13 @@ class DerivedVariableTmon(DerivedVariableBase):
             n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"]) + self["n_th_base"], 
             # readout
             chi_ar = self["chi_ar/kappa_r"] * self["kappa_r"],
-            sigma = self["sigma*2*K_a"] / np.abs(self["2*K_a"])
+            sigma = self["sigma*2*K_a"] / np.abs(self["2*K_a"]),
         ))
+
+        # #  Override the chi_ar/kappa_r ratio when using Ofek parameters
+        # warnings.warn("Warning: Overriding the chi_ar calculation!")
+        # self.derived_dict["chi_ar"] = 1e-3      
+
         # 2nd level
         lambda_2 = np.abs(self["chi_ar"] / self["2*K_a"])
         n_crit = (1 / 4 / lambda_2)
@@ -387,6 +394,8 @@ class DerivedVariableTmon(DerivedVariableBase):
             # total decoherence rate
             gamma_down = self["kappa_s"] * self["n_bar_s"] * (1 + self["n_th_s"]) 
                 + self["kappa_a"] * self["n_bar_a"],
+            gamma_01_down = self["kappa_s"] * self["n_fock1_s"] * (1 + self["n_th_s"]) 
+                + self["kappa_a"] * self["n_fock1_a"],
             gamma_up = self["kappa_s"] * (self["n_bar_s"] + 1) * self["n_th_s"] 
                 + self["kappa_a"] * self["n_bar_a"] * self["n_th_a"],
             Gamma_down = self["kappa_a"] + self["kappa_a_r"],

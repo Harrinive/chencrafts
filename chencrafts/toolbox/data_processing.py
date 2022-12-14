@@ -3,7 +3,6 @@ from locale import currency
 import chencrafts
 
 from typing import Callable, List, Union, Dict
-from collections import OrderedDict
 
 import numpy as np
 from scipy.interpolate import LinearNDInterpolator
@@ -91,7 +90,7 @@ class NSArray(NamedSlotsNdarray):
         return super().__new__(cls, input_array, values_by_name)
 
     def __getitem__(self, index):
-        if isinstance(index, dict | OrderedDict):
+        if isinstance(index, dict):
             regular_index = []
             for key in self.param_info.keys():
                 try:

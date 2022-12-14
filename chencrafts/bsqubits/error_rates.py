@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import OrderedDict
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
@@ -25,8 +24,8 @@ class ErrorRate:
     def __init__(
         self, 
     ):
-        self.error_channels: dict = OrderedDict({})
-        self.channel_enable_info: dict = OrderedDict({})
+        self.error_channels: dict = {}
+        self.channel_enable_info: dict = {}
 
     def __call__(
         self,
@@ -37,7 +36,7 @@ class ErrorRate:
         """returns the total enabled error rate"""
         total_error = 0
         if return_dict:
-            error_dict = OrderedDict({})
+            error_dict = {}
 
         for name, error_channel in self.error_channels.items():
             if not self.channel_enable_info[name]:
@@ -212,7 +211,7 @@ class ErrorRate:
             para_dicts = [para_dicts]
             compare_num = 1
         elif isinstance(para_dicts, list):
-            if isinstance(para_dicts[0], list):
+            if isinstance(para_dicts[0], dict):
                 compare_num = len(para_dicts)
             else:
                 raise TypeError("Should input a single dictionary or a list of "

@@ -1,4 +1,3 @@
-from collections import OrderedDict
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Callable, List
@@ -99,8 +98,8 @@ class ErrorRateArrIpt:
             raise ValueError(f"Input mode {default_input_mode} is invalid, only use "
             "\"original\", \"full\" and \"dict\".")
 
-        self.error_channels = OrderedDict({})
-        self.channel_enable_info = OrderedDict({})
+        self.error_channels = {}
+        self.channel_enable_info = {}
 
     def __call__(
         self,
@@ -110,7 +109,7 @@ class ErrorRateArrIpt:
     ):
         """returns the total enabled error rate"""
         if return_dict:
-            error_dict = OrderedDict({})
+            error_dict = {}
         else:
             total_error = 0
 

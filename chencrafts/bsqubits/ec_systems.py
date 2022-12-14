@@ -6,8 +6,6 @@ import qutip as qt
 
 from typing import Dict, List, Tuple
 
-from collections import OrderedDict
-
 from chencrafts.bsqubits.basis_n_states import dressed_basis
 
 class JointSystemBase():
@@ -70,12 +68,12 @@ class JointSystemBase():
         
         return scq.identity_wrap(oprt, sys, self.subsys, evecs=evecs)
 
-    def _scq_sweep_input_para(self) -> OrderedDict:
+    def _scq_sweep_input_para(self) -> dict:
         """
         For multi-dimensional sweep, the sweep function need all value in the swept_para
         to be a list
         """
-        swept_para = OrderedDict({})
+        swept_para = {}
         for var_name in self.sweep_available_name:
             if var_name in self.swept_para.keys():
                 swept_para[var_name] = self.swept_para[var_name]
