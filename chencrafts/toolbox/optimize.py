@@ -386,7 +386,7 @@ class Optimization():
 
         self.optimizer = optimizer
         assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell",
-                                  "shgo", "differential evolution"]
+                                  "shgo", "differential evolution", "bo"]
 
     def _update_free_name_list(self):
         self.free_name_list = list(self.free_variables.keys())
@@ -599,6 +599,7 @@ class Optimization():
             np.array([self._x_dict_2_arr(init_denorm_x)]),
             np.array([init_target]),
             np.array([init_constr]),
+            fixed_para = self.fixed_variables
         )
 
         def opt_call_back(x, convergence=None):
@@ -639,6 +640,9 @@ class Optimization():
                 bounds=opt_bounds,
                 callback=opt_call_back,
             )
+        # elif self.optimizer == "bo":
+            # bo_res = 
+
 
         return result
 

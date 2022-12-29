@@ -44,6 +44,23 @@ def sweep_loss_rate(
     cavity_excitation_f = qt.expect(a_dag_a, fock_1)
     qubit_excitation_f = qt.expect(sig_p_sig_m, fock_1)
 
+    # # Sanity check 0:
+    # print(len(basis))
+
+    # # Sanity check 1: 
+    # sys_dim_plot = 4
+    # fig, axs = plt.subplots(sys_dim_plot, 2, figsize=(4, sys_dim_plot*2))
+    # for idx in range(sys_dim_plot):
+    #     qt.plot_fock_distribution(qt.ptrace(basis[idx], 0), ax = axs[idx, 0])
+    #     qt.plot_fock_distribution(qt.ptrace(basis[idx], 1), ax = axs[idx, 1])
+
+    # plt.tight_layout()
+    # plt.show()
+
+    # # Sanity check 2:
+    # qt.plot_wigner_fock_distribution(qt.ptrace(logical_plus, 0))
+    # plt.show()
+
     return np.array([
         cavity_excitation_l, 
         qubit_excitation_l, 

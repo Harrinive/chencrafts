@@ -63,8 +63,6 @@ def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[float]]) -> qt.Qobj:
 
     return state.unit()
 
-
-
 def dressed_basis(
     h_space: scq.HilbertSpace, 
     dim_list: List[float], 

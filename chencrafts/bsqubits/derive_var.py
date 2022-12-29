@@ -149,8 +149,8 @@ class DerivedVariableBase():
     
     @property
     def full_para(self):
-        
-        return self.para_dict_to_use | self.derived_dict
+        para = self.para_dict_to_use | self.derived_dict
+        return dict(sorted(para.items()))
 
     def keys(self):
         return self.full_para.keys()
@@ -334,6 +334,7 @@ class DerivedVariableTmon(DerivedVariableBase):
         a_s = self.system.a_s()
         a_dag_a = a_s.dag() * a_s
         sig_p_sig_m = self.system.proj_a(1, 1)
+
         self._evaluate_extra_sweep_from_dict(
             tmon_sweep_dict, 
             kwargs={
@@ -408,10 +409,14 @@ class DerivedVariableTmon(DerivedVariableBase):
                 + np.pi / np.abs(self["chi_sa"]) + 3 * self["tau_p"], 
         ))
 
-        if not return_full_para:
-            return self.derived_dict
-        else:
-            full_dict = self.para_dict_to_use.copy()
-            full_dict.update(self.derived_dict)
-            return full_dict
+        # 4th level, for convenience
+        self.derived_dict.update(dict(
+            T1_a = 1 / self["Gamma_down"], 
+            T2_a = 1 / (self["Gamma_phi"] + self["Gamma_down"] / 2),
+            T_s = 1 / self["gamma_01_down"],
+        ))
 
+        if not return_full_para:
+            return dict(sorted(self.derived_dict.items()))
+        else:
+            return self.full_para
