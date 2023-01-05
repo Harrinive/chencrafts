@@ -5,7 +5,7 @@ from chencrafts.toolbox.data_processing import (
 )
 from chencrafts.toolbox.optimize import (
     nan_2_flat_val, 
-    nan_2_constr, 
+    # nan_2_constr, 
     OptTraj,
     MultiTraj,
     Optimization, 

@@ -10,13 +10,14 @@ from scipy.optimize import (
     dual_annealing,
     NonlinearConstraint,
 )
+from robo.fmin import bayesian_optimization
 
 from typing import Callable, Dict, List, Tuple, Union
 
 from tqdm.notebook import tqdm
 import os
 
-from chencrafts.bsqubits.error_rates import manual_constr
+# from chencrafts.bsqubits.error_rates import manual_constr
 from chencrafts.toolbox.save import (
     save_variable_list_dict, 
     load_variable_list_dict, 
@@ -46,17 +47,17 @@ def nan_2_flat_val(full_variables, possible_nan_value):
         return possible_nan_value
 
 
-def nan_2_constr(full_variables, possible_nan_value):
-    """
-    The full_variables should contain "disp", "kappa_s", "g_sa", 
-    "min_detuning", "detuning_lower_bound", "constr_amp"
-    """
-    if np.isnan(possible_nan_value):
-        base_val = (full_variables["disp"])**2 * full_variables["kappa_s"]
-        val = base_val + manual_constr(**full_variables)
-        return val
-    else:
-        return possible_nan_value
+# def nan_2_constr(full_variables, possible_nan_value):
+#     """
+#     The full_variables should contain "disp", "kappa_s", "g_sa", 
+#     "min_detuning", "detuning_lower_bound", "constr_amp"
+#     """
+#     if np.isnan(possible_nan_value):
+#         base_val = (full_variables["disp"])**2 * full_variables["kappa_s"]
+#         val = base_val + manual_constr(**full_variables)
+#         return val
+#     else:
+#         return possible_nan_value
 
 # ##############################################################################
 class OptTraj():
@@ -116,17 +117,19 @@ class OptTraj():
 
     @property
     def final_para(self, full=False) -> Dict[str, float]:
-        if full:
-            return self._x_arr_2_dict(self.para_traj[-1, :]) | self.fixed_para
-        else:
-            return self._x_arr_2_dict(self.para_traj[-1, :])
+        return self._x_arr_2_dict(self.para_traj[-1, :])
+
+    @property
+    def final_full_para(self) -> Dict[str, float]:
+        return self._x_arr_2_dict(self.para_traj[-1, :]) | self.fixed_para
 
     @property
     def init_para(self, full=False) -> Dict[str, float]:
-        if full: 
-            self._x_arr_2_dict(self.para_traj[0, :]) | self.fixed_para
-        else:
-            return self._x_arr_2_dict(self.para_traj[0, :])
+        return self._x_arr_2_dict(self.para_traj[0, :])
+
+    @property
+    def init_full_para(self) -> Dict[str, float]:
+        return self._x_arr_2_dict(self.para_traj[0, :]) | self.fixed_para
 
     @property
     def final_target(self) -> float:
@@ -182,9 +185,9 @@ class OptTraj():
 
         ax.plot(range(self.length), normalized_para, label=self.para_name)
         ax.plot(range(self.length), self.target_traj /
-                 max_target, label="normed_target")
+            max_target, label="normed_target")
         ax.plot(range(self.length), self.constr_traj /
-                 max_target, label="normed_constr")
+            max_target, label="normed_constr")
         ax.legend()
         ax.set_xlabel("Iterations")
         ax.set_ylabel("Normalized Parameters")
@@ -369,7 +372,7 @@ class Optimization():
         """
         The target function should be like: 
         target_func(full_variable_dict, **kwargs)  
-        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution
+        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, bayesian optimization
         """
         self.fixed_variables = fixed_variables
         self.free_variables = free_variable_ranges
@@ -386,7 +389,7 @@ class Optimization():
 
         self.optimizer = optimizer
         assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell",
-                                  "shgo", "differential evolution", "bo"]
+                                  "shgo", "differential evolution", "bayesian optimization"]
 
     def _update_free_name_list(self):
         self.free_name_list = list(self.free_variables.keys())
@@ -398,7 +401,7 @@ class Optimization():
     ):
         if variable not in self.default_variables.keys():
             raise KeyError(f"{variable} is not in the default variable dict. "
-                           "Please consider re-initializing an optimize object including this variable.")
+                "Please consider re-initializing an optimize object including this variable.")
 
     def _fix(
         self,
@@ -415,9 +418,9 @@ class Optimization():
         else:
             value = self.default_variables[variable]
 
-        if variable in self.fixed_variables():
+        if variable in self.fixed_variables:
             self.fixed_variables[variable] = value
-        elif variable in self.free_variables():
+        elif variable in self.free_variables:
             self.fixed_variables[variable] = value
             del self.free_variables[variable]
 
@@ -640,9 +643,20 @@ class Optimization():
                 bounds=opt_bounds,
                 callback=opt_call_back,
             )
-        # elif self.optimizer == "bo":
-            # bo_res = 
-
+        elif self.optimizer == "bayesian optimization":
+            bo_res = bayesian_optimization(
+                self._opt_func, 
+                lower=opt_bounds[:, 0], 
+                upper=opt_bounds[:, 1],
+                num_iterations=len(self.free_name_list)
+            )
+            result = OptTraj(
+                self.free_name_list,
+                np.array(bo_res["X"]),
+                np.array(bo_res["y"]),
+                np.ones_like(bo_res["y"]) * np.nan,
+                fixed_para = self.fixed_variables,
+            )
 
         return result
 

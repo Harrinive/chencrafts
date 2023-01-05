@@ -160,8 +160,8 @@ class CavityAncSystem(JointSystemBase):
 
 
 class CavityTmonSys(CavityAncSystem):
-    base_para_name = ["omega_s", "EJ", "EC", "ng", "g_sa"]
-    sweep_available_name = ["omega_s", "g_sa", "EJ", "EC"]
+    base_para_name = ["omega_s_GHz", "g_sa_GHz", "EJ_GHz", "EC_GHz", "ng"]
+    sweep_available_name = ["omega_s_GHz", "g_sa_GHz", "EJ_GHz", "EC_GHz"]
 
     def __init__(
         self,
@@ -184,6 +184,9 @@ class CavityTmonSys(CavityAncSystem):
             return_array,
         )
 
+        self.system: scq.Oscillator
+        self.ancilla: scq.Transmon
+
         if h_space is None:
             self._base_para_initialize(self.para)
             self._h_space_initalize(sim_para, convergence_range, update_ncut)
@@ -199,7 +202,7 @@ class CavityTmonSys(CavityAncSystem):
         convergence_range: Tuple[float], 
         update_ncut: bool
     ):
-        omega_s, EJ, EC, ng, g_sa = self.base_para_value
+        omega_s, g_sa, EJ, EC, ng = self.base_para_value
         sys_dim, anc_ncut, anc_dim = [self.sim_para[key] 
             for key in ["sys_dim", "anc_ncut", "anc_dim"]]
 
@@ -222,7 +225,10 @@ class CavityTmonSys(CavityAncSystem):
             )
 
             _, bare_evecs = self.ancilla.eigensys(anc_dim)
-            conv = np.max(np.abs(bare_evecs[-1][-3:]))
+            # convergence checker: for all eigenvectors, check the smallness for 
+            # the last three numbers
+            conv = np.max(np.abs(bare_evecs[-3:, :]))  
+            # conv = np.max(np.abs(bare_evecs[-1][-3:]))
 
             if convergence_range is None:
                 break
@@ -289,13 +295,148 @@ class CavityTmonSys(CavityAncSystem):
         """
         evals, _ = self.ancilla.eigensys(evals_count=2)
 
-        return self.para["omega_s"] - (evals[1] - evals[0])
+        return self.para["omega_s_GHz"] - (evals[1] - evals[0])
 
-    def _update_h_space(self, omega_s, g_sa, EJ, EC, **kwargs):
+    def _update_h_space(self, omega_s_GHz, g_sa_GHz, EJ_GHz, EC_GHz, **kwargs):
+        self.system.E_osc = omega_s_GHz
+        self.h_space.interaction_list[0].g_strength = g_sa_GHz
+        self.ancilla.EJ = EJ_GHz
+        self.ancilla.EC = EC_GHz
+
+    def sweep(self,) -> scq.ParameterSweep:
+        # "sweep" for variables on omega_s, g_sa, EJ and EC
+
+        if self.sim_para["sweep_eval_count"] >= np.prod(self.dim_list):
+            raise ValueError(f"""
+                Too much sweep_eval_count 
+                ({self.sim_para["sweep_eval_count"]:d}) for 
+                a {np.prod(self.dim_list):d}-dimensional system
+            """)
+
+        paramvals_by_name = self._scq_sweep_input_para()
+
+        subsys_update_info =  {
+            "omega_s_GHz": [self.system],
+            "g_sa_GHz": [],
+            "EJ_GHz": [self.ancilla],
+            "EC_GHz": [self.ancilla]
+        }
+
+        update_h_space = lambda *args: self._update_h_space(*args)
+
+        sweep = scq.ParameterSweep(
+            hilbertspace = self.h_space,
+            paramvals_by_name = paramvals_by_name,
+            update_hilbertspace = update_h_space,
+            evals_count = self.sim_para["sweep_eval_count"],
+            subsys_update_info = subsys_update_info,
+            num_cpus = self.sim_para["num_cpus"]
+        )
+
+        return sweep
+
+
+class CavityFlxnSys(CavityAncSystem):
+    base_para_name = ["omega_s_GHz", "g_sa_GHz", "EJ_GHz", "EC_GHz", "EL_GHz", "flux"]
+    sweep_available_name = ["omega_s_GHz", "g_sa_GHz", "EJ_GHz", "EC_GHz", "EL_GHz", "flux"]
+
+    def __init__(
+        self,
+        para: Dict[str, float],
+        sim_para: Dict[str, float],
+        swept_para: Dict[str, List[float]] = {},
+        h_space: scq.HilbertSpace = None,
+        convergence_range: Tuple[float] = (1e-10, 1e-5),
+        update_cutoff: bool = True,
+        return_array = False
+    ):
+        """
+        Initialize from h_space is dangerous, currently I don't have a good idea of
+        how to do this. Sweeping is not allowed in this case. 
+        """
+        super().__init__(
+            para,
+            sim_para,
+            swept_para,
+            return_array,
+        )
+        self.system: scq.Oscillator
+        self.ancilla: scq.Fluxonium
+
+        if h_space is None:
+            self._base_para_initialize(self.para)
+            self._h_space_initalize(sim_para, convergence_range, update_cutoff)
+        else:
+            self.h_space = h_space
+            self.subsys = h_space.subsys_list
+            self.system = self.subsys[0]
+            self.ancilla = self.subsys[1]
+
+    def _h_space_initalize(
+        self, 
+        sim_para: Dict[str, float], 
+        convergence_range: Tuple[float], 
+        update_cutoff: bool
+    ):
+        omega_s, g_sa, EJ, EC, EL, flux = self.base_para_value
+        sys_dim, anc_cutoff, anc_dim = [self.sim_para[key] 
+            for key in ["sys_dim", "anc_cutoff", "anc_dim"]]
+
+        # build system and ancilla
+        self.system = scq.Oscillator(
+            E_osc = omega_s,
+            truncated_dim = sys_dim,
+            id_str = "system",
+            l_osc = 1
+        )
+
+        while True:
+            self.ancilla = scq.Fluxonium(
+                EJ = EJ,
+                EC = EC,
+                EL = EL,
+                flux = flux,
+                cutoff = anc_cutoff,
+                truncated_dim = anc_dim,
+                id_str = "ancilla" 
+            )
+
+            _, bare_evecs = self.ancilla.eigensys(anc_dim)
+            # convergence checker: for all eigenvectors, check the smallness for 
+            # the last three numbers
+            conv = np.max(np.abs(bare_evecs[-3:, :]))  
+
+            if convergence_range is None or not update_cutoff:
+                break
+            elif conv > convergence_range[1]:
+                anc_cutoff = int(anc_cutoff * 1.5)
+            elif conv < convergence_range[0]:
+                anc_cutoff = int(anc_cutoff / 1.5)
+                break
+            else:
+                break
+
+        if update_cutoff:
+            sim_para["anc_cutoff"] = anc_cutoff
+
+        self.subsys = [self.system, self.ancilla]
+        self.h_space = scq.HilbertSpace(self.subsys)
+
+        self.h_space.add_interaction(
+            g = g_sa,
+            op1 = self.system.n_operator,
+            op2 = self.ancilla.n_operator,
+            add_hc = False,
+            id_str = "sys-anc"
+        )
+    
+    def _update_h_space(self, omega_s, g_sa, EJ, EC, EL, flux, **kwargs):
         self.system.E_osc = omega_s
         self.h_space.interaction_list[0].g_strength = g_sa
         self.ancilla.EJ = EJ
         self.ancilla.EC = EC
+        self.ancilla.EL = EL
+        self.ancilla.flux = flux
 
     def sweep(self,) -> scq.ParameterSweep:
         # "sweep" for variables on omega_s, g_sa, EJ and EC
@@ -313,7 +454,9 @@ class CavityTmonSys(CavityAncSystem):
             "omega_s": [self.system],
             "g_sa": [],
             "EJ": [self.ancilla],
-            "EC": [self.ancilla]
+            "EC": [self.ancilla],
+            "EL": [self.ancilla],
+            "flux": [self.ancilla],
         }
 
         update_h_space = lambda *args: self._update_h_space(*args)

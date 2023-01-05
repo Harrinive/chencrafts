@@ -84,6 +84,63 @@ def sweep_tmon_relaxation(
     # "A_ng": 1e-4,  # Charge noise strength. Units of charge e
     # "A_cc": 1e-7,  # Critical current noise strength. Units of critical current I_c
 
+    gamma_down = ancilla.t1_capacitive(
+        i=1, 
+        j=0, 
+        get_rate=True, 
+        total=False, 
+        T=temp_a, 
+        esys=(bare_evals, bare_evecs),
+        Q_cap = Q_cap,
+    )
+
+    gamma_phi_ng = ancilla.tphi_1_over_f_ng(
+        A_noise=A_ng,
+        i=0, 
+        j=1, 
+        get_rate=True, 
+        esys=(bare_evals, bare_evecs)
+    )
+
+    gamma_phi_cc = ancilla.tphi_1_over_f_cc(
+        A_noise=A_cc,
+        i=0, 
+        j=1, 
+        get_rate=True, 
+        esys=(bare_evals, bare_evecs)
+    )
+
+    return np.array([gamma_down, gamma_phi_ng, gamma_phi_cc])
+
+tmon_sweep_dict[
+    ("kappa_cap", "kappa_phi_ng", "kappa_phi_cc")
+] = (sweep_tmon_relaxation, ("temp_a", "Q_cap", "A_ng", "A_cc"))
+
+
+# ##############################################################################
+# dictionary key is a str or a tuple: output_name or (output_names)
+# dict values is a tuple: (function, input_names)
+# the function should return a np.array object
+flxn_sweep_dict: Dict[str, Tuple[Callable, Tuple[str]]] = {}
+
+flxn_sweep_dict[(
+    "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
+)] = (sweep_loss_rate, ("disp", ))
+
+def sweep_flxn_relaxation(
+    paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
+    temp_a, Q_cap=5e5, A_ng=1e-4, A_cc=1e-7, **kwargs
+):
+
+    ancilla: scq.Transmon = paramsweep.hilbertspace.subsys_list[1]
+    bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+    bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+
+    # default: 
+    # "A_flux": 1e-6,  # Flux noise strength. Units: Phi_0
+    # "A_ng": 1e-4,  # Charge noise strength. Units of charge e
+    # "A_cc": 1e-7,  # Critical current noise strength. Units of critical current I_c
+
     # gamma_up = ancilla.t1_capacitive(
     #     i=0, 
     #     j=1, 
@@ -125,7 +182,6 @@ def sweep_tmon_relaxation(
 tmon_sweep_dict[
     ("kappa_cap", "kappa_phi_ng", "kappa_phi_cc")
 ] = (sweep_tmon_relaxation, ("temp_a", "Q_cap", "A_ng", "A_cc"))
-
 
 # ##############################################################################
 

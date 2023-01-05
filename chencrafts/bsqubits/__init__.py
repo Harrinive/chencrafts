@@ -1,5 +1,6 @@
 from chencrafts.bsqubits.ec_systems import (
-    CavityTmonSys
+    CavityTmonSys,
+    CavityFlxnSys,
 )
 # from chencrafts.bsqubits.pulse_utils import *
 # from chencrafts.bsqubits.qoc_init import *
