@@ -9,6 +9,10 @@ PACKAGES = [
     'chencrafts/operations',
 ]
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(CURRENT_DIR, "requirements.txt")) as requirements:
+    INSTALL_REQUIRES = requirements.read().splitlines()
+
 setuptools.setup(name='chencrafts', 
       version=VERSION,
       description='Danyang Chen\'s personal toolbox',
