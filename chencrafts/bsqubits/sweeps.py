@@ -146,36 +146,36 @@ def sweep_flxn_relaxation(
         j = 0, 
         get_rate = True, 
         total = False, 
-        T = Temp, 
-        esys = (bare_evals, bare_evecs
+        T = temp_a, 
+        esys = (bare_evals, bare_evecs),
     ) 
     ancilla.t1_inductive(
         i = 1, 
         j = 0, 
         get_rate = True, 
         total = False, 
-        T = Temp, 
-        esys=(bare_evals, bare_evecs
+        T = temp_a, 
+        esys=(bare_evals, bare_evecs),
     )
     ancilla.t1_flux_bias_line(
         i = 1,
         j = 0,
         get_rate=True, 
         total = False,
-        T=Temp, 
-        esys=(bare_evals, bare_evecs
+        T=temp_a, 
+        esys=(bare_evals, bare_evecs),
     )
     ancilla.t1_quasiparticle_tunneling(
         i = 1,
         j = 0,
         get_rate=True, 
         total = False,
-        T=Temp, 
+        T=temp_a, 
         esys=(bare_evals, bare_evecs), 
     )
 
 
-    return np.array([gamma_down, gamma_phi_ng, gamma_phi_cc])
+    return np.array([])
 
 tmon_sweep_dict[
     ("kappa_cap", "kappa_phi_ng", "kappa_phi_cc")
