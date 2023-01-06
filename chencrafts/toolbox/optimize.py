@@ -10,7 +10,7 @@ from scipy.optimize import (
     dual_annealing,
     NonlinearConstraint,
 )
-from robo.fmin import bayesian_optimization
+# from robo.fmin import bayesian_optimization
 
 from typing import Callable, Dict, List, Tuple, Union
 
@@ -643,20 +643,20 @@ class Optimization():
                 bounds=opt_bounds,
                 callback=opt_call_back,
             )
-        elif self.optimizer == "bayesian optimization":
-            bo_res = bayesian_optimization(
-                self._opt_func, 
-                lower=opt_bounds[:, 0], 
-                upper=opt_bounds[:, 1],
-                num_iterations=len(self.free_name_list)
-            )
-            result = OptTraj(
-                self.free_name_list,
-                np.array(bo_res["X"]),
-                np.array(bo_res["y"]),
-                np.ones_like(bo_res["y"]) * np.nan,
-                fixed_para = self.fixed_variables,
-            )
+        # elif self.optimizer == "bayesian optimization":
+        #     bo_res = bayesian_optimization(
+        #         self._opt_func, 
+        #         lower=opt_bounds[:, 0], 
+        #         upper=opt_bounds[:, 1],
+        #         num_iterations=len(self.free_name_list)
+        #     )
+        #     result = OptTraj(
+        #         self.free_name_list,
+        #         np.array(bo_res["X"]),
+        #         np.array(bo_res["y"]),
+        #         np.ones_like(bo_res["y"]) * np.nan,
+        #         fixed_para = self.fixed_variables,
+        #     )
 
         return result
 

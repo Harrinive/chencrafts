@@ -141,41 +141,39 @@ def sweep_flxn_relaxation(
     # "A_ng": 1e-4,  # Charge noise strength. Units of charge e
     # "A_cc": 1e-7,  # Critical current noise strength. Units of critical current I_c
 
-    # gamma_up = ancilla.t1_capacitive(
-    #     i=0, 
-    #     j=1, 
-    #     get_rate=True, 
-    #     total=False, 
-    #     T=temp_a, 
-    #     esys=(bare_evals, bare_evecs), 
-    #     Q_cap = default_Q,
-    # ) / Q_t1_coef
-
-    gamma_down = ancilla.t1_capacitive(
-        i=1, 
-        j=0, 
+    ancilla.t1_capacitive(
+        i = 1, 
+        j = 0, 
+        get_rate = True, 
+        total = False, 
+        T = Temp, 
+        esys = (bare_evals, bare_evecs
+    ) 
+    ancilla.t1_inductive(
+        i = 1, 
+        j = 0, 
+        get_rate = True, 
+        total = False, 
+        T = Temp, 
+        esys=(bare_evals, bare_evecs
+    )
+    ancilla.t1_flux_bias_line(
+        i = 1,
+        j = 0,
         get_rate=True, 
-        total=False, 
-        T=temp_a, 
-        esys=(bare_evals, bare_evecs),
-        Q_cap = Q_cap,
+        total = False,
+        T=Temp, 
+        esys=(bare_evals, bare_evecs
+    )
+    ancilla.t1_quasiparticle_tunneling(
+        i = 1,
+        j = 0,
+        get_rate=True, 
+        total = False,
+        T=Temp, 
+        esys=(bare_evals, bare_evecs), 
     )
 
-    gamma_phi_ng = ancilla.tphi_1_over_f_ng(
-        A_noise=A_ng,
-        i=0, 
-        j=1, 
-        get_rate=True, 
-        esys=(bare_evals, bare_evecs)
-    )
-
-    gamma_phi_cc = ancilla.tphi_1_over_f_cc(
-        A_noise=A_cc,
-        i=0, 
-        j=1, 
-        get_rate=True, 
-        esys=(bare_evals, bare_evecs)
-    )
 
     return np.array([gamma_down, gamma_phi_ng, gamma_phi_cc])
 
