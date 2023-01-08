@@ -417,7 +417,7 @@ class DerivedVariableTmon(DerivedVariableBase):
         # Evaluate the derived variables that can be simply calculated by elementary functions
         # bare decoherence rate
         kappa_s = PI2 * self["omega_s_GHz"] / self["Q_s"]
-        kappa_a = extra_sweep["kappa_cap"]
+        kappa_a = extra_sweep["kappa_a_cap"]
         kappa_phi = extra_sweep["kappa_phi_ng"] + extra_sweep["kappa_phi_cc"]
         n_th_s = _n_th(self["omega_s_GHz"], self["temp_s"], self["n_th_base"])
         n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"], self["n_th_base"])
