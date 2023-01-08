@@ -30,9 +30,9 @@ def _var_dict_2_shape_dict(var_dict):
         shape_dict[key] = len(val)
     return shape_dict
 
-def _n_th(freq, temp):
+def _n_th(freq, temp, n_th_base=0):
     """freq is in the unit of GHz, temp is in the unit of K"""
-    return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1)
+    return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1) + n_th_base
 
 def _readout_error(disp, relax_rate, int_time) -> NSArray:
     SNR = 2 * np.abs(disp) * np.sqrt(relax_rate * int_time)
@@ -419,8 +419,8 @@ class DerivedVariableTmon(DerivedVariableBase):
         kappa_s = PI2 * self["omega_s_GHz"] / self["Q_s"]
         kappa_a = extra_sweep["kappa_cap"]
         kappa_phi = extra_sweep["kappa_phi_ng"] + extra_sweep["kappa_phi_cc"]
-        n_th_s = _n_th(self["omega_s_GHz"], self["temp_s"]) + self["n_th_base"]
-        n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"]) + self["n_th_base"]
+        n_th_s = _n_th(self["omega_s_GHz"], self["temp_s"], self["n_th_base"])
+        n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"], self["n_th_base"])
 
         # readout
         chi_ar = self["chi_ar/kappa_r"] * self["kappa_r"]
@@ -620,10 +620,10 @@ class DerivedVariableFlxn(DerivedVariableBase):
         # Evaluate the derived variables that can be simply calculated by elementary functions
         # bare decoherence rate
         kappa_s = PI2 * self["omega_s_GHz"] / self["Q_s"]
-        kappa_a = extra_sweep["kappa_cap"]
+        kappa_a = extra_sweep["kappa_a_cap"]
         kappa_phi = extra_sweep["kappa_phi_ng"] + extra_sweep["kappa_phi_cc"]
-        n_th_s = _n_th(self["omega_s_GHz"], self["temp_s"]) + self["n_th_base"]
-        n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"]) + self["n_th_base"]
+        n_th_s = _n_th(self["omega_s_GHz"], self["temp_s"], self["n_th_base"])
+        n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"], self["n_th_base"])
 
         # readout
         chi_ar = self["chi_ar/kappa_r"] * self["kappa_r"]
@@ -663,7 +663,8 @@ class DerivedVariableFlxn(DerivedVariableBase):
         gamma_up = kappa_s * (extra_sweep["n_bar_s"] + 1) * n_th_s \
             + kappa_a * extra_sweep["n_bar_a"] * n_th_a
         Gamma_down = kappa_a + kappa_a_r
-        Gamma_up = (kappa_a + kappa_a_r) * n_th_a
+        Gamma_up = kappa_a * n_th_a       # readout induced excitation rate is not added
+        # Gamma_up = (kappa_a + kappa_a_r) * n_th_a
         Gamma_phi = kappa_phi + kappa_phi_r
         Gamma_down_ro = kappa_a + kappa_down_ro
         Gamma_up_ro = kappa_a * n_th_a + kappa_up_ro

@@ -2,14 +2,21 @@ import numpy as np
 import scqubits as scq
 import qutip as qt
 import matplotlib.pyplot as plt
+from scipy.constants import h, k
 
 from typing import Dict, Callable, List, Tuple
 
 from chencrafts.toolbox.data_processing import NSArray
-
 from chencrafts.bsqubits.basis_n_states import cat
 
 PI2 = np.pi * 2
+
+# ##############################################################################
+def therm_factor(freq, temp, n_th_base):
+    """freq is in the unit of GHz, temp is in the unit of K"""
+    assert n_th_base == 0, "currently the code only support n_th_base = 0"
+    therm_ratio = freq * h * 1e9 / temp / k
+    return (1 / np.tanh(0.5 * np.abs(therm_ratio))) / (1 + np.exp(-therm_ratio))
 
 # ##############################################################################
 # dictionary key is a str or a tuple: output_name or (output_names)
@@ -75,14 +82,18 @@ def sweep_tmon_relaxation(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
     temp_a, Q_cap=5e5, A_ng=1e-4, A_cc=1e-7, **kwargs):
 
-    ancilla: scq.Transmon = paramsweep.hilbertspace.subsys_list[1]
-    bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
-    bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+    # the calculation of those relaxation rate doesn't consist with our definition 
+    # for n_th, but transmon is special - whose n_th is always << 1 in a nornal 
+    # experimental setup. So the diviation is small
 
-    # default: 
+    # default amplitude: 
     # "A_flux": 1e-6,  # Flux noise strength. Units: Phi_0
     # "A_ng": 1e-4,  # Charge noise strength. Units of charge e
     # "A_cc": 1e-7,  # Critical current noise strength. Units of critical current I_c
+
+    ancilla: scq.Transmon = paramsweep.hilbertspace.subsys_list[1]
+    bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+    bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
 
     gamma_down = ancilla.t1_capacitive(
         i=1, 
@@ -113,7 +124,7 @@ def sweep_tmon_relaxation(
     return np.array([gamma_down, gamma_phi_ng, gamma_phi_cc])
 
 tmon_sweep_dict[
-    ("kappa_cap", "kappa_phi_ng", "kappa_phi_cc")
+    ("kappa_a_cap", "kappa_phi_ng", "kappa_phi_cc")
 ] = (sweep_tmon_relaxation, ("temp_a", "Q_cap", "A_ng", "A_cc"))
 
 
@@ -127,12 +138,145 @@ flxn_sweep_dict[(
     "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
 )] = (sweep_loss_rate, ("disp", ))
 
-def sweep_flxn_relaxation(
+def sweep_flxn_decoherence(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
-    temp_a, Q_cap=5e5, A_ng=1e-4, A_cc=1e-7, **kwargs
+    starting_level=0, temp_a=0.015, n_th_base=0.0, 
+    Q_cap=5e5, Q_ind=5e8, Z_char=50, Z_fbl=50, A_qsp_tnl=1, n_th_threshold=1e-3, 
+    **kwargs
 ):
+    assert n_th_base == 0, "Now the code only support n_th_base = 0."
 
-    ancilla: scq.Transmon = paramsweep.hilbertspace.subsys_list[1]
+    ancilla: scq.Fluxonium = paramsweep.hilbertspace.subsys_list[1]
+    bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+    bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+
+    kappa_a_cap_list = []
+    kappa_a_ind_list = []
+    kappa_a_impd_list = []
+    kappa_a_fbl_list = []
+    kappa_a_qsp_tnl_list = []
+    
+    for level in range(0, ancilla.truncated_dim):
+        if level == starting_level:
+            kappa_a_cap_list.append(0)
+            kappa_a_ind_list.append(0)
+            kappa_a_impd_list.append(0)
+            kappa_a_fbl_list.append(0)
+            kappa_a_qsp_tnl_list.append(0)
+            continue
+
+        freq = bare_evals[level] - bare_evals[0]
+        n_th = therm_factor(freq, temp_a, n_th_base)
+        if n_th < n_th_threshold:
+            break
+
+        kappa_a_cap_list.append(ancilla.t1_capacitive(
+            i = level, 
+            j = starting_level, 
+            get_rate = True, 
+            total = False, 
+            T = temp_a, 
+            esys = (bare_evals, bare_evecs),
+            Q_cap = Q_cap,
+        ))
+        kappa_a_ind_list.append(ancilla.t1_inductive(
+            i = level, 
+            j = starting_level, 
+            get_rate = True, 
+            total = False, 
+            T = temp_a, 
+            esys=(bare_evals, bare_evecs),
+            Q_ind = Q_ind,
+        ))
+        kappa_a_impd_list.append(ancilla.t1_charge_impedance(
+            i = level, 
+            j = starting_level, 
+            get_rate = True, 
+            total = False,
+            T = temp_a, 
+            esys = (bare_evals, bare_evecs),
+            Z = Z_char,
+        ))
+        kappa_a_fbl_list.append(ancilla.t1_flux_bias_line(
+            i = level, 
+            j = starting_level, 
+            get_rate = True, 
+            total = False,
+            T = temp_a, 
+            esys = (bare_evals, bare_evecs),
+            Z = Z_fbl,
+        ))
+        kappa_a_qsp_tnl_list.append(ancilla.t1_quasiparticle_tunneling(
+            i = level, 
+            j = starting_level, 
+            get_rate = True, 
+            total = False,
+            T = temp_a, 
+            esys = (bare_evals, bare_evecs), 
+        ) * A_qsp_tnl)
+
+    level_used = level - 1
+
+    kappa_a_cap = np.sum(kappa_a_cap_list)
+    kappa_a_cap_dominant = np.argmax(kappa_a_cap_list)
+
+    kappa_a_ind = np.sum(kappa_a_ind_list)
+    kappa_a_ind_dominant = np.argmax(kappa_a_ind_list)
+
+    kappa_a_impd = np.sum(kappa_a_impd_list)
+    kappa_a_impd_dominant = np.argmax(kappa_a_impd_list)
+
+    kappa_a_fbl = np.sum(kappa_a_cap_list)
+    kappa_a_fbl_dominant = np.argmax(kappa_a_fbl_list)
+
+    kappa_a_qsp_tnl = np.sum(kappa_a_qsp_tnl_list)
+    kappa_a_qsp_tnl_dominant = np.argmax(kappa_a_qsp_tnl_list)
+
+    return np.array([
+        kappa_a_cap, 
+        kappa_a_ind, 
+        kappa_a_impd, 
+        kappa_a_fbl, 
+        kappa_a_qsp_tnl,
+        np.mean([
+            kappa_a_cap_dominant, 
+            kappa_a_ind_dominant, 
+            kappa_a_impd_dominant, 
+            kappa_a_fbl_dominant, 
+            kappa_a_qsp_tnl_dominant
+        ])
+    ])
+
+sweep_flxn_up = lambda ps, pi, pv, **kwargs: \
+    sweep_flxn_decoherence(ps, pi, pv, starting_level=0, **kwargs)
+
+sweep_flxn_down = lambda ps, pi, pv, **kwargs: \
+    sweep_flxn_decoherence(ps, pi, pv, starting_level=1, **kwargs)
+
+flxn_sweep_dict[(
+    "kappa_a_up_cap", 
+    "kappa_a_up_ind", 
+    "kappa_a_up_impd", 
+    "kappa_a_up_fbl", 
+    "kappa_a_up_qsp_tnl",
+    "kappa_a_up_avg_transition"
+)] = (sweep_flxn_up, ("temp_a", "n_th_base", 
+    "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
+
+flxn_sweep_dict[(
+    "kappa_a_down_cap", 
+    "kappa_a_down_ind", 
+    "kappa_a_down_impd", 
+    "kappa_a_down_fbl", 
+    "kappa_a_down_qsp_tnl",
+    "kappa_a_down_avg_transition"
+)] = (sweep_flxn_down, ("temp_a", "n_th_base", 
+    "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
+
+def sweep_gamma_phi(paramsweep, paramindex_tuple, paramvals_tuple, 
+    A_flux=1e-6, A_cc=1e-7, **kwargs):
+
+    ancilla: scq.Fluxonium = paramsweep.hilbertspace.subsys_list[1]
     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
 
@@ -141,45 +285,29 @@ def sweep_flxn_relaxation(
     # "A_ng": 1e-4,  # Charge noise strength. Units of charge e
     # "A_cc": 1e-7,  # Critical current noise strength. Units of critical current I_c
 
-    ancilla.t1_capacitive(
-        i = 1, 
-        j = 0, 
+    kappa_phi_flux = ancilla.tphi_1_over_f_flux(
+        i = 0, 
+        j = 1, 
         get_rate = True, 
-        total = False, 
-        T = temp_a, 
         esys = (bare_evals, bare_evecs),
-    ) 
-    ancilla.t1_inductive(
-        i = 1, 
-        j = 0, 
+        A_flux = A_flux
+    )
+    kappa_phi_cc = ancilla.tphi_1_over_f_cc(
+        i = 0, 
+        j = 1, 
         get_rate = True, 
-        total = False, 
-        T = temp_a, 
-        esys=(bare_evals, bare_evecs),
-    )
-    ancilla.t1_flux_bias_line(
-        i = 1,
-        j = 0,
-        get_rate=True, 
-        total = False,
-        T=temp_a, 
-        esys=(bare_evals, bare_evecs),
-    )
-    ancilla.t1_quasiparticle_tunneling(
-        i = 1,
-        j = 0,
-        get_rate=True, 
-        total = False,
-        T=temp_a, 
-        esys=(bare_evals, bare_evecs), 
+        esys = (bare_evals, bare_evecs),
+        A_cc = A_cc,
     )
 
+    return np.array([kappa_phi_flux, kappa_phi_cc])
 
-    return np.array([])
+flxn_sweep_dict[(
+    "kappa_phi_flux", 
+    "kappa_phi_cc", 
+)] = (sweep_flxn_down, ("A_flux", "A_cc"))
 
-tmon_sweep_dict[
-    ("kappa_cap", "kappa_phi_ng", "kappa_phi_cc")
-] = (sweep_tmon_relaxation, ("temp_a", "Q_cap", "A_ng", "A_cc"))
+
 
 # ##############################################################################
 
