@@ -416,7 +416,9 @@ class CavityFlxnSys(CavityAncSystem):
             else:
                 break
 
+        print(f"A flxn is successfully created!")
         if update_cutoff:
+            print(f"Cutoff: {sim_para['anc_cutoff']} -> {anc_cutoff}")
             sim_para["anc_cutoff"] = anc_cutoff
 
         self.subsys = [self.system, self.ancilla]
