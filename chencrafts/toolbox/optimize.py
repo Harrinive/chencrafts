@@ -318,7 +318,7 @@ class MultiTraj():
         else:
             return new_traj
 
-    def plot_target(self, ax=None, ylim=(1e-7, 6e-6)):
+    def plot_target(self, ax=None, ylim=()):
         need_show = False
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=150)
@@ -349,7 +349,7 @@ class MultiTraj():
         ax.set_ylim(*ylim)
         # ax.set_title("error rates")
         ax.set_xlabel("Iterations")
-        ax.set_ylabel("Total Error Rate / GHz")
+        ax.set_ylabel("Cost function")
         # ax.set_legend()
         ax.grid()
 
