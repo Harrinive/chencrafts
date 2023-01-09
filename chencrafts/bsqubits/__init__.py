@@ -12,9 +12,10 @@ from chencrafts.bsqubits.basis_n_states import (
 )
 from chencrafts.bsqubits.derive_var import (
     DerivedVariableTmon, 
+    DerivedVariableFlxn, 
 )
 from chencrafts.bsqubits.error_rates import (
     ErrorChannel, 
     ErrorRate, 
-    ErrorRateTmon
+    basic_channels
 )

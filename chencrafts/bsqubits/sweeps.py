@@ -138,7 +138,7 @@ flxn_sweep_dict[(
     "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
 )] = (sweep_loss_rate, ("disp", ))
 
-def sweep_flxn_decoherence(
+def sweep_flxn_depolarization(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
     starting_level=0, temp_a=0.015, n_th_base=0.0, 
     Q_cap=5e5, Q_ind=5e8, Z_char=50, Z_fbl=50, A_qsp_tnl=1, n_th_threshold=1e-3, 
@@ -188,15 +188,16 @@ def sweep_flxn_decoherence(
             esys=(bare_evals, bare_evecs),
             Q_ind = Q_ind,
         ))
-        kappa_a_impd_list.append(ancilla.t1_charge_impedance(
-            i = level, 
-            j = starting_level, 
-            get_rate = True, 
-            total = False,
-            T = temp_a, 
-            esys = (bare_evals, bare_evecs),
-            Z = Z_char,
-        ))
+        # kappa_a_impd_list.append(ancilla.t1_charge_impedance(
+        #     i = level, 
+        #     j = starting_level, 
+        #     get_rate = True, 
+        #     total = False,
+        #     T = temp_a, 
+        #     esys = (bare_evals, bare_evecs),
+        #     Z = Z_char,
+        # ))
+        kappa_a_impd_list.append(0)          # this channel is weird
         kappa_a_fbl_list.append(ancilla.t1_flux_bias_line(
             i = level, 
             j = starting_level, 
@@ -226,7 +227,7 @@ def sweep_flxn_decoherence(
     kappa_a_impd = np.sum(kappa_a_impd_list)
     kappa_a_impd_dominant = np.argmax(kappa_a_impd_list)
 
-    kappa_a_fbl = np.sum(kappa_a_cap_list)
+    kappa_a_fbl = np.sum(kappa_a_fbl_list)
     kappa_a_fbl_dominant = np.argmax(kappa_a_fbl_list)
 
     kappa_a_qsp_tnl = np.sum(kappa_a_qsp_tnl_list)
@@ -247,11 +248,11 @@ def sweep_flxn_decoherence(
         ])
     ])
 
-sweep_flxn_up = lambda ps, pi, pv, **kwargs: \
-    sweep_flxn_decoherence(ps, pi, pv, starting_level=0, **kwargs)
+sweep_flxn_up = lambda ps, paramindex_tuple, paramvals_tuple, **kwargs: \
+    sweep_flxn_depolarization(ps, paramindex_tuple, paramvals_tuple, starting_level=0, **kwargs)
 
-sweep_flxn_down = lambda ps, pi, pv, **kwargs: \
-    sweep_flxn_decoherence(ps, pi, pv, starting_level=1, **kwargs)
+sweep_flxn_down = lambda ps, paramindex_tuple, paramvals_tuple, **kwargs: \
+    sweep_flxn_depolarization(ps, paramindex_tuple, paramvals_tuple, starting_level=1, **kwargs)
 
 flxn_sweep_dict[(
     "kappa_a_up_cap", 
@@ -273,7 +274,7 @@ flxn_sweep_dict[(
 )] = (sweep_flxn_down, ("temp_a", "n_th_base", 
     "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
 
-def sweep_gamma_phi(paramsweep, paramindex_tuple, paramvals_tuple, 
+def sweep_flxn_dephasing(paramsweep, paramindex_tuple, paramvals_tuple, 
     A_flux=1e-6, A_cc=1e-7, **kwargs):
 
     ancilla: scq.Fluxonium = paramsweep.hilbertspace.subsys_list[1]
@@ -305,7 +306,7 @@ def sweep_gamma_phi(paramsweep, paramindex_tuple, paramvals_tuple,
 flxn_sweep_dict[(
     "kappa_phi_flux", 
     "kappa_phi_cc", 
-)] = (sweep_flxn_down, ("A_flux", "A_cc"))
+)] = (sweep_flxn_dephasing, ("A_flux", "A_cc"))
 
 
 

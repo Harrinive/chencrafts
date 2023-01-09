@@ -12,7 +12,7 @@ from scipy.optimize import (
 )
 # from robo.fmin import bayesian_optimization
 
-from typing import Callable, Dict, List, Tuple, Union
+from typing import Callable, Dict, List
 
 from tqdm.notebook import tqdm
 import os

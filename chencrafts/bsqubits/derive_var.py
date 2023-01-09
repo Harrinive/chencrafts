@@ -20,7 +20,7 @@ from chencrafts.bsqubits.ec_systems import (
     CavityFlxnSys,
 )
 from chencrafts.bsqubits.basis_n_states import cat
-from chencrafts.bsqubits.sweeps import tmon_sweep_dict
+from chencrafts.bsqubits.sweeps import tmon_sweep_dict, flxn_sweep_dict
 
 PI2 = np.pi * 2
 
@@ -307,7 +307,7 @@ class DerivedVariableBase():
                     func, 
                     sweep_dict,
                     kwargs=kwargs,
-                    output_elem_shape=tuple()
+                    output_elem_shape=tuple(),
                 )
                 result_dict[out_var_name] = self._sweep_wrapper(
                     data, from_scq_sweep=(sweep_dict == {})
@@ -551,7 +551,7 @@ class DerivedVariableFlxn(DerivedVariableBase):
     def evaluate(
         self,
         convergence_range = (1e-8, 1e-4),
-        update_ncut = True,
+        update_cutoff = True,
         return_intermediate_result = True,
     ):
         """
@@ -560,21 +560,21 @@ class DerivedVariableFlxn(DerivedVariableBase):
         """
         # evaluate eigensystem using scq.ParameterSweep
         if np.allclose(list(self._scq_sweep_shape.values()), 1):
-            self.system = CavityTmonSys(
+            self.system = CavityFlxnSys(
                 self.para,
                 self.sim_para,
                 {},
                 convergence_range = convergence_range,
-                update_ncut = update_ncut,
+                update_cutoff = update_cutoff,
             )
 
         else:
-            self.system = CavityTmonSys(
+            self.system = CavityFlxnSys(
                 self.para,
                 self.sim_para,
                 self.swept_para,
                 convergence_range = None,
-                update_ncut = False,
+                update_cutoff = False,
             )
         self.sweep = self.system.sweep()
 
@@ -602,6 +602,10 @@ class DerivedVariableFlxn(DerivedVariableBase):
             self.sweep["bare_evals"][1][..., 2] 
             - self.sweep["bare_evals"][1][..., 1]
         ) - self["omega_s_GHz"]
+        det_02_GHz = self._sweep_wrapper(
+            self.sweep["bare_evals"][1][..., 2] 
+            - self.sweep["bare_evals"][1][..., 0]
+        ) - self["omega_s_GHz"]
         # non_linr_a = PI2 * (det_12_GHz - det_01_GHz)   # no non-lin for a flxn
 
         # Evaluate extra sweep over parameter outside of the self.scq_available_var
@@ -610,7 +614,7 @@ class DerivedVariableFlxn(DerivedVariableBase):
         sig_p_sig_m = self.system.proj_a(1, 1)
 
         extra_sweep = self._evaluate_extra_sweep_from_dict(
-            tmon_sweep_dict, 
+            flxn_sweep_dict, 
             kwargs={
                 "a_dag_a": a_dag_a,
                 "sig_p_sig_m": sig_p_sig_m,
@@ -620,10 +624,19 @@ class DerivedVariableFlxn(DerivedVariableBase):
         # Evaluate the derived variables that can be simply calculated by elementary functions
         # bare decoherence rate
         kappa_s = PI2 * self["omega_s_GHz"] / self["Q_s"]
-        kappa_a = extra_sweep["kappa_a_cap"]
-        kappa_phi = extra_sweep["kappa_phi_ng"] + extra_sweep["kappa_phi_cc"]
+        kappa_a_down = (
+            extra_sweep["kappa_a_down_cap"] + extra_sweep["kappa_a_down_ind"] 
+            + extra_sweep["kappa_a_down_impd"] + extra_sweep["kappa_a_down_fbl"]  
+            + extra_sweep["kappa_a_down_qsp_tnl"]
+        )
+        kappa_a_up = (
+            extra_sweep["kappa_a_up_cap"] + extra_sweep["kappa_a_up_ind"] 
+            + extra_sweep["kappa_a_up_impd"] + extra_sweep["kappa_a_up_fbl"]  
+            + extra_sweep["kappa_a_up_qsp_tnl"]
+        )
+        kappa_phi = extra_sweep["kappa_phi_flux"] + extra_sweep["kappa_phi_cc"]
         n_th_s = _n_th(self["omega_s_GHz"], self["temp_s"], self["n_th_base"])
-        n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"], self["n_th_base"])
+        # n_th_a = _n_th(self["omega_a_GHz"], self["temp_a"], self["n_th_base"])
 
         # readout
         chi_ar = self["chi_ar/kappa_r"] * self["kappa_r"]
@@ -657,17 +670,17 @@ class DerivedVariableFlxn(DerivedVariableBase):
 
         # total decoherence rate
         gamma_down = kappa_s * extra_sweep["n_bar_s"] * (1 + n_th_s) \
-            + kappa_a * extra_sweep["n_bar_a"]
+            + kappa_a_down * extra_sweep["n_bar_a"]
         gamma_01_down = kappa_s * extra_sweep["n_fock1_s"] * (1 + n_th_s) \
-            + kappa_a * extra_sweep["n_fock1_a"]
+            + kappa_a_down * extra_sweep["n_fock1_a"]
         gamma_up = kappa_s * (extra_sweep["n_bar_s"] + 1) * n_th_s \
-            + kappa_a * extra_sweep["n_bar_a"] * n_th_a
-        Gamma_down = kappa_a + kappa_a_r
-        Gamma_up = kappa_a * n_th_a       # readout induced excitation rate is not added
+            + kappa_a_up * extra_sweep["n_bar_a"]
+        Gamma_down = kappa_a_down + kappa_a_r
+        Gamma_up = kappa_a_up       # readout induced excitation rate is not added
         # Gamma_up = (kappa_a + kappa_a_r) * n_th_a
         Gamma_phi = kappa_phi + kappa_phi_r
-        Gamma_down_ro = kappa_a + kappa_down_ro
-        Gamma_up_ro = kappa_a * n_th_a + kappa_up_ro
+        Gamma_down_ro = kappa_a_down + kappa_down_ro
+        Gamma_up_ro = kappa_a_up + kappa_up_ro
 
         T1_a = 1 / Gamma_down
         T2_a = 1 / (Gamma_phi + Gamma_down / 2)
@@ -683,13 +696,15 @@ class DerivedVariableFlxn(DerivedVariableBase):
         intermediate_result.update(dict(
             det_01_GHz = det_01_GHz,
             det_12_GHz = det_12_GHz,
+            det_02_GHz = det_02_GHz,
             # non_linr_a = non_linr_a,
 
             kappa_s = kappa_s,
-            kappa_a = kappa_a,
+            kappa_a_down = kappa_a_down,
+            kappa_a_up = kappa_a_up,
             kappa_phi = kappa_phi,
             n_th_s = n_th_s,
-            n_th_a = n_th_a,
+            # n_th_a = n_th_a,
 
             chi_ar = chi_ar,
             # sigma = sigma,

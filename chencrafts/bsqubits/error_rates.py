@@ -402,9 +402,3 @@ basic_channels.add_channel(
     lambda n_bar_s, chi_sa, T_M, chi_prime, *args, **kwargs: 
         n_bar_s * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
 )
-
-# ##############################################################################
-class ErrorRateTmon(ErrorRate):
-    def __init__(self):
-        super().__init__()
-        self.merge_channel(basic_channels)
