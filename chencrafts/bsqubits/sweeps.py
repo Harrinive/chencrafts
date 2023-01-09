@@ -171,8 +171,8 @@ def sweep_flxn_depolarization(
             break
 
         kappa_a_cap_list.append(ancilla.t1_capacitive(
-            i = level, 
-            j = starting_level, 
+            i = starting_level, 
+            j = level, 
             get_rate = True, 
             total = False, 
             T = temp_a, 
@@ -180,27 +180,26 @@ def sweep_flxn_depolarization(
             Q_cap = Q_cap,
         ))
         kappa_a_ind_list.append(ancilla.t1_inductive(
-            i = level, 
-            j = starting_level, 
+            i = starting_level, 
+            j = level, 
             get_rate = True, 
             total = False, 
             T = temp_a, 
-            esys=(bare_evals, bare_evecs),
+            esys = (bare_evals, bare_evecs),
             Q_ind = Q_ind,
         ))
-        # kappa_a_impd_list.append(ancilla.t1_charge_impedance(
-        #     i = level, 
-        #     j = starting_level, 
-        #     get_rate = True, 
-        #     total = False,
-        #     T = temp_a, 
-        #     esys = (bare_evals, bare_evecs),
-        #     Z = Z_char,
-        # ))
-        kappa_a_impd_list.append(0)          # this channel is weird
+        kappa_a_impd_list.append(ancilla.t1_charge_impedance(
+            i = starting_level, 
+            j = level, 
+            get_rate = True, 
+            total = False,
+            T = temp_a, 
+            esys = (bare_evals, bare_evecs),
+            Z = Z_char,
+        ))
         kappa_a_fbl_list.append(ancilla.t1_flux_bias_line(
-            i = level, 
-            j = starting_level, 
+            i = starting_level, 
+            j = level, 
             get_rate = True, 
             total = False,
             T = temp_a, 
@@ -208,8 +207,8 @@ def sweep_flxn_depolarization(
             Z = Z_fbl,
         ))
         kappa_a_qsp_tnl_list.append(ancilla.t1_quasiparticle_tunneling(
-            i = level, 
-            j = starting_level, 
+            i = starting_level, 
+            j = level, 
             get_rate = True, 
             total = False,
             T = temp_a, 
@@ -245,7 +244,8 @@ def sweep_flxn_depolarization(
             kappa_a_impd_dominant, 
             kappa_a_fbl_dominant, 
             kappa_a_qsp_tnl_dominant
-        ])
+        ]),
+        level_used,
     ])
 
 sweep_flxn_up = lambda ps, paramindex_tuple, paramvals_tuple, **kwargs: \
@@ -260,7 +260,8 @@ flxn_sweep_dict[(
     "kappa_a_up_impd", 
     "kappa_a_up_fbl", 
     "kappa_a_up_qsp_tnl",
-    "kappa_a_up_avg_transition"
+    "kappa_a_up_avg_transition",
+    "kappa_a_up_levels_used",
 )] = (sweep_flxn_up, ("temp_a", "n_th_base", 
     "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
 
@@ -270,7 +271,8 @@ flxn_sweep_dict[(
     "kappa_a_down_impd", 
     "kappa_a_down_fbl", 
     "kappa_a_down_qsp_tnl",
-    "kappa_a_down_avg_transition"
+    "kappa_a_down_avg_transition",
+    "kappa_a_down_levels_used",
 )] = (sweep_flxn_down, ("temp_a", "n_th_base", 
     "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
 
