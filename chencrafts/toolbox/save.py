@@ -28,7 +28,7 @@ def datetime_dir(
     if not os.path.exists(current_date_dir):
         os.mkdir(current_date_dir)
 
-    print(f"Current save directory: {current_date_dir}")
+    print(f"Current datetime directory: {current_date_dir}")
     return current_date_dir
 
 def save_variable_dict(file_name, variable_dict):
