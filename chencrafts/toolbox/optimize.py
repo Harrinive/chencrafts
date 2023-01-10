@@ -674,6 +674,7 @@ class MultiOpt():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
+        save_path: str = None,
     ):
         multi_result = MultiTraj()
         for _ in tqdm(range(run_num)):
@@ -684,5 +685,8 @@ class MultiOpt():
                 check_kwargs=check_kwargs,
             )
             multi_result.append(result)
+
+            if save_path is not None:
+                multi_result.save(save_path)
 
         return multi_result
