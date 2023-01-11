@@ -349,7 +349,7 @@ class DerivedVariableTmon(DerivedVariableBase):
         self,
         convergence_range = (1e-8, 1e-4),
         update_ncut = True,
-        return_intermediate_result = True,
+        store_intermediate_result = True,
     ):
         """
         At this level, every energy should be in the angular frequency unit except 
@@ -493,6 +493,8 @@ class DerivedVariableTmon(DerivedVariableBase):
             kappa_phi_r = kappa_phi_r,
             kappa_a_r = kappa_a_r,
         ))
+        if store_intermediate_result:
+            self.derived_dict.update(intermediate_result)
 
         self.derived_dict.update(dict(
             n_bar_s = extra_sweep["n_bar_s"],
@@ -522,12 +524,7 @@ class DerivedVariableTmon(DerivedVariableBase):
             T_s = T_s,
         ))
 
-
-        if return_intermediate_result:
-            return_dict = self.full_para | intermediate_result
-            return dict(sorted(return_dict.items()))
-        else:
-            return self.full_para
+        return self.full_para
 
 
 class DerivedVariableFlxn(DerivedVariableBase):
@@ -552,7 +549,7 @@ class DerivedVariableFlxn(DerivedVariableBase):
         self,
         convergence_range = (1e-8, 1e-4),
         update_cutoff = True,
-        return_intermediate_result = True,
+        store_intermediate_result = True,
     ):
         """
         At this level, every energy should be in the angular frequency unit except 
@@ -716,6 +713,8 @@ class DerivedVariableFlxn(DerivedVariableBase):
             kappa_phi_r = kappa_phi_r,
             kappa_a_r = kappa_a_r,
         ))
+        if store_intermediate_result:
+            self.derived_dict.update(intermediate_result)
 
         self.derived_dict.update(dict(
             n_bar_s = extra_sweep["n_bar_s"],
@@ -745,9 +744,4 @@ class DerivedVariableFlxn(DerivedVariableBase):
             T_s = T_s,
         ))
 
-
-        if return_intermediate_result:
-            return_dict = self.full_para | intermediate_result 
-            return dict(sorted(return_dict.items()))
-        else:
-            return self.full_para
+        return self.full_para

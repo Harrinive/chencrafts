@@ -2,6 +2,7 @@ from chencrafts.toolbox.data_processing import (
     DimensionModify,
     NSArray,
     nd_interpolation,
+    scatter_to_mesh,
 )
 from chencrafts.toolbox.optimize import (
     nan_2_flat_val, 
@@ -20,6 +21,6 @@ from chencrafts.toolbox.save import (
 )
 from chencrafts.toolbox.plot import (
     filter,
-    IntCmap,
+    Cmap,
     plot_dictionary_2d
 )

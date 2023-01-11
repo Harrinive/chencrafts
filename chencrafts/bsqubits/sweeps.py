@@ -30,6 +30,9 @@ def sweep_loss_rate(
 ):
     sys_dim, anc_dim = paramsweep.hilbertspace.subsystem_dims
 
+    # minimal number of basis
+    min_basis_num = int(np.abs(disp)**2 + np.abs(disp))
+
     # obtain a set of eigenstates with bare index (n, 0)
     full_drs_idx = paramsweep["dressed_indices"][paramindex_tuple]
     basis = np.ndarray(sys_dim, dtype=qt.Qobj)
@@ -40,16 +43,30 @@ def sweep_loss_rate(
             basis[idx] = paramsweep["evecs"][paramindex_tuple][drs_idx]
         else:
             basis[idx] = None
+            if idx < min_basis_num:
+                return np.nan * np.zeros(4)
+
 
     # get a state for calculating decay rate, now uses logical plus state
     logical_plus = cat(basis, [(1, disp), (1, -disp), (1, 1j * disp), (1, -1j * disp)])
     fock_1 = basis[1]
 
     # evaluate photon loss rate
-    cavity_excitation_l = qt.expect(a_dag_a, logical_plus)
-    qubit_excitation_l = qt.expect(sig_p_sig_m, logical_plus)
-    cavity_excitation_f = qt.expect(a_dag_a, fock_1)
-    qubit_excitation_f = qt.expect(sig_p_sig_m, fock_1)
+    try:
+        cavity_excitation_l = qt.expect(a_dag_a, logical_plus)
+        qubit_excitation_l = qt.expect(sig_p_sig_m, logical_plus)
+        cavity_excitation_f = qt.expect(a_dag_a, fock_1)
+        qubit_excitation_f = qt.expect(sig_p_sig_m, fock_1)
+    except TypeError:
+        # debugging
+        bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
+        print(
+            paramvals_tuple,
+            bare_evals[1] - bare_evals[0],
+            fock_1,
+            len([b for b in basis if b is not None])
+        )
+        return np.nan * np.zeros(4)
 
     # # Sanity check 0:
     # print(len(basis))

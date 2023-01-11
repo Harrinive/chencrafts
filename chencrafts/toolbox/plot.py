@@ -17,16 +17,24 @@ def filter(c, filter_name):
         factor = 3
         return [r ** factor, g ** factor, b ** factor, a]
 
-class IntCmap():
-    def __init__(self, total, cmap_name="rainbow"):
-        self.total = total
+class Cmap():
+    def __init__(
+        self, 
+        upper: float, 
+        lower: float = 0, 
+        cmap_name="rainbow"
+    ):
+        self.upper = upper
+        self.lower = lower
         self.cmap_name = cmap_name
 
         self.cmap = colormaps[self.cmap_name]
-        self.norm = plt.Normalize(0, self.total)
+        self.norm = plt.Normalize(self.lower, self.upper)
+        self.mappable = plt.cm.ScalarMappable(norm=self.norm, cmap=self.cmap)
     
-    def __call__(self, idx):
-        return self.cmap(self.norm(idx))
+    def __call__(self, val):
+        # return self.mappable.cmap(val)
+        return self.cmap(self.norm(val))
 
 def plot_dictionary_2d(
     dict: Dict[str, np.ndarray], 

@@ -138,6 +138,33 @@ def nd_interpolation(
 
     return interp
 
+def scatter_to_mesh(
+    x_data, y_data, z_data, 
+    x_remeshed=None, y_remeshed=None
+):
+    """
+    x_data, y_data, z_data should all be in the same shape. 
+    """
+    x_ravel = np.array(x_data).reshape(-1)
+    y_ravel = np.array(y_data).reshape(-1)
+    z_ravel = np.array(z_data).reshape(-1)
+
+    val_not_nan = list(np.logical_not(np.isnan(z_ravel)))
+
+    input_xy = np.transpose([
+        x_ravel[val_not_nan],
+        y_ravel[val_not_nan]
+    ])
+    interp = LinearNDInterpolator(
+        input_xy,
+        z_ravel[val_not_nan],
+    )
+
+    if x_remeshed is not None and y_remeshed is not None:
+        data = interp(x_remeshed, y_remeshed)
+        return interp, data
+    else:
+        return interp
 
 def merge_sort(arr: Union[List, np.ndarray], ascent: bool = True) -> np.ndarray:
     """

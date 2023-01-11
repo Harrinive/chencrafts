@@ -24,7 +24,7 @@ from chencrafts.toolbox.save import (
     save_variable_dict,
     load_variable_dict,
 )
-from chencrafts.toolbox.plot import IntCmap, filter
+from chencrafts.toolbox.plot import Cmap, filter
 
 
 # ##############################################################################
