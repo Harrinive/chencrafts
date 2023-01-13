@@ -678,13 +678,17 @@ class MultiOpt():
     ):
         multi_result = MultiTraj()
         for _ in tqdm(range(run_num)):
-            result = self.optimize.run(
-                init_x={},
-                call_back=call_back,
-                check_func=check_func,
-                check_kwargs=check_kwargs,
-            )
-            multi_result.append(result)
+
+            try: 
+                result = self.optimize.run(
+                    init_x={},
+                    call_back=call_back,
+                    check_func=check_func,
+                    check_kwargs=check_kwargs,
+                )
+                multi_result.append(result)
+            except ValueError:
+                continue
 
             if save_path is not None:
                 multi_result.save(save_path)

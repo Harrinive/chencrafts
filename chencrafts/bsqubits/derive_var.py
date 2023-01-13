@@ -5,7 +5,7 @@ import scqubits as scq
 
 import warnings
 from typing import List, Dict, Callable, Tuple
-import os 
+import os, copy
 
 from chencrafts.toolbox import (
     NSArray,
@@ -364,7 +364,6 @@ class DerivedVariableTmon(DerivedVariableBase):
                 convergence_range = convergence_range,
                 update_ncut = update_ncut,
             )
-            ancilla_copy = self.system.ancilla
 
         else:
             self.system = CavityTmonSys(
@@ -374,13 +373,13 @@ class DerivedVariableTmon(DerivedVariableBase):
                 convergence_range = None,
                 update_ncut = False,
             )
-            ancilla_copy = scq.Transmon(
-                EJ = self.para["EJ_GHz"],
-                EC = self.para["EC_GHz"],
-                ng = self.para["ng"],
-                ncut = self.sim_para["anc_ncut"],
-                truncated_dim = self.sim_para["anc_dim"],
-            )
+            # ancilla_copy = scq.Transmon(
+            #     EJ = self.para["EJ_GHz"],
+            #     EC = self.para["EC_GHz"],
+            #     ng = self.para["ng"],
+            #     ncut = self.sim_para["anc_ncut"],
+            #     truncated_dim = self.sim_para["anc_dim"],
+            # )
 
         self.sweep = self.system.sweep()
 
@@ -414,6 +413,8 @@ class DerivedVariableTmon(DerivedVariableBase):
         a_s = self.system.a_s()
         a_dag_a = a_s.dag() * a_s
         sig_p_sig_m = self.system.proj_a(1, 1)
+
+        ancilla_copy = copy.deepcopy(self.system.ancilla)
 
         extra_sweep = self._evaluate_extra_sweep_from_dict(
             tmon_sweep_dict, 
@@ -574,7 +575,6 @@ class DerivedVariableFlxn(DerivedVariableBase):
                 convergence_range = convergence_range,
                 update_cutoff = update_cutoff,
             )
-            ancilla_copy = self.system.ancilla
 
         else:
             self.system = CavityFlxnSys(
@@ -584,14 +584,14 @@ class DerivedVariableFlxn(DerivedVariableBase):
                 convergence_range = None,
                 update_cutoff = False,
             )
-            ancilla_copy = scq.Fluxonium(
-                EJ = self.para["EJ_GHz"],
-                EC = self.para["EC_GHz"],
-                EL = self.para["EL_GHz"],
-                flux = self.para["flux"],
-                cutoff = self.sim_para["anc_cutoff"],
-                truncated_dim = self.sim_para["anc_dim"],
-            )
+            # ancilla_copy = scq.Fluxonium(
+            #     EJ = self.para["EJ_GHz"],
+            #     EC = self.para["EC_GHz"],
+            #     EL = self.para["EL_GHz"],
+            #     flux = self.para["flux"],
+            #     cutoff = self.sim_para["anc_cutoff"],
+            #     truncated_dim = self.sim_para["anc_dim"],
+            # )
         self.sweep = self.system.sweep()
 
         # Store the data that directly come from the sweep
@@ -628,6 +628,8 @@ class DerivedVariableFlxn(DerivedVariableBase):
         a_s = self.system.a_s()
         a_dag_a = a_s.dag() * a_s
         sig_p_sig_m = self.system.proj_a(1, 1)
+        
+        ancilla_copy = copy.deepcopy(self.system.ancilla)
 
         extra_sweep = self._evaluate_extra_sweep_from_dict(
             flxn_sweep_dict, 
