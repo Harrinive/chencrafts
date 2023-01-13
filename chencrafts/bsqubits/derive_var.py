@@ -406,9 +406,18 @@ class DerivedVariableTmon(DerivedVariableBase):
         a_dag_a = a_s.dag() * a_s
         sig_p_sig_m = self.system.proj_a(1, 1)
 
+        ancilla_copy = scq.Transmon(
+            EJ = self.para["EJ_GHz"],
+            EC = self.para["EC_GHz"],
+            ng = self.para["ng"],
+            ncut = self.sim_para["anc_ncut"],
+            truncated_dim = self.sim_para["anc_dim"],
+        )
+
         extra_sweep = self._evaluate_extra_sweep_from_dict(
             tmon_sweep_dict, 
             kwargs={
+                "ancilla_copy": ancilla_copy,
                 "a_dag_a": a_dag_a,
                 "sig_p_sig_m": sig_p_sig_m,
             },
@@ -610,9 +619,20 @@ class DerivedVariableFlxn(DerivedVariableBase):
         a_dag_a = a_s.dag() * a_s
         sig_p_sig_m = self.system.proj_a(1, 1)
 
+        ancilla_copy = scq.Fluxonium(
+            EJ = self.para["EJ_GHz"],
+            EC = self.para["EC_GHz"],
+            EL = self.para["EL_GHz"],
+            flux = self.para["flux"],
+            cutoff = self.sim_para["anc_cutoff"],
+            truncated_dim = self.sim_para["anc_dim"],
+        )
+
+
         extra_sweep = self._evaluate_extra_sweep_from_dict(
             flxn_sweep_dict, 
             kwargs={
+                "ancilla_copy": ancilla_copy,
                 "a_dag_a": a_dag_a,
                 "sig_p_sig_m": sig_p_sig_m,
             },
@@ -623,13 +643,11 @@ class DerivedVariableFlxn(DerivedVariableBase):
         kappa_s = PI2 * self["omega_s_GHz"] / self["Q_s"]
         kappa_a_down = (
             extra_sweep["kappa_a_down_cap"] + extra_sweep["kappa_a_down_ind"] 
-            + extra_sweep["kappa_a_down_impd"] + extra_sweep["kappa_a_down_fbl"]  
-            + extra_sweep["kappa_a_down_qsp_tnl"]
+            + extra_sweep["kappa_a_down_fbl"] + extra_sweep["kappa_a_down_qsp_tnl"]
         )
         kappa_a_up = (
             extra_sweep["kappa_a_up_cap"] + extra_sweep["kappa_a_up_ind"] 
-            + extra_sweep["kappa_a_up_impd"] + extra_sweep["kappa_a_up_fbl"]  
-            + extra_sweep["kappa_a_up_qsp_tnl"]
+            + extra_sweep["kappa_a_up_fbl"] + extra_sweep["kappa_a_up_qsp_tnl"]
         )
         kappa_phi = extra_sweep["kappa_phi_flux"] + extra_sweep["kappa_phi_cc"]
         n_th_s = _n_th(self["omega_s_GHz"], self["temp_s"], self["n_th_base"])

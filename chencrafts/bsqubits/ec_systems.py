@@ -232,6 +232,8 @@ class CavityTmonSys(CavityAncSystem):
 
             if convergence_range is None:
                 break
+            elif not update_ncut:
+                break
             elif conv > convergence_range[1]:
                 anc_ncut = int(anc_ncut * 1.5)
             elif conv < convergence_range[0]:
@@ -406,7 +408,9 @@ class CavityFlxnSys(CavityAncSystem):
             # the last three numbers
             conv = np.max(np.abs(bare_evecs[-3:, :]))  
 
-            if convergence_range is None or not update_cutoff:
+            if convergence_range is None:
+                break
+            elif not update_cutoff:
                 break
             elif conv > convergence_range[1]:
                 anc_cutoff = int(anc_cutoff * 1.5)

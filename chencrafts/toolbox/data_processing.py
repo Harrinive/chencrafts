@@ -83,6 +83,8 @@ class NSArray(NamedSlotsNdarray):
     ) -> "NamedSlotsNdarray":
         if isinstance(input_array, float | int):
             return super().__new__(cls, np.array(input_array), {})
+        elif isinstance(input_array, NamedSlotsNdarray) and values_by_name is None:
+            return super().__new__(cls, np.array(input_array), input_array.param_info)
         elif values_by_name is None:
             raise ValueError("value_by_name shouldn't be None unless your input "
             "arra is actually a float number.")
