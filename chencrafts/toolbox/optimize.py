@@ -325,7 +325,7 @@ class MultiTraj():
             need_show = True
 
         best = self.best_traj()
-        cmap = IntCmap(self.length)
+        cmap = Cmap(self.length)
         for idx, traj in enumerate(self.traj_list):
             if traj == best:
                 filter_name = "emph"
