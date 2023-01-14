@@ -230,15 +230,12 @@ class CavityTmonSys(CavityAncSystem):
             conv = np.max(np.abs(bare_evecs[-3:, :]))  
             # conv = np.max(np.abs(bare_evecs[-1][-3:]))
 
-            if convergence_range is None:
-                break
-            elif not update_ncut:
+            if convergence_range is None or not update_ncut:
                 break
             elif conv > convergence_range[1]:
                 anc_ncut = int(anc_ncut * 1.5)
             elif conv < convergence_range[0]:
                 anc_ncut = int(anc_ncut / 1.5)
-                break
             else:
                 break
 
