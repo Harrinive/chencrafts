@@ -583,14 +583,6 @@ class DerivedVariableFlxn(DerivedVariableBase):
                 convergence_range = None,
                 update_cutoff = False,
             )
-            # ancilla_copy = scq.Fluxonium(
-            #     EJ = self.para["EJ_GHz"],
-            #     EC = self.para["EC_GHz"],
-            #     EL = self.para["EL_GHz"],
-            #     flux = self.para["flux"],
-            #     cutoff = self.sim_para["anc_cutoff"],
-            #     truncated_dim = self.sim_para["anc_dim"],
-            # )
         self.sweep = self.system.sweep()
 
         # Store the data that directly come from the sweep
@@ -628,7 +620,14 @@ class DerivedVariableFlxn(DerivedVariableBase):
         a_dag_a = a_s.dag() * a_s
         sig_p_sig_m = self.system.proj_a(1, 1)
         
-        ancilla_copy = copy.deepcopy(self.system.ancilla)
+        ancilla_copy = scq.Fluxonium(
+            EJ = self.para["EJ_GHz"],
+            EC = self.para["EC_GHz"],
+            EL = self.para["EL_GHz"],
+            flux = self.para["flux"],
+            cutoff = self.sim_para["anc_cutoff"],
+            truncated_dim = self.sim_para["anc_dim"],
+        )
 
         extra_sweep = self._evaluate_extra_sweep_from_dict(
             flxn_sweep_dict, 
