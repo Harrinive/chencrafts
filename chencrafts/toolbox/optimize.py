@@ -686,10 +686,11 @@ class MultiOpt():
                     check_func=check_func,
                     check_kwargs=check_kwargs,
                 )
-                multi_result.append(result)
-            except ValueError:
+            except ValueError as e:
+                print(e.with_traceback())
                 continue
 
+            multi_result.append(result)
             if save_path is not None:
                 multi_result.save(save_path)
 

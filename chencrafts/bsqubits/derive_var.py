@@ -373,13 +373,6 @@ class DerivedVariableTmon(DerivedVariableBase):
                 convergence_range = None,
                 update_ncut = False,
             )
-            # ancilla_copy = scq.Transmon(
-            #     EJ = self.para["EJ_GHz"],
-            #     EC = self.para["EC_GHz"],
-            #     ng = self.para["ng"],
-            #     ncut = self.sim_para["anc_ncut"],
-            #     truncated_dim = self.sim_para["anc_dim"],
-            # )
 
         self.sweep = self.system.sweep()
 
@@ -414,7 +407,13 @@ class DerivedVariableTmon(DerivedVariableBase):
         a_dag_a = a_s.dag() * a_s
         sig_p_sig_m = self.system.proj_a(1, 1)
 
-        ancilla_copy = copy.deepcopy(self.system.ancilla)
+        ancilla_copy = scq.Transmon(
+            EJ = self.para["EJ_GHz"],
+            EC = self.para["EC_GHz"],
+            ng = self.para["ng"],
+            ncut = self.sim_para["anc_ncut"],
+            truncated_dim = self.sim_para["anc_dim"],
+        )
 
         extra_sweep = self._evaluate_extra_sweep_from_dict(
             tmon_sweep_dict, 
