@@ -1,3 +1,5 @@
+import scqubits as scq
+
 from chencrafts.bsqubits.ec_systems import (
     CavityTmonSys,
     CavityFlxnSys,
@@ -19,3 +21,9 @@ from chencrafts.bsqubits.error_rates import (
     ErrorRate, 
     basic_channels
 )
+
+# set scqubits
+scq.set_units('GHz')
+scq.settings.T1_DEFAULT_WARNING = False
+scq.settings.PROGRESSBAR_DISABLED = True
+scq.settings.FUZZY_SLICING = True

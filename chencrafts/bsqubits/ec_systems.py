@@ -125,7 +125,7 @@ class CavityAncSystem(JointSystemBase):
             return_array
         )
 
-        self.system: Qubit
+        self.cavity: Qubit
         self.ancilla: Qubit
         self.subsys: List[Qubit]
 
@@ -140,7 +140,7 @@ class CavityAncSystem(JointSystemBase):
         """
         Annihilation operator for the system
         """
-        a = self.bare_oprt("annihilation_operator", self.system, sys_bare_esys)
+        a = self.bare_oprt("annihilation_operator", self.cavity, sys_bare_esys)
         return self._qobj_wrapper(a)
 
     def proj_a(self, ket_fock_num, bra_fock_num) -> np.ndarray | qt.Qobj:
@@ -154,7 +154,7 @@ class CavityAncSystem(JointSystemBase):
             bra_fock_num,
         )
         return qt.tensor(
-            qt.qeye(self.system.truncated_dim),
+            qt.qeye(self.cavity.truncated_dim),
             proj
         )
 
@@ -184,7 +184,7 @@ class CavityTmonSys(CavityAncSystem):
             return_array,
         )
 
-        self.system: scq.Oscillator
+        self.cavity: scq.Oscillator
         self.ancilla: scq.Transmon
 
         if h_space is None:
@@ -193,7 +193,7 @@ class CavityTmonSys(CavityAncSystem):
         else:
             self.h_space = h_space
             self.subsys = h_space.subsys_list
-            self.system = self.subsys[0]
+            self.cavity = self.subsys[0]
             self.ancilla = self.subsys[1]
 
     def _h_space_initalize(
@@ -207,7 +207,7 @@ class CavityTmonSys(CavityAncSystem):
             for key in ["sys_dim", "anc_ncut", "anc_dim"]]
 
         # build system and ancilla
-        self.system = scq.Oscillator(
+        self.cavity = scq.Oscillator(
             E_osc = omega_s,
             truncated_dim = sys_dim,
             id_str = "system",
@@ -245,12 +245,12 @@ class CavityTmonSys(CavityAncSystem):
         if update_ncut:
             sim_para["anc_ncut"] = anc_ncut
 
-        self.subsys = [self.system, self.ancilla]
+        self.subsys = [self.cavity, self.ancilla]
         self.h_space = scq.HilbertSpace(self.subsys)
 
         self.h_space.add_interaction(
             g = g_sa,
-            op1 = self.system.n_operator,
+            op1 = self.cavity.n_operator,
             op2 = self.ancilla.n_operator,
             add_hc = False,
             id_str = "sys-anc"
@@ -288,7 +288,7 @@ class CavityTmonSys(CavityAncSystem):
         mat_elems = mat_elems / mat_elems[0]
         
         a = qt.qdiags(mat_elems, 1)
-        a = qt.tensor(qt.identity(self.system.truncated_dim), a)
+        a = qt.tensor(qt.identity(self.cavity.truncated_dim), a)
         return self._qobj_wrapper(a)
 
     def detuning(self):
@@ -300,7 +300,7 @@ class CavityTmonSys(CavityAncSystem):
         return self.para["omega_s_GHz"] - (evals[1] - evals[0])
 
     def _update_h_space(self, omega_s_GHz, g_sa_GHz, EJ_GHz, EC_GHz, **kwargs):
-        self.system.E_osc = omega_s_GHz
+        self.cavity.E_osc = omega_s_GHz
         self.h_space.interaction_list[0].g_strength = g_sa_GHz
         self.ancilla.EJ = EJ_GHz
         self.ancilla.EC = EC_GHz
@@ -318,7 +318,7 @@ class CavityTmonSys(CavityAncSystem):
         paramvals_by_name = self._scq_sweep_input_para()
 
         subsys_update_info =  {
-            "omega_s_GHz": [self.system],
+            "omega_s_GHz": [self.cavity],
             "g_sa_GHz": [],
             "EJ_GHz": [self.ancilla],
             "EC_GHz": [self.ancilla]
@@ -362,7 +362,7 @@ class CavityFlxnSys(CavityAncSystem):
             swept_para,
             return_array,
         )
-        self.system: scq.Oscillator
+        self.cavity: scq.Oscillator
         self.ancilla: scq.Fluxonium
 
         if h_space is None:
@@ -371,7 +371,7 @@ class CavityFlxnSys(CavityAncSystem):
         else:
             self.h_space = h_space
             self.subsys = h_space.subsys_list
-            self.system = self.subsys[0]
+            self.cavity = self.subsys[0]
             self.ancilla = self.subsys[1]
 
     def _h_space_initalize(
@@ -385,7 +385,7 @@ class CavityFlxnSys(CavityAncSystem):
             for key in ["sys_dim", "anc_cutoff", "anc_dim"]]
 
         # build system and ancilla
-        self.system = scq.Oscillator(
+        self.cavity = scq.Oscillator(
             E_osc = omega_s,
             truncated_dim = sys_dim,
             id_str = "system",
@@ -408,36 +408,33 @@ class CavityFlxnSys(CavityAncSystem):
             # the last three numbers
             conv = np.max(np.abs(bare_evecs[-3:, :]))  
 
-            if convergence_range is None:
-                break
-            elif not update_cutoff:
+            if convergence_range is None or not update_cutoff:
                 break
             elif conv > convergence_range[1]:
                 anc_cutoff = int(anc_cutoff * 1.5)
             elif conv < convergence_range[0]:
                 anc_cutoff = int(anc_cutoff / 1.5)
-                break
             else:
                 break
 
         # print(f"A flxn is successfully created!")
-        if update_cutoff:
-            # print(f"Cutoff: {sim_para['anc_cutoff']} -> {anc_cutoff}")
+        if update_cutoff and sim_para['anc_cutoff'] != anc_cutoff:
+            # print(f"\tCutoff: {sim_para['anc_cutoff']} -> {anc_cutoff}")
             sim_para["anc_cutoff"] = anc_cutoff
 
-        self.subsys = [self.system, self.ancilla]
+        self.subsys = [self.cavity, self.ancilla]
         self.h_space = scq.HilbertSpace(self.subsys)
 
         self.h_space.add_interaction(
             g = g_sa,
-            op1 = self.system.n_operator,
+            op1 = self.cavity.n_operator,
             op2 = self.ancilla.n_operator,
             add_hc = False,
             id_str = "sys-anc"
         )
     
     def _update_h_space(self, omega_s, g_sa, EJ, EC, EL, flux, **kwargs):
-        self.system.E_osc = omega_s
+        self.cavity.E_osc = omega_s
         self.h_space.interaction_list[0].g_strength = g_sa
         self.ancilla.EJ = EJ
         self.ancilla.EC = EC
@@ -457,7 +454,7 @@ class CavityFlxnSys(CavityAncSystem):
         paramvals_by_name = self._scq_sweep_input_para()
 
         subsys_update_info =  {
-            "omega_s": [self.system],
+            "omega_s": [self.cavity],
             "g_sa": [],
             "EJ": [self.ancilla],
             "EC": [self.ancilla],

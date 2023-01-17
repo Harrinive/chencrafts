@@ -573,7 +573,8 @@ class Optimization():
         init_x: dict = {},
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
-        check_kwargs: dict = {}
+        check_kwargs: dict = {},
+        opt_options: dict = {},
     ):
         """
         If not specifying the initial x, a random x within range will be used.  
@@ -629,19 +630,21 @@ class Optimization():
                 bounds=opt_bounds,
                 callback=opt_call_back,
                 method=self.optimizer,
-                # options={"maxls": 20}
+                options=opt_options,
             )
         elif self.optimizer == "shgo":
             scipy_res = shgo(
                 self._opt_func,
                 bounds=opt_bounds,
                 callback=opt_call_back,
+                # options=opt_options,
             )
         elif self.optimizer == "differential evolution":
             scipy_res = differential_evolution(
                 self._opt_func,
                 bounds=opt_bounds,
                 callback=opt_call_back,
+                # options=opt_options,
             )
         # elif self.optimizer == "bayesian optimization":
         #     bo_res = bayesian_optimization(
@@ -674,6 +677,7 @@ class MultiOpt():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
+        opt_options: dict = {},
         save_path: str = None,
     ):
         multi_result = MultiTraj()
@@ -685,9 +689,10 @@ class MultiOpt():
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
+                    opt_options=opt_options,
                 )
             except ValueError as e:
-                print(e.with_traceback())
+                print(f"Capture a ValueError from optimization: {e}")
                 continue
 
             multi_result.append(result)

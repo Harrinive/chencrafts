@@ -148,15 +148,18 @@ class DerivedVariableBase():
             orient="index",
         )
 
-        flattened_derived_para = dict([
-            (key, val.reshape(-1)) for key, val in self.derived_dict.items()
-        ])
+        flattened_derived_para = {}
+        for key, val in self.derived_dict.items():
+            try: 
+                flattened_derived_para[key] = val.reshape(-1)
+            except AttributeError as e:
+                print(f"Data {key} is not saved due to AttributeError: {e}")
+
         save_variable_list_dict(
             f"{path}/derived_para.csv",
             flattened_derived_para,
             orient="columns",
         )
-
 
     def _init_scq_sweep_shape(self) -> Dict:
         """
@@ -665,7 +668,7 @@ class DerivedVariableFlxn(DerivedVariableBase):
         # kappa_down_ro, kappa_up_ro = _addit_rate_ro(
         #     kappa_a, n_ro, n_crit, lambda_2, self["kappa_r"], kappa_phi
         # )                                             # temporarily set to 0
-        kappa_down_ro, kappa_up_ro = 0, 0
+        kappa_down_ro, kappa_up_ro = np.zeros_like(self["omega_s_GHz"]), np.zeros_like(self["omega_s_GHz"])
 
         M_ge = _readout_error(
             np.sqrt(n_ro), 
@@ -677,7 +680,7 @@ class DerivedVariableFlxn(DerivedVariableBase):
         # additional coherence rates
         kappa_phi_r = _shot_noise(self["kappa_r"], chi_ar, self["n_th_r"])
         # kappa_a_r = lambda_2 * self["kappa_r"]        # temporarily set to 0
-        kappa_a_r = 0
+        kappa_a_r = np.zeros_like(self["omega_s_GHz"])
 
         # pulse
         tau_p = sigma * np.abs(self["tau_p/sigma"])
