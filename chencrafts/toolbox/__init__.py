@@ -22,5 +22,6 @@ from chencrafts.toolbox.save import (
 from chencrafts.toolbox.plot import (
     filter,
     Cmap,
+    bar_plot_compare,
     plot_dictionary_2d
 )

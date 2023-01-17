@@ -4,7 +4,7 @@ import qutip as qt
 import matplotlib.pyplot as plt
 from scipy.constants import h, k
 
-from typing import Dict, Callable, List, Tuple
+from typing import Dict, Callable, List, Tuple, Any
 
 from chencrafts.toolbox.data_processing import NSArray
 from chencrafts.bsqubits.basis_n_states import cat
@@ -22,7 +22,7 @@ def therm_factor(freq, temp, n_th_base):
 # dictionary key is a str or a tuple: output_name or (output_names)
 # dict values is a tuple: (function, input_names)
 # the function should return a np.array object
-tmon_sweep_dict: Dict[str, Tuple[Callable, Tuple[str]]] = {}
+tmon_sweep_dict: Dict[Any, Tuple[Callable, Tuple[str]]] = {}
 
 def sweep_loss_rate(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
@@ -151,7 +151,7 @@ tmon_sweep_dict[
 # dictionary key is a str or a tuple: output_name or (output_names)
 # dict values is a tuple: (function, input_names)
 # the function should return a np.array object
-flxn_sweep_dict: Dict[str, Tuple[Callable, Tuple[str]]] = {}
+flxn_sweep_dict: Dict[Any, Tuple[Callable, Tuple[str]]] = {}
 
 flxn_sweep_dict[(
     "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"

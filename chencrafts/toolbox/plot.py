@@ -1,6 +1,7 @@
 from matplotlib import pyplot as plt
 from matplotlib import colormaps
 from matplotlib.axes import Axes
+from matplotlib import rcParams
 
 import numpy as np
 
@@ -35,6 +36,49 @@ class Cmap():
     def __call__(self, val):
         # return self.mappable.cmap(val)
         return self.cmap(self.norm(val))
+
+def bar_plot_compare(
+    var_list_dict: Dict[str, np.ndarray],
+    x_ticks: List = None,
+    ax = None,
+    figsize = None, 
+    dpi = None,
+    x_tick_rotation = 45, 
+):
+    # plot 
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
+
+    x_len = len(x_ticks)
+    for key, val in var_list_dict.items():
+        assert len(x_ticks) == len(val), f"x_lables should have the same length with"
+        f"the data to be plotted, exception occurs for {key}"
+
+    compare_num = len(var_list_dict)
+    plot_width = 1 / (compare_num + 1)
+    plot_x = np.linspace(0, x_len-1, x_len) + 0.5 * plot_width
+    
+    for i, (key, val) in enumerate(var_list_dict.items()):
+            
+        ax.bar(
+            x = plot_x + i * plot_width, 
+            height = val,
+            width = plot_width,
+            align = "edge",
+            label = key
+        )
+            
+        ax.set_xticks(plot_x + plot_width * compare_num / 2)
+        ax.set_xticklabels(
+            x_ticks, 
+            rotation=x_tick_rotation, 
+            rotation_mode="anchor", 
+            horizontalalignment="right", 
+            verticalalignment="top", 
+            fontsize=rcParams["axes.labelsize"]
+        )
+
+        ax.legend()
 
 def plot_dictionary_2d(
     dict: Dict[str, np.ndarray], 
