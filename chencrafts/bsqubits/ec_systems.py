@@ -236,6 +236,7 @@ class CavityTmonSys(CavityAncSystem):
                 anc_ncut = int(anc_ncut * 1.5)
             elif conv < convergence_range[0]:
                 anc_ncut = int(anc_ncut / 1.5)
+                break
             else:
                 break
 
