@@ -411,11 +411,11 @@ class DerivedVariableTmon(DerivedVariableBase):
         sig_p_sig_m = self.system.proj_a(1, 1)
 
         ancilla_copy = scq.Transmon(
-            EJ = self.para["EJ_GHz"],
-            EC = self.para["EC_GHz"],
-            ng = self.para["ng"],
-            ncut = self.sim_para["anc_ncut"],
-            truncated_dim = self.sim_para["anc_dim"],
+            EJ = self.system.ancilla.EJ,
+            EC = self.system.ancilla.EC,
+            ng = self.system.ancilla.ng,
+            ncut = self.system.ancilla.ncut,
+            truncated_dim = self.system.ancilla.truncated_dim,
         )
 
         extra_sweep = self._evaluate_extra_sweep_from_dict(
@@ -624,12 +624,12 @@ class DerivedVariableFlxn(DerivedVariableBase):
         sig_p_sig_m = self.system.proj_a(1, 1)
         
         ancilla_copy = scq.Fluxonium(
-            EJ = self.para["EJ_GHz"],
-            EC = self.para["EC_GHz"],
-            EL = self.para["EL_GHz"],
-            flux = self.para["flux"],
-            cutoff = self.sim_para["anc_cutoff"],
-            truncated_dim = self.sim_para["anc_dim"],
+            EJ = self.system.ancilla.EJ,
+            EC = self.system.ancilla.EC,
+            EL = self.system.ancilla.EL,
+            flux = self.system.ancilla.flux,
+            cutoff = self.system.ancilla.cutoff,
+            truncated_dim = self.system.ancilla.truncated_dim,
         )
 
         extra_sweep = self._evaluate_extra_sweep_from_dict(
