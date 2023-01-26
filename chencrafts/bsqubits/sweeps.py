@@ -19,10 +19,12 @@ def therm_factor(freq, temp, n_th_base):
     return (1 / np.tanh(0.5 * np.abs(therm_ratio))) / (1 + np.exp(-therm_ratio))
 
 # ##############################################################################
-# dictionary key is a str or a tuple: output_name or (output_names)
-# dict values is a tuple: (function, input_names)
-# the function should return a np.array object
-tmon_sweep_dict: Dict[Any, Tuple[Callable, Tuple[str]]] = {}
+def sweep_convergence(
+    paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple,
+    **kwargs
+):
+    bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
+    return np.max(np.abs(bare_evecs[-3:, :]))
 
 def sweep_loss_rate(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
@@ -91,6 +93,15 @@ def sweep_loss_rate(
         cavity_excitation_f, 
         qubit_excitation_f
     ])
+
+# ##############################################################################
+# dictionary key is a str or a tuple: output_name or (output_names)
+# dict values is a tuple: (function, input_names)
+# the function should return a np.array object
+tmon_sweep_dict: Dict[Any, Tuple[Callable, Tuple[str]]] = {}
+
+tmon_sweep_dict["conv"] = (sweep_convergence, tuple())
+
 tmon_sweep_dict[(
     "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
 )] = (sweep_loss_rate, ("disp", ))
@@ -153,6 +164,8 @@ tmon_sweep_dict[
 # the function should return a np.array object
 flxn_sweep_dict: Dict[Any, Tuple[Callable, Tuple[str]]] = {}
 
+flxn_sweep_dict["conv"] = (sweep_convergence, tuple())
+
 flxn_sweep_dict[(
     "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
 )] = (sweep_loss_rate, ("disp", ))
@@ -165,10 +178,12 @@ def sweep_flxn_depolarization(
 ):
     assert n_th_base == 0, "Now the code only support n_th_base = 0."
 
-    ancilla_copy.EJ = paramvals_tuple[list(paramsweep.param_info.keys()).index("EJ_GHz")]
-    ancilla_copy.EC = paramvals_tuple[list(paramsweep.param_info.keys()).index("EC_GHz")]
-    ancilla_copy.EL = paramvals_tuple[list(paramsweep.param_info.keys()).index("EL_GHz")]
-    ancilla_copy.flux = paramvals_tuple[list(paramsweep.param_info.keys()).index("flux")]
+    param_name = list(paramsweep.param_info.keys())
+    ancilla_copy.EJ = paramvals_tuple[param_name.index("EJ_GHz")]
+    ancilla_copy.EC = paramvals_tuple[param_name.index("EC_GHz")]
+    ancilla_copy.EL = paramvals_tuple[param_name.index("EL_GHz")]
+    ancilla_copy.flux = paramvals_tuple[param_name.index("flux")]
+
     bare_evecs = paramsweep["bare_evecs"]["subsys":1][paramindex_tuple]
     bare_evals = paramsweep["bare_evals"]["subsys":1][paramindex_tuple]
 
@@ -187,7 +202,7 @@ def sweep_flxn_depolarization(
             kappa_a_qsp_tnl_list.append(0)
             continue
 
-        freq = bare_evals[level] - bare_evals[0]
+        freq = bare_evals[starting_level] - bare_evals[level]
         n_th = therm_factor(freq, temp_a, n_th_base)
         if n_th < n_th_threshold:
             break

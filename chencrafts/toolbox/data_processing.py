@@ -96,9 +96,18 @@ class NSArray(NamedSlotsNdarray):
             regular_index = []
             for key in self.param_info.keys():
                 try:
-                    regular_index.append(index[key])
+                    idx = index[key]
                 except KeyError:
-                    regular_index.append(slice(None))
+                    idx = slice(None)
+
+                if isinstance(idx, np.ndarray):
+                    if idx.shape == tuple():
+                        idx = float(idx)
+                    else:
+                        raise TypeError(f"Wrong type of indexing on axis {key}: {idx}")
+
+                regular_index.append(idx)
+
             return super().__getitem__(tuple(regular_index))
 
         return super().__getitem__(index)

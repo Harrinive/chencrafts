@@ -201,14 +201,24 @@ class DerivedVariableBase():
     def _sweep_wrapper(
         self, 
         nsarray: NSArray, 
-        from_scq_sweep: bool = True
+        from_scq_sweep: bool = True,
+        extra_dim_name: List[str] = [],
     ):
+        """ 
+        extra_shape_dict should be non-empty when then OUTPUT data have extra dimension
+        which is not included in self.swept_para. For example, for the evals sweep, 
+        the data has one more dimension to store a list of evals. 
+        """
         if from_scq_sweep:
             shaped_array = self._dim_modify(nsarray)
         else:
+            target_shape = self._target_shape
+            for name in extra_dim_name:
+                target_shape[name] = len(nsarray.param_info[name])
+
             dim_modify = DimensionModify(
                 _var_dict_2_shape_dict(nsarray.param_info),
-                self._target_shape
+                target_shape
             )
             shaped_array = dim_modify(nsarray)
 
@@ -224,7 +234,7 @@ class DerivedVariableBase():
 
     def keys(self):
         return self.full_para.keys()
-    
+
     def values(self):
         return self.full_para.values()
 
@@ -285,9 +295,9 @@ class DerivedVariableBase():
 
         return data
 
-    def _evaluate_extra_sweep_from_dict(
+    def evaluate_extra_sweep_from_dict(
         self, 
-        sweep_func_dict: Dict[str, Tuple[Callable, Tuple[str]]], 
+        sweep_func_dict: Dict[str | Tuple[str,...], Tuple[Callable, Tuple[str, ...]]], 
         kwargs: Dict
     ):
         """
@@ -418,7 +428,7 @@ class DerivedVariableTmon(DerivedVariableBase):
             truncated_dim = self.system.ancilla.truncated_dim,
         )
 
-        extra_sweep = self._evaluate_extra_sweep_from_dict(
+        extra_sweep = self.evaluate_extra_sweep_from_dict(
             tmon_sweep_dict, 
             kwargs={
                 "ancilla_copy": ancilla_copy,
@@ -589,11 +599,8 @@ class DerivedVariableFlxn(DerivedVariableBase):
         self.sweep = self.system.sweep()
 
         # Store the data that directly come from the sweep
+
         self.derived_dict.update(dict(
-            omega_a_GHz = self._sweep_wrapper(
-                self.sweep["bare_evals"][1][..., 1] 
-                - self.sweep["bare_evals"][1][..., 0]
-            ),
             chi_sa = PI2 * self._sweep_wrapper(
                 self.sweep["chi"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
@@ -604,17 +611,18 @@ class DerivedVariableFlxn(DerivedVariableBase):
                 self.sweep["chi_prime"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
         ))
+
         det_01_GHz = self._sweep_wrapper(
             self.sweep["bare_evals"][1][..., 1] 
+            - self.sweep["bare_evals"][1][..., 0]
+        ) - self["omega_s_GHz"]
+        det_02_GHz = self._sweep_wrapper(
+            self.sweep["bare_evals"][1][..., 2] 
             - self.sweep["bare_evals"][1][..., 0]
         ) - self["omega_s_GHz"]
         det_12_GHz = self._sweep_wrapper(
             self.sweep["bare_evals"][1][..., 2] 
             - self.sweep["bare_evals"][1][..., 1]
-        ) - self["omega_s_GHz"]
-        det_02_GHz = self._sweep_wrapper(
-            self.sweep["bare_evals"][1][..., 2] 
-            - self.sweep["bare_evals"][1][..., 0]
         ) - self["omega_s_GHz"]
         # non_linr_a = PI2 * (det_12_GHz - det_01_GHz)   # no non-lin for a flxn
 
@@ -632,7 +640,7 @@ class DerivedVariableFlxn(DerivedVariableBase):
             truncated_dim = self.system.ancilla.truncated_dim,
         )
 
-        extra_sweep = self._evaluate_extra_sweep_from_dict(
+        extra_sweep = self.evaluate_extra_sweep_from_dict(
             flxn_sweep_dict, 
             kwargs={
                 "ancilla_copy": ancilla_copy,
@@ -711,10 +719,19 @@ class DerivedVariableFlxn(DerivedVariableBase):
         # store the data into dictionaries
         intermediate_result = {}
         intermediate_result.update(extra_sweep)
+
+        eval_dict = {}
+        for idx in range(self.sim_para["anc_dim"]):
+            eval_dict[f"omega_a_{idx}_GHz"] = self._sweep_wrapper(
+                self.sweep["bare_evals"][1][..., idx] 
+                - self.sweep["bare_evals"][1][..., 0]
+            )
+        intermediate_result.update(eval_dict)
+
         intermediate_result.update(dict(
             det_01_GHz = det_01_GHz,
-            det_12_GHz = det_12_GHz,
             det_02_GHz = det_02_GHz,
+            det_12_GHz = det_12_GHz,
             # non_linr_a = non_linr_a,
 
             kappa_s = kappa_s,

@@ -51,8 +51,8 @@ def bar_plot_compare(
 
     x_len = len(x_ticks)
     for key, val in var_list_dict.items():
-        assert len(x_ticks) == len(val), f"x_lables should have the same length with"
-        f"the data to be plotted, exception occurs for {key}"
+        assert len(x_ticks) == len(val), (f"x_lables should have the same length with"
+        f"the data to be plotted, exception occurs for {key}")
 
     compare_num = len(var_list_dict)
     plot_width = 1 / (compare_num + 1)
@@ -102,7 +102,7 @@ def plot_dictionary_2d(
     place_a_point should be (x, y)
 
     """
-    
+
     rows = np.ceil(len(dict) / cols).astype(int)
     fig, axs = plt.subplots(rows, cols, figsize=(cols*single_figsize[0], rows*single_figsize[1]), dpi=dpi)
 
@@ -122,17 +122,17 @@ def plot_dictionary_2d(
             print("Error, Value to be plotted has the shape", value.shape, ", key: ", key)
         # except TypeError:
         #     print("TypeError, key: ", key, "value: ", value, "X, Y mesh", X_mesh, Y_mesh)
+        fig.colorbar(cax, ax=ax)
 
         # contour
         if contour_levels > 0 and np.std(value) > 1e-14:
             try:
-                cax_cont = ax.contour(X_mesh, Y_mesh, value, cmap="hsv", levels=contour_levels)
-                fig.colorbar(cax_cont, ax=ax)
+                CS = ax.contour(X_mesh, Y_mesh, value, cmap="hsv", levels=contour_levels)
+                ax.clabel(CS, inline=True, fontsize=7)
+                # fig.colorbar(cax_cont, ax=ax)
             except IndexError as err: # usually when no contour is found\
                 print(f"In {key}, except IndexError: {err}")
                 pass
-        else:
-            fig.colorbar(cax, ax=ax)
 
         # trajectory
         if place_a_point != ():
@@ -150,7 +150,6 @@ def plot_dictionary_2d(
                     text = f"  {val:.1e}"
                 ax.text(px, py, text, ha="left", va="center", c="white", fontsize=7)
 
-                
         # labels 
         ax.set_title(key)
         ax.set_xlabel(x_name)
