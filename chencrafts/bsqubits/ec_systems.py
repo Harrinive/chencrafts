@@ -4,6 +4,9 @@ from scqubits.core.qubit_base import QubitBaseClass1d as Qubit
 import numpy as np
 import qutip as qt
 
+import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+
 from typing import Dict, List, Tuple
 
 from chencrafts.bsqubits.basis_n_states import dressed_basis
@@ -108,8 +111,7 @@ class JointSystemBase():
             self.h_space,
             self.dim_list,
             esys
-        )
-        
+        )        
 
 class CavityAncSystem(JointSystemBase):
     def __init__(
@@ -157,6 +159,16 @@ class CavityAncSystem(JointSystemBase):
             qt.qeye(self.cavity.truncated_dim),
             proj
         )
+
+    def plot_resonance(
+        self, 
+        highest_anc_levels: int = 3,
+        ax: Axes = None,
+    ):
+        if ax is None:
+            fig, ax = plt.subplots(1, 1)
+        
+        return
 
 
 class CavityTmonSys(CavityAncSystem):
@@ -431,12 +443,12 @@ class CavityFlxnSys(CavityAncSystem):
             id_str = "sys-anc"
         )
     
-    def _update_h_space(self, omega_s, g_sa, EJ, EC, EL, flux, **kwargs):
-        self.cavity.E_osc = omega_s
-        self.h_space.interaction_list[0].g_strength = g_sa
-        self.ancilla.EJ = EJ
-        self.ancilla.EC = EC
-        self.ancilla.EL = EL
+    def _update_h_space(self, omega_s_GHz, g_sa_GHz, EJ_GHz, EC_GHz, EL_GHz, flux, **kwargs):
+        self.cavity.E_osc = omega_s_GHz
+        self.h_space.interaction_list[0].g_strength = g_sa_GHz
+        self.ancilla.EJ = EJ_GHz
+        self.ancilla.EC = EC_GHz
+        self.ancilla.EL = EL_GHz
         self.ancilla.flux = flux
 
     def sweep(self,) -> scq.ParameterSweep:
@@ -452,11 +464,11 @@ class CavityFlxnSys(CavityAncSystem):
         paramvals_by_name = self._scq_sweep_input_para()
 
         subsys_update_info =  {
-            "omega_s": [self.cavity],
-            "g_sa": [],
-            "EJ": [self.ancilla],
-            "EC": [self.ancilla],
-            "EL": [self.ancilla],
+            "omega_s_GHz": [self.cavity],
+            "g_sa_GHz": [],
+            "EJ_GHz": [self.ancilla],
+            "EC_GHz": [self.ancilla],
+            "EL_GHz": [self.ancilla],
             "flux": [self.ancilla],
         }
 
