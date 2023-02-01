@@ -18,6 +18,8 @@ from chencrafts.toolbox.save import (
     load_variable_list_dict,
     save_variable_dict,
     load_variable_dict,
+    dill_dump,
+    dill_load,
 )
 from chencrafts.toolbox.plot import (
     filter,

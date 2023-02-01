@@ -14,6 +14,8 @@ from chencrafts.toolbox import (
     load_variable_dict,
     save_variable_list_dict,
     load_variable_list_dict,
+    dill_dump,
+    dill_load,
 )
 from chencrafts.bsqubits.ec_systems import (
     CavityTmonSys,
@@ -97,7 +99,11 @@ class DerivedVariableBase():
             "If you didn't call use `evaluate()`, try it.")
 
     @classmethod
-    def from_folder(cls, path: str) -> "DerivedVariableBase":
+    def from_file(cls, filename: str) -> "DerivedVariableBase":
+        return dill_load(filename)
+
+    @classmethod
+    def from_export_folder(cls, path: str) -> "DerivedVariableBase":
         path = os.path.normpath(path)
 
         para = load_variable_dict(
@@ -130,8 +136,11 @@ class DerivedVariableBase():
         new_der_para.derived_dict = ns_derived_dict
 
         return new_der_para
+    
+    def save(self, filename: str) -> None:
+        dill_dump(self, filename)
 
-    def save(self, path: str) -> None:
+    def export(self, path: str) -> None:
         path = os.path.normpath(path)
 
         save_variable_dict(

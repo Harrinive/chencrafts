@@ -48,7 +48,6 @@ def sweep_loss_rate(
             if idx < min_basis_num:
                 return np.nan * np.zeros(4)
 
-
     # get a state for calculating decay rate, now uses logical plus state
     logical_plus = cat(basis, [(1, disp), (1, -disp), (1, 1j * disp), (1, -1j * disp)])
     fock_1 = basis[1]
