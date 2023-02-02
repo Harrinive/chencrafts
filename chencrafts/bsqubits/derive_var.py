@@ -218,7 +218,7 @@ class DerivedVariableBase():
         which is not included in self.swept_para. For example, for the evals sweep, 
         the data has one more dimension to store a list of evals. 
         """
-        if from_scq_sweep:
+        if from_scq_sweep and extra_dim_name == []:
             shaped_array = self._dim_modify(nsarray)
         else:
             target_shape = self._target_shape
@@ -254,7 +254,7 @@ class DerivedVariableBase():
         self, 
         func: Callable, 
         extra_input_dict: Dict[str, np.ndarray] = {},
-        output_elem_shape: float = 1,
+        output_elem_shape: Tuple = tuple(),
         kwargs: Dict[str, np.ndarray] = {},
     ) -> NSArray | List[NSArray]:
         """
@@ -621,18 +621,18 @@ class DerivedVariableFlxn(DerivedVariableBase):
             ), 
         ))
 
-        det_01_GHz = self._sweep_wrapper(
-            self.sweep["bare_evals"][1][..., 1] 
-            - self.sweep["bare_evals"][1][..., 0]
-        ) - self["omega_s_GHz"]
-        det_02_GHz = self._sweep_wrapper(
-            self.sweep["bare_evals"][1][..., 2] 
-            - self.sweep["bare_evals"][1][..., 0]
-        ) - self["omega_s_GHz"]
-        det_12_GHz = self._sweep_wrapper(
-            self.sweep["bare_evals"][1][..., 2] 
-            - self.sweep["bare_evals"][1][..., 1]
-        ) - self["omega_s_GHz"]
+        # det_01_GHz = self._sweep_wrapper(
+        #     self.sweep["bare_evals"][1][..., 1] 
+        #     - self.sweep["bare_evals"][1][..., 0]
+        # ) - self["omega_s_GHz"]
+        # det_02_GHz = self._sweep_wrapper(
+        #     self.sweep["bare_evals"][1][..., 2] 
+        #     - self.sweep["bare_evals"][1][..., 0]
+        # ) - self["omega_s_GHz"]
+        # det_12_GHz = self._sweep_wrapper(
+        #     self.sweep["bare_evals"][1][..., 2] 
+        #     - self.sweep["bare_evals"][1][..., 1]
+        # ) - self["omega_s_GHz"]
         # non_linr_a = PI2 * (det_12_GHz - det_01_GHz)   # no non-lin for a flxn
 
         # Evaluate extra sweep over parameter outside of the self.scq_available_var
@@ -738,9 +738,9 @@ class DerivedVariableFlxn(DerivedVariableBase):
         intermediate_result.update(eval_dict)
 
         intermediate_result.update(dict(
-            det_01_GHz = det_01_GHz,
-            det_02_GHz = det_02_GHz,
-            det_12_GHz = det_12_GHz,
+            # det_01_GHz = det_01_GHz,
+            # det_02_GHz = det_02_GHz,
+            # det_12_GHz = det_12_GHz,
             # non_linr_a = non_linr_a,
 
             kappa_s = kappa_s,

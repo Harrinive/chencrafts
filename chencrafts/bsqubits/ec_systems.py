@@ -361,7 +361,7 @@ class CavityFlxnSys(CavityAncSystem):
         h_space: scq.HilbertSpace = None,
         convergence_range: Tuple[float] = (1e-10, 1e-5),
         update_cutoff: bool = True,
-        return_array = False
+        return_array: bool = False
     ):
         """
         Initialize from h_space is dangerous, currently I don't have a good idea of
