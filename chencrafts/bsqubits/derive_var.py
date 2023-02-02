@@ -139,8 +139,14 @@ class DerivedVariableBase():
 
         new_der_para.derived_dict = ns_derived_dict
 
-        new_der_para.system = dill_load(f"{path}/system.dill")
-        new_der_para.sweep = new_der_para.system.sweep
+        try: 
+            new_der_para.system = dill_load(f"{path}/system.dill")
+        except FileNotFoundError:
+            pass
+        try:
+            new_der_para.sweep = dill_load(f"{path}/sweep.dill")
+        except FileNotFoundError:
+            pass
 
 
         return new_der_para
@@ -178,7 +184,14 @@ class DerivedVariableBase():
             orient="columns",
         )
 
-        dill_dump(self.system, f"{path}/system.dill")
+        try:
+            dill_dump(self.system, f"{path}/system.dill")
+        except NameError:
+            pass
+        try:
+            dill_dump(self.sweep, f"{path}/sweep.dill")
+        except NameError:
+            pass
 
     def _init_scq_sweep_shape(self) -> Dict:
         """
