@@ -18,6 +18,7 @@ from chencrafts.toolbox import (
     dill_load,
 )
 from chencrafts.bsqubits.ec_systems import (
+    CavityAncSystem,
     CavityTmonSys,
     CavityFlxnSys,
 )
@@ -83,6 +84,9 @@ class DerivedVariableBase():
             self._target_shape
         )
 
+        self.system: CavityAncSystem
+        self.sweep: scq.ParameterSweep
+
     def __getitem__(
         self,
         name: str,
@@ -99,8 +103,8 @@ class DerivedVariableBase():
             "If you didn't call use `evaluate()`, try it.")
 
     @classmethod
-    def from_file(cls, filename: str) -> "DerivedVariableBase":
-        return dill_load(filename)
+    # def from_file(cls, filename: str) -> "DerivedVariableBase":
+    #     return dill_load(filename)
 
     @classmethod
     def from_export_folder(cls, path: str) -> "DerivedVariableBase":
@@ -135,10 +139,14 @@ class DerivedVariableBase():
 
         new_der_para.derived_dict = ns_derived_dict
 
+        new_der_para.system = dill_load(f"{path}/system.dill")
+        new_der_para.sweep = new_der_para.system.sweep
+
+
         return new_der_para
     
-    def save(self, filename: str) -> None:
-        dill_dump(self, filename)
+    # def save(self, filename: str) -> None:
+    #     dill_dump(self, filename)
 
     def export(self, path: str) -> None:
         path = os.path.normpath(path)
@@ -169,6 +177,8 @@ class DerivedVariableBase():
             flattened_derived_para,
             orient="columns",
         )
+
+        dill_dump(self.system, f"{path}/system.dill")
 
     def _init_scq_sweep_shape(self) -> Dict:
         """
