@@ -83,18 +83,19 @@ def bar_plot_compare(
 def plot_dictionary_2d(
     dict: Dict[str, np.ndarray], 
     xy_mesh: List[np.ndarray],
-    xy_label: List[str], 
-    single_figsize=(3, 2.5), 
-    cols=3, 
-    place_a_point: Tuple[float, float]=(),     # plot a point in the figure
-    show_value=False,                   # plot the number number near the destination of the trajectory  
-    slc=slice(None),                            # slice the value stored in the dictionary before any processing
-    slc_2d=slice(None),  # for zooming in the plots
-    contour_levels=0,
-    vmin=None,
-    vmax=None,
-    dpi=150,
-    save_filename=None,
+    xy_label: List[str] = ["", ""], 
+    single_figsize = (3, 2.5), 
+    cols = 3, 
+    place_a_point: Tuple[float, float] = tuple(),     # plot a point in the figure
+    show_value = False,                   # plot the number number near the destination of the trajectory  
+    slc = slice(None),                            # slice the value stored in the dictionary before any processing
+    slc_2d = slice(None),  # for zooming in the plots
+    contour_levels = 0,
+    cmap = "viridis",
+    vmin = None,
+    vmax = None,
+    dpi = 150,
+    save_filename = None,
 ):
     """
     this function plot meshes from a dictionary
@@ -112,12 +113,15 @@ def plot_dictionary_2d(
 
     ax_row, ax_col = 0, 0
     for key, full_value in dict.items():
-        ax: Axes = axs[ax_row, ax_col]
+        if rows == 1:
+            ax: Axes = axs[ax_col]
+        else:
+            ax: Axes = axs[ax_row, ax_col]
         value = full_value[slc][slc_2d]
 
         # base value
         try:
-            cax = ax.pcolormesh(X_mesh, Y_mesh, value, vmin=vmin, vmax=vmax)
+            cax = ax.pcolormesh(X_mesh, Y_mesh, value, vmin=vmin, vmax=vmax, cmap=cmap)
         except (ValueError, IndexError):
             print("Error, Value to be plotted has the shape", value.shape, ", key: ", key)
         # except TypeError:
