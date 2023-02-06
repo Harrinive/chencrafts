@@ -79,17 +79,46 @@ class NSArray(NamedSlotsNdarray):
     def __new__(
         cls, 
         input_array: np.ndarray | float, 
-        values_by_name: Dict[str, np.ndarray] = None
+        values_by_name: Dict[str, range | np.ndarray | None] = {}
     ) -> "NamedSlotsNdarray":
         if isinstance(input_array, float | int):
             return super().__new__(cls, np.array(input_array), {})
-        elif isinstance(input_array, NamedSlotsNdarray) and values_by_name is None:
-            return super().__new__(cls, np.array(input_array), input_array.param_info)
-        elif values_by_name is None:
-            raise ValueError("value_by_name shouldn't be None unless your input "
-            "arra is actually a float number.")
 
-        return super().__new__(cls, input_array, values_by_name)
+        elif isinstance(input_array, np.ndarray) and input_array.shape == tuple() and values_by_name == {}:
+            return super().__new__(cls, input_array, {})
+        
+        elif isinstance(input_array, NamedSlotsNdarray) and values_by_name == {}:
+            return super().__new__(cls, input_array, input_array.param_info)
+        
+        elif isinstance(input_array, NSArray) and values_by_name == {}:
+            return input_array.copy()
+        
+        elif values_by_name == {}:
+            raise ValueError("value_by_name shouldn't be empty unless your input "
+            "array is a float number.")
+        
+        elif isinstance(input_array, list | np.ndarray | range):
+            # set value to be range(dim) when it is None
+            for idx, (key, val) in enumerate(values_by_name.items()):
+                if val is None:
+                    values_by_name[key] = range(input_array.shape[idx])
+
+            input_array = np.array(input_array)
+            data_shape = np.array(input_array.shape)
+            name_shape = np.array([len(val) for val in values_by_name.values()])
+            if len(data_shape) != len(name_shape):
+                raise ValueError(f"Dimension of the input_array ({len(data_shape)}) doesn't match with the "
+                    f"length of named slots ({len(name_shape)})")
+            if (data_shape != name_shape).any():
+                raise ValueError(f"Shape of the input_array {data_shape} doesn't match with the "
+                    f"shape indicated by the named slots {name_shape}")
+            
+            
+
+            return super().__new__(cls, input_array, values_by_name)
+    
+        else:
+            raise ValueError(f"Your input data is incompatible.")
 
     def __getitem__(self, index):
         if isinstance(index, dict):
