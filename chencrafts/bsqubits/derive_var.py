@@ -2,6 +2,7 @@ import numpy as np
 from scipy.constants import h, k
 from scipy.special import erfc
 import scqubits as scq
+from scqubits.core.namedslots_array import NamedSlotsNdarray
 
 import warnings
 from typing import List, Dict, Callable, Tuple
@@ -57,14 +58,14 @@ class DerivedVariableBase():
     default_para: Dict[str, float] = {}
     def __init__(
         self,
-        para: dict[str, float], 
-        sim_para: dict[str, float],
-        swept_para: dict[str, List | np.ndarray] = {},
+        para: Dict[str, float], 
+        sim_para: Dict[str, float],
+        swept_para: Dict[str, range | List | np.ndarray] = {},
     ):
         # independent parameters: fixed + simulation + varied
         self.para = para
         self.sim_para = sim_para
-        self.swept_para = dict([(key, np.array(val)) 
+        self.swept_para: Dict[str, np.ndarray] = dict([(key, np.array(val)) 
             for key, val in swept_para.items()])
 
         # output
@@ -145,6 +146,7 @@ class DerivedVariableBase():
             pass
         try:
             new_der_para.sweep = dill_load(f"{path}/sweep.dill")
+            # new_der_para.sweep = scq.read(f"{path}/sweep.h5")
         except FileNotFoundError:
             pass
 
@@ -190,6 +192,7 @@ class DerivedVariableBase():
             pass
         try:
             dill_dump(self.sweep, f"{path}/sweep.dill")
+            # self.sweep.filewrite(f"{path}/sweep.h5")
         except NameError:
             pass
 
@@ -230,35 +233,55 @@ class DerivedVariableBase():
 
         return full_para_mesh
 
-    def _sweep_wrapper(
+    def sweep_wrapper(
         self, 
         nsarray: NSArray, 
-        from_scq_sweep: bool = True,
-        extra_dim_name: List[str] = [],
+        extra_dim_dict: Dict[str, List | np.ndarray | range | None] = {},
+        from_scq_sweep: bool = False,
     ):
         """ 
-        extra_shape_dict should be non-empty when then OUTPUT data have extra dimension
-        which is not included in self.swept_para. For example, for the evals sweep, 
-        the data has one more dimension to store a list of evals. 
-        """
-        if from_scq_sweep and extra_dim_name == []:
-            shaped_array = self._dim_modify(nsarray)
-        else:
-            target_shape = self._target_shape
-            for name in extra_dim_name:
-                target_shape[name] = len(nsarray.param_info[name])
+        wrapping the data coming from the scq.ParameterSweep
 
-            dim_modify = DimensionModify(
-                _var_dict_2_shape_dict(nsarray.param_info),
-                target_shape
+        extra_shape_dict should be non-empty when then OUTPUT data have extra dimension
+        which is not included in self.swept_para and not named in scqubits output. 
+        For example, for the evals sweep, the data has one more dimension to store a list of evals. 
+        """
+        if from_scq_sweep and extra_dim_dict == {}:
+            shaped_array = self._dim_modify(nsarray)
+
+            return NSArray(
+                shaped_array,
+                self.swept_para
             )
-            shaped_array = dim_modify(nsarray)
+        
+        # check the extra dimension is actually the missing part
+        current_dim = len(nsarray.shape)
+        extra_dim = len(extra_dim_dict)
+        named_dim = len(nsarray.param_info)
+        if current_dim != extra_dim + named_dim:
+            raise ValueError(f"extra_dim_name's length ({extra_dim}) should match the dimension "
+                f"with missing names ({current_dim - named_dim})")
+        
+        # find the missing dimension length
+        extra_shape = {}
+        for idx, (name, val_list) in enumerate(extra_dim_dict.items()):
+            if val_list is None:
+                extra_dim_dict[name] = range(nsarray.shape[named_dim + idx])
+            extra_shape[name] = nsarray.shape[named_dim + idx]
+
+        target_shape = self._target_shape | extra_shape
+
+        dim_modify = DimensionModify(
+            _var_dict_2_shape_dict(nsarray.param_info | extra_dim_dict),
+            target_shape
+        )
+        shaped_array = dim_modify(nsarray)
 
         return NSArray(
             shaped_array,
-            self.swept_para
+            self.swept_para | extra_dim_dict
         )
-    
+
     @property
     def full_para(self):
         para = self.para_dict_to_use | self.derived_dict
@@ -304,7 +327,7 @@ class DerivedVariableBase():
         # initialize an empty nsarray
         data = NSArray(
             np.zeros(shape + output_elem_shape),
-            overall_sweep_dict
+            overall_sweep_dict | dict([("data", None)] * len(output_elem_shape))
         )
 
         # iterating on extra dimensions
@@ -354,7 +377,7 @@ class DerivedVariableBase():
                     kwargs=kwargs,
                     output_elem_shape=tuple(),
                 )
-                result_dict[out_var_name] = self._sweep_wrapper(
+                result_dict[out_var_name] = self.sweep_wrapper(
                     data, from_scq_sweep=(sweep_dict == {})
                 )
             elif isinstance(out_var_name, tuple | list):
@@ -365,7 +388,7 @@ class DerivedVariableBase():
                     output_elem_shape=(len(out_var_name),)
                 )
                 for idx, key in enumerate(out_var_name):
-                    result_dict[key] = self._sweep_wrapper(
+                    result_dict[key] = self.sweep_wrapper(
                         data[..., idx], from_scq_sweep=(sweep_dict == {})
                     )
 
@@ -423,25 +446,25 @@ class DerivedVariableTmon(DerivedVariableBase):
 
         # Store the data that directly come from the sweep
         self.derived_dict.update(dict(
-            omega_a_GHz = self._sweep_wrapper(
+            omega_a_GHz = self.sweep_wrapper(
                 self.sweep["bare_evals"][1][..., 1] 
                 - self.sweep["bare_evals"][1][..., 0]
             ),
-            chi_sa = PI2 * self._sweep_wrapper(
+            chi_sa = PI2 * self.sweep_wrapper(
                 self.sweep["chi"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
-            K_s = PI2 * self._sweep_wrapper(
+            K_s = PI2 * self.sweep_wrapper(
                 self.sweep["kerr"]["subsys1": 0, "subsys2": 0], 
             ), 
-            chi_prime = PI2 * self._sweep_wrapper(
+            chi_prime = PI2 * self.sweep_wrapper(
                 self.sweep["chi_prime"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
         ))
-        det_01_GHz = self._sweep_wrapper(
+        det_01_GHz = self.sweep_wrapper(
             self.sweep["bare_evals"][1][..., 1] 
             - self.sweep["bare_evals"][1][..., 0]
         ) - self["omega_s_GHz"]
-        det_12_GHz = self._sweep_wrapper(
+        det_12_GHz = self.sweep_wrapper(
             self.sweep["bare_evals"][1][..., 2] 
             - self.sweep["bare_evals"][1][..., 1]
         ) - self["omega_s_GHz"]
@@ -633,13 +656,13 @@ class DerivedVariableFlxn(DerivedVariableBase):
         # Store the data that directly come from the sweep
 
         self.derived_dict.update(dict(
-            chi_sa = PI2 * self._sweep_wrapper(
+            chi_sa = PI2 * self.sweep_wrapper(
                 self.sweep["chi"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
-            K_s = PI2 * self._sweep_wrapper(
+            K_s = PI2 * self.sweep_wrapper(
                 self.sweep["kerr"]["subsys1": 0, "subsys2": 0], 
             ), 
-            chi_prime = PI2 * self._sweep_wrapper(
+            chi_prime = PI2 * self.sweep_wrapper(
                 self.sweep["chi_prime"]["subsys1": 0, "subsys2": 1][..., 1], 
             ), 
         ))
@@ -754,7 +777,7 @@ class DerivedVariableFlxn(DerivedVariableBase):
 
         eval_dict = {}
         for idx in range(self.sim_para["anc_dim"]):
-            eval_dict[f"omega_a_{idx}_GHz"] = self._sweep_wrapper(
+            eval_dict[f"omega_a_{idx}_GHz"] = self.sweep_wrapper(
                 self.sweep["bare_evals"][1][..., idx] 
                 - self.sweep["bare_evals"][1][..., 0]
             )
