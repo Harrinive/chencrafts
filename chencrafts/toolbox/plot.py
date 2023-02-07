@@ -158,6 +158,7 @@ def plot_dictionary_2d(
         ax.set_title(key)
         ax.set_xlabel(x_name)
         ax.set_ylabel(y_name)
+        ax.grid()
 
         ax_col += 1
         if ax_col % cols == 0:
