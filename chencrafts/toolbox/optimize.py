@@ -306,17 +306,20 @@ class MultiTraj():
                 fixed_para_file_name=f"{path}/fixed.csv"
             )
 
-    def best_traj(self, select_num=1) -> OptTraj | MultiTraj:
+    def sort_traj(self, select_num=1) -> MultiTraj:
+        if select_num > self.length:
+            raise ValueError(f"Do not have enough data to sort. ")
+
         sort = np.argsort(self._target_list())
         new_traj = MultiTraj()
         for sorted_idx in range(select_num):
             idx = int(sort[sorted_idx])
             new_traj.append(self[idx])
 
-        if select_num == 1:
-            return new_traj[0]
-        else:
-            return new_traj
+        return new_traj
+    
+    def best_traj(self) -> OptTraj:
+        return self.sort_traj(1)[0]
 
     def plot_target(self, ax=None, ylim=()):
         need_show = False
@@ -324,7 +327,7 @@ class MultiTraj():
             fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=150)
             need_show = True
 
-        best = self.best_traj()
+        best = self.sort_traj()
         cmap = Cmap(self.length)
         for idx, traj in enumerate(self.traj_list):
             if traj == best:

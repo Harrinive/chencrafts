@@ -97,13 +97,19 @@ def sweep_loss_rate(
 # dictionary key is a str or a tuple: output_name or (output_names)
 # dict values is a tuple: (function, input_names)
 # the function should return a np.array object
-tmon_sweep_dict: Dict[Any, Tuple[Callable, Tuple[str]]] = {}
+tmon_sweep_dict: Dict[str, Tuple[Callable, List[str], Dict[str, List | np.ndarray | range | None]]] = {}
 
-tmon_sweep_dict["conv"] = (sweep_convergence, tuple())
+tmon_sweep_dict["conv"] = (
+    sweep_convergence, 
+    tuple(),
+    {},
+)
 
-tmon_sweep_dict[(
-    "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
-)] = (sweep_loss_rate, ("disp", ))
+tmon_sweep_dict["n_bar"] = (
+    sweep_loss_rate, 
+    ("disp",),
+    {"n_bar": None},
+)
 
 def sweep_tmon_relaxation(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
@@ -152,27 +158,34 @@ def sweep_tmon_relaxation(
 
     return np.array([gamma_down, gamma_phi_ng, gamma_phi_cc])
 
-tmon_sweep_dict[
-    ("kappa_a_cap", "kappa_phi_ng", "kappa_phi_cc")
-] = (sweep_tmon_relaxation, ("temp_a", "Q_cap", "A_ng", "A_cc"))
-
+tmon_sweep_dict["kappa_a"] = (
+    sweep_tmon_relaxation, 
+    ("temp_a", "Q_cap", "A_ng", "A_cc"),
+    {"channels": None},
+)
 
 # ##############################################################################
 # dictionary key is a str or a tuple: output_name or (output_names)
 # dict values is a tuple: (function, input_names)
 # the function should return a np.array object
-flxn_sweep_dict: Dict[Any, Tuple[Callable, Tuple[str]]] = {}
+flxn_sweep_dict: Dict[str, Tuple[Callable, List[str], Dict[str, List | np.ndarray | range | None]]] = {}
 
-flxn_sweep_dict["conv"] = (sweep_convergence, tuple())
+flxn_sweep_dict["conv"] = (
+    sweep_convergence, 
+    tuple(),
+    {},
+)
 
-flxn_sweep_dict[(
-    "n_bar_s", "n_bar_a", "n_fock1_s", "n_fock1_a"
-)] = (sweep_loss_rate, ("disp", ))
+flxn_sweep_dict["n_bar"] = (
+    sweep_loss_rate, 
+    ("disp",),
+    {"n_bar": None},
+)
 
 def sweep_flxn_depolarization(
     paramsweep: scq.ParameterSweep, paramindex_tuple, paramvals_tuple, 
     starting_level, ancilla_copy: scq.Fluxonium, temp_a=0.015, n_th_base=0.0, 
-    Q_cap=5e5, Q_ind=5e8, Z_char=50, Z_fbl=50, A_qsp_tnl=1, n_th_threshold=1e-3, 
+    Q_cap=5e5, Q_ind=5e8, Z_char=50, Z_fbl=50, A_qsp_tnl=1, n_th_threshold=1e-4, 
     **kwargs
 ):
     assert n_th_base == 0, "Now the code only support n_th_base = 0."
@@ -204,7 +217,12 @@ def sweep_flxn_depolarization(
         freq = bare_evals[starting_level] - bare_evals[level]
         n_th = therm_factor(freq, temp_a, n_th_base)
         if n_th < n_th_threshold:
-            break
+            kappa_a_cap_list.append(0)
+            kappa_a_ind_list.append(0)
+            kappa_a_impd_list.append(0)
+            kappa_a_fbl_list.append(0)
+            kappa_a_qsp_tnl_list.append(0)
+            continue
 
         kappa_a_cap_list.append(ancilla_copy.t1_capacitive(
             i = starting_level, 
@@ -251,37 +269,44 @@ def sweep_flxn_depolarization(
             esys = (bare_evals, bare_evecs), 
         ) * A_qsp_tnl)
 
-    level_used = level - 1
+    # level_used = level - 1
 
-    kappa_a_cap = np.sum(kappa_a_cap_list)
-    kappa_a_cap_dominant = np.argmax(kappa_a_cap_list)
+    # kappa_a_cap = np.sum(kappa_a_cap_list)
+    # kappa_a_cap_dominant = np.argmax(kappa_a_cap_list)
 
-    kappa_a_ind = np.sum(kappa_a_ind_list)
-    kappa_a_ind_dominant = np.argmax(kappa_a_ind_list)
+    # kappa_a_ind = np.sum(kappa_a_ind_list)
+    # kappa_a_ind_dominant = np.argmax(kappa_a_ind_list)
 
-    # kappa_a_impd = np.sum(kappa_a_impd_list)
-    # kappa_a_impd_dominant = np.argmax(kappa_a_impd_list)
+    # # kappa_a_impd = np.sum(kappa_a_impd_list)
+    # # kappa_a_impd_dominant = np.argmax(kappa_a_impd_list)
 
-    kappa_a_fbl = np.sum(kappa_a_fbl_list)
-    kappa_a_fbl_dominant = np.argmax(kappa_a_fbl_list)
+    # kappa_a_fbl = np.sum(kappa_a_fbl_list)
+    # kappa_a_fbl_dominant = np.argmax(kappa_a_fbl_list)
 
-    kappa_a_qsp_tnl = np.sum(kappa_a_qsp_tnl_list)
-    kappa_a_qsp_tnl_dominant = np.argmax(kappa_a_qsp_tnl_list)
+    # kappa_a_qsp_tnl = np.sum(kappa_a_qsp_tnl_list)
+    # kappa_a_qsp_tnl_dominant = np.argmax(kappa_a_qsp_tnl_list)
+
+    # return np.array([
+    #     kappa_a_cap, 
+    #     kappa_a_ind, 
+    #     # kappa_a_impd, 
+    #     kappa_a_fbl, 
+    #     kappa_a_qsp_tnl,
+    #     np.mean([
+    #         kappa_a_cap_dominant, 
+    #         kappa_a_ind_dominant, 
+    #         # kappa_a_impd_dominant, 
+    #         kappa_a_fbl_dominant, 
+    #         kappa_a_qsp_tnl_dominant
+    #     ]),
+    #     level_used,
+    # ])
 
     return np.array([
-        kappa_a_cap, 
-        kappa_a_ind, 
-        # kappa_a_impd, 
-        kappa_a_fbl, 
-        kappa_a_qsp_tnl,
-        np.mean([
-            kappa_a_cap_dominant, 
-            kappa_a_ind_dominant, 
-            # kappa_a_impd_dominant, 
-            kappa_a_fbl_dominant, 
-            kappa_a_qsp_tnl_dominant
-        ]),
-        level_used,
+        kappa_a_cap_list,
+        kappa_a_ind_list,
+        kappa_a_fbl_list,
+        kappa_a_qsp_tnl_list,
     ])
 
 sweep_flxn_up = lambda ps, paramindex_tuple, paramvals_tuple, **kwargs: \
@@ -290,27 +315,41 @@ sweep_flxn_up = lambda ps, paramindex_tuple, paramvals_tuple, **kwargs: \
 sweep_flxn_down = lambda ps, paramindex_tuple, paramvals_tuple, **kwargs: \
     sweep_flxn_depolarization(ps, paramindex_tuple, paramvals_tuple, starting_level=1, **kwargs)
 
-flxn_sweep_dict[(
-    "kappa_a_up_cap", 
-    "kappa_a_up_ind", 
-    # "kappa_a_up_impd", 
-    "kappa_a_up_fbl", 
-    "kappa_a_up_qsp_tnl",
-    "kappa_a_up_avg_transition",
-    "kappa_a_up_levels_used",
-)] = (sweep_flxn_up, ("temp_a", "n_th_base", 
-    "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
+flxn_sweep_dict["kappa_a_down"] = (
+    sweep_flxn_down,
+    ("temp_a", "n_th_base", 
+        "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",),
+    {"channel": None, "level": None}
+)
 
-flxn_sweep_dict[(
-    "kappa_a_down_cap", 
-    "kappa_a_down_ind", 
-    # "kappa_a_down_impd", 
-    "kappa_a_down_fbl", 
-    "kappa_a_down_qsp_tnl",
-    "kappa_a_down_avg_transition",
-    "kappa_a_down_levels_used",
-)] = (sweep_flxn_down, ("temp_a", "n_th_base", 
-    "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
+flxn_sweep_dict["kappa_a_up"] = (
+    sweep_flxn_up,
+    ("temp_a", "n_th_base", 
+        "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",),
+    {"channel": None, "level": None}
+)
+
+# flxn_sweep_dict[(
+#     "kappa_a_up_cap", 
+#     "kappa_a_up_ind", 
+#     # "kappa_a_up_impd", 
+#     "kappa_a_up_fbl", 
+#     "kappa_a_up_qsp_tnl",
+#     "kappa_a_up_avg_transition",
+#     "kappa_a_up_levels_used",
+# )] = (sweep_flxn_up, ("temp_a", "n_th_base", 
+#     "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
+
+# flxn_sweep_dict[(
+#     "kappa_a_down_cap", 
+#     "kappa_a_down_ind", 
+#     # "kappa_a_down_impd", 
+#     "kappa_a_down_fbl", 
+#     "kappa_a_down_qsp_tnl",
+#     "kappa_a_down_avg_transition",
+#     "kappa_a_down_levels_used",
+# )] = (sweep_flxn_down, ("temp_a", "n_th_base", 
+#     "Q_cap", "Q_ind", "Z_char", "Z_fbl", "A_qsp_tnl",))
 
 def sweep_flxn_dephasing(paramsweep, paramindex_tuple, paramvals_tuple, 
     ancilla_copy: scq.Fluxonium, A_flux=1e-6, A_cc=1e-7, **kwargs):
@@ -344,9 +383,10 @@ def sweep_flxn_dephasing(paramsweep, paramindex_tuple, paramvals_tuple,
 
     return np.array([kappa_phi_flux, kappa_phi_cc])
 
-flxn_sweep_dict[(
-    "kappa_phi_flux", 
-    "kappa_phi_cc", 
-)] = (sweep_flxn_dephasing, ("A_flux", "A_cc"))
+flxn_sweep_dict["kappa_a_phi"] = (
+    sweep_flxn_dephasing, 
+    ("A_flux", "A_cc"),
+    {"channel": None},
+)
 
 # ##############################################################################

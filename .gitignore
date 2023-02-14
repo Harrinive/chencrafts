@@ -8,4 +8,6 @@ chencrafts/__pycache__/
 chencrafts/toolbox/__pycache__/
 chencrafts/tests/__pycache__/
 chencrafts/bsqubits/__pycache__/
-chencrafts/operations/__pycache__/
+chencrafts/cqed/__pycache__/
+
+**.ipynb

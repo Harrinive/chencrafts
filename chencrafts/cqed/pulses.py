@@ -224,7 +224,7 @@ class DRAGGaussian(PulseBase):
         eps_pi_2 = (_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias)**2
         detuning = (
             (self.leaking_elem_ratio**2 - 4) / (4 * self.non_lin) * eps_pi_2
-            - (self.leaking_elem_ratio**4 - 7*self.leaking_elem_ratio**2 + 12) / (16 * self.non_lin**3) * eps_pi_2**2
+            # - (self.leaking_elem_ratio**4 - 7*self.leaking_elem_ratio**2 + 12) / (16 * self.non_lin**3) * eps_pi_2**2
         )
         return self.base_angular_freq - detuning
 
@@ -250,12 +250,12 @@ class DRAGGaussian(PulseBase):
 
         eps_x = (
             eps_pi
-            + (self.leaking_elem_ratio**2 - 4) / (8 * self.non_lin**2) * eps_pi**3
-            - (13*self.leaking_elem_ratio**4 - 76*self.leaking_elem_ratio**2 + 112) / (128*self.non_lin**4) * eps_pi**5
+            # + (self.leaking_elem_ratio**2 - 4) / (8 * self.non_lin**2) * eps_pi**3
+            # - (13*self.leaking_elem_ratio**4 - 76*self.leaking_elem_ratio**2 + 112) / (128*self.non_lin**4) * eps_pi**5
         )
         eps_y = (
             - eps_pi_dot / self.non_lin
-            + 33*(self.leaking_elem_ratio**2 - 2) / (24*self.non_lin**3) * eps_pi**2 * eps_pi_dot
+            # + 33*(self.leaking_elem_ratio**2 - 2) / (24*self.non_lin**3) * eps_pi**2 * eps_pi_dot
         )
 
         return eps_x, eps_y
