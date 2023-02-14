@@ -1,6 +1,3 @@
-from mimetypes import init
-from statistics import median
-from typing import Callable
 import numpy as np
 from scipy.integrate import odeint
 

@@ -462,9 +462,9 @@ class Optimization():
     ):
         self._check_exist(variable)
 
-        if variable in self.free_variables():
+        if variable in self.free_variables:
             self.free_variables[variable] = range
-        elif variable in self.fixed_variables():
+        elif variable in self.fixed_variables:
             self.free_variables[variable] = range
             del self.fixed_variables[variable]
 
