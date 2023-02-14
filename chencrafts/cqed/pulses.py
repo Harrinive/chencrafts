@@ -181,11 +181,18 @@ class DRAGGaussian(PulseBase):
         duration: float, 
         sigma: float, 
         non_lin: float = 0, 
+        order: int = 5,
         rotation_angle: float = np.pi, 
         tgt_mat_elem: float = 1, 
         leaking_mat_elem: float = np.sqrt(2), 
-        init_time: float = 0
+        init_time: float = 0,
     ) -> None:
+        
+        if order != 2 and order != 5:
+            raise ValueError(f"Currently the code only support order = 2 or 5!")
+        else:
+            self.order = order
+
         if np.abs(non_lin) < 1 / duration:
             raise ValueError("Non-linearity of the system should be specified and"
                 "much larger than the pulse amplitude.")
@@ -222,10 +229,11 @@ class DRAGGaussian(PulseBase):
             raise TypeError("The input time should be a float")
 
         eps_pi_2 = (_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias)**2
-        detuning = (
-            (self.leaking_elem_ratio**2 - 4) / (4 * self.non_lin) * eps_pi_2
-            # - (self.leaking_elem_ratio**4 - 7*self.leaking_elem_ratio**2 + 12) / (16 * self.non_lin**3) * eps_pi_2**2
-        )
+        detuning = (self.leaking_elem_ratio**2 - 4) / (4 * self.non_lin) * eps_pi_2
+        if self.order == 5:
+            detuning -= (self.leaking_elem_ratio**4 - 7*self.leaking_elem_ratio**2 + 12) \
+                / (16 * self.non_lin**3) * eps_pi_2**2
+
         return self.base_angular_freq - detuning
 
     def phase(self, t):
@@ -248,15 +256,14 @@ class DRAGGaussian(PulseBase):
         eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias
         eps_pi_dot = -_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) * (t - self.t_mid) / self.sigma**2
 
-        eps_x = (
-            eps_pi
-            # + (self.leaking_elem_ratio**2 - 4) / (8 * self.non_lin**2) * eps_pi**3
-            # - (13*self.leaking_elem_ratio**4 - 76*self.leaking_elem_ratio**2 + 112) / (128*self.non_lin**4) * eps_pi**5
-        )
-        eps_y = (
-            - eps_pi_dot / self.non_lin
-            # + 33*(self.leaking_elem_ratio**2 - 2) / (24*self.non_lin**3) * eps_pi**2 * eps_pi_dot
-        )
+        eps_x = eps_pi
+        eps_y = - eps_pi_dot / self.non_lin
+        if self.order == 5:
+            eps_x += (
+                + (self.leaking_elem_ratio**2 - 4) / (8 * self.non_lin**2) * eps_pi**3
+                - (13*self.leaking_elem_ratio**4 - 76*self.leaking_elem_ratio**2 + 112) / (128*self.non_lin**4) * eps_pi**5
+            )
+            eps_y += 33*(self.leaking_elem_ratio**2 - 2) / (24*self.non_lin**3) * eps_pi**2 * eps_pi_dot
 
         return eps_x, eps_y
 
