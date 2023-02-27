@@ -45,6 +45,9 @@ def bar_plot_compare(
     dpi = None,
     x_tick_rotation = 45, 
 ):
+    """
+    The var_list_dict should be {labels: a series of value to compare}
+    """
     # plot 
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
