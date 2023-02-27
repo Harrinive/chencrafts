@@ -377,8 +377,8 @@ class Optimization():
         target_func(full_variable_dict, **kwargs)  
         Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, bayesian optimization
         """
-        self.fixed_variables = fixed_variables
-        self.free_variables = free_variable_ranges
+        self.fixed_variables = fixed_variables.copy()
+        self.free_variables = free_variable_ranges.copy()
         self._update_free_name_list()
 
         # the value stored in self.default_variables is dynamic - it is always
