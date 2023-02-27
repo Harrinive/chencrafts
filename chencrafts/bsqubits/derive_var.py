@@ -296,6 +296,12 @@ class DerivedVariableBase():
                 output_val_lists_dict[name] = range(scq_nsarray.shape[named_dim + idx])
             output_shape[name] = scq_nsarray.shape[named_dim + idx]
 
+        # add the output dimensions
+        scq_nsarray = NSArray(
+            scq_nsarray,
+            scq_nsarray.param_info | output_val_lists_dict
+        )
+
         target_shape = self._target_shape | output_shape
 
         result = self._dim_modify(
