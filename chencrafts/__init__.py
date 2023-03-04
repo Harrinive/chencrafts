@@ -17,7 +17,7 @@ PGL_cycler = cycler(color = [
 ])
 green_to_red_cycler = cycler(color = [
     "#001219", "#005f73", "#0a9396", "#94d2bd", "#e9d8a6", 
-    "#ee9b00", "#ca6702", "#bb3e03", "#ae2012", "#9b2226"
+    "#ee9b00", "#ca6702", "#bb3e03", "#9b2226"
 ])
 sunset_cycler = cycler(color = [
     "#F8B195", "#F67280", "#C06C84", "#6C5B7B", "#355C7D"
@@ -29,7 +29,7 @@ red_green_blue_purple_cycler = cycler(color = [
     "#e63946", "#a8dadc", "#457b9d", "#a7bb40", "#3d1645"
 ])
 mpl.rcParams["axes.prop_cycle"] = PGL_cycler
-mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.usetex'] = False
 
 
 # set numpy 

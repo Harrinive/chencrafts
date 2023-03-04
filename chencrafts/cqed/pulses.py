@@ -21,23 +21,25 @@ class PulseBase:
         self.env_amp = self.drive_amp / np.abs(tgt_mat_elem)
         self.drive_freq = self.base_angular_freq
 
-        return
+        def flat_envelope_func(t):
+            """Only support scalar t"""
+            self._check_input_t(t)
 
-    def envelope(self, t):
-        """Only support scalar t"""
-        if not isinstance(t, float):
-            raise TypeError("The input time should be a float")
-
-        return self.env_amp
+            return self.env_amp
+        
+        self.envelope = flat_envelope_func
 
     def __call__(self, t) -> float:
         """Only support scalar t"""
-        if not isinstance(t, float):
-            raise TypeError("The input time should be a float")
+        self._check_input_t(t)
 
         env = self.envelope(t)
         t_bias = t - self.init_time
         return env * np.cos(self.drive_freq * t_bias)
+
+    def _check_input_t(self, t):
+        if not isinstance(t, float | int):
+            raise TypeError("The input time should be a 0d number")
 
 # ##############################################################################
 class Sinusoidal(PulseBase):
@@ -117,8 +119,7 @@ class Gaussian(PulseBase):
 
     def envelope(self, t):
         """Only support scalar t"""
-        if not isinstance(t, float):
-            raise TypeError("The input time should be a float")
+        self._check_input_t(t)
 
         return _gaussian_function(
             t,
@@ -235,8 +236,7 @@ class DRAGGaussian(PulseBase):
 
     def phase(self, t):
         """Only support scalar t"""
-        if not isinstance(t, float):
-            raise TypeError("The input time should be a float")
+        self._check_input_t(t)
 
         init_t, init_phase = self.t_n_phase
         phase = _phase_from_init(self.base_angular_freq, self.drive_freq_func, init_t, init_phase, t)
@@ -247,8 +247,7 @@ class DRAGGaussian(PulseBase):
 
     def envelope(self, t):
         """Only support scalar t"""
-        if not isinstance(t, float):
-            raise TypeError("The input time should be a float")
+        self._check_input_t(t)
 
         eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias
         eps_pi_dot = -_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) * (t - self.t_mid) / self.sigma**2
@@ -267,8 +266,7 @@ class DRAGGaussian(PulseBase):
     
     def __call__(self, t, *args, **kwargs):
         """Only support scalar t"""
-        if not isinstance(t, float):
-            raise TypeError("The input time should be a float")
+        self._check_input_t(t)
 
         phase = self.phase(t)
         eps_x, eps_y = self.envelope(t)
