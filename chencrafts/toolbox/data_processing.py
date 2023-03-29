@@ -113,9 +113,12 @@ class NSArray(NamedSlotsNdarray):
                 raise ValueError(f"Shape of the input_array {data_shape} doesn't match with the "
                     f"shape indicated by the named slots {name_shape}")
             
-            
+            ndarray_values_by_name = dict(zip(
+                values_by_name.keys(),
+                [np.array(val) for val in values_by_name.values()]
+            ))          # without this value-based slicing won't work
 
-            return super().__new__(cls, input_array, values_by_name)
+            return super().__new__(cls, input_array, ndarray_values_by_name)
     
         else:
             raise ValueError(f"Your input data is incompatible.")
@@ -132,8 +135,6 @@ class NSArray(NamedSlotsNdarray):
                 if isinstance(idx, np.ndarray):
                     if idx.shape == tuple():
                         idx = float(idx)
-                    else:
-                        raise TypeError(f"Wrong type of indexing on axis {key}: {idx}")
 
                 regular_index.append(idx)
 
@@ -146,6 +147,21 @@ class NSArray(NamedSlotsNdarray):
         Reshape breaks the structure of the naming method, return a normal ndarray
         """
         return np.array(super().reshape(*args, **kwargs))
+    
+    def transpose(self, axes = None):
+        transposed_data = np.array(super().transpose(axes))
+
+        if axes is None:
+            dim = len(self.shape)
+            axes = np.linspace(0, dim-1, dim, dtype=int)[::-1]
+
+        transposed_param_info = {}
+        key_list = list(self.param_info.keys())
+        for dim_idx in axes:
+            key = key_list[dim_idx]
+            transposed_param_info[key] = self.param_info[key]
+
+        return NSArray(transposed_data, transposed_param_info)
 
 
 def nd_interpolation(
