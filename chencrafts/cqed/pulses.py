@@ -21,14 +21,17 @@ class PulseBase:
         self.env_amp = self.drive_amp / np.abs(tgt_mat_elem)
         self.drive_freq = self.base_angular_freq
 
-        def flat_envelope_func(t):
-            """Only support scalar t"""
-            self._check_input_t(t)
+        self.custom_envelope = None
 
-            return self.env_amp
+    def envelope(self, t):
+        """Only support scalar t"""
+        self._check_input_t(t)
+
+        if self.custom_envelope is not None:
+            return self.custom_envelope(t)
+
+        return self.env_amp
         
-        self.envelope = flat_envelope_func
-
     def __call__(self, t) -> float:
         """Only support scalar t"""
         self._check_input_t(t)
@@ -62,8 +65,8 @@ class Sinusoidal(PulseBase):
 
         # modify the drive freq with the Bloch–Siegert shift
         if with_freq_shift:
-            freq_shift = self.drive_amp**2 / self.base_angular_freq / 4
-            self.drive_freq = self.base_angular_freq - freq_shift * 1
+            self.freq_shift = self.drive_amp**2 / self.base_angular_freq / 4
+            self.drive_freq = self.base_angular_freq - self.freq_shift * 1
 
 # ##############################################################################
 def _gaussian_function(t, t_mid, sigma, amp=1):
@@ -114,12 +117,17 @@ class Gaussian(PulseBase):
 
         # Bloch–Siegert shift
         sine_drive_amp = self.rotation_angle / self.duration
-        freq_shift = (sine_drive_amp)**2 / self.base_angular_freq / 4
-        self.drive_freq = self.base_angular_freq - freq_shift
+        self.freq_shift = (sine_drive_amp)**2 / self.base_angular_freq / 4
+        self.drive_freq = self.base_angular_freq - self.freq_shift
+
+        self.custom_envelope = None
 
     def envelope(self, t):
         """Only support scalar t"""
         self._check_input_t(t)
+
+        if self.custom_envelope is not None:
+            return self.custom_envelope(t)
 
         return _gaussian_function(
             t,
@@ -127,6 +135,7 @@ class Gaussian(PulseBase):
             self.sigma,
             self.env_amp
         ) - self.env_bias
+        
 
 # ##############################################################################
 def _phase_from_init(base_ang_freq, freq_func, init_t, init_val, current_t):
