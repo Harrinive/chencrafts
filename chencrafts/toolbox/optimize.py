@@ -121,7 +121,7 @@ class OptTraj():
 
     @property
     def final_full_para(self) -> Dict[str, float]:
-        return self._x_arr_2_dict(self.para_traj[-1, :]) | self.fixed_para
+        return self.fixed_para | self._x_arr_2_dict(self.para_traj[-1, :])
 
     @property
     def init_para(self, full=False) -> Dict[str, float]:
@@ -129,7 +129,7 @@ class OptTraj():
 
     @property
     def init_full_para(self) -> Dict[str, float]:
-        return self._x_arr_2_dict(self.para_traj[0, :]) | self.fixed_para
+        return self.fixed_para | self._x_arr_2_dict(self.para_traj[0, :])
 
     @property
     def final_target(self) -> float:
