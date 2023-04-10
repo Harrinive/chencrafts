@@ -371,6 +371,7 @@ class Optimization():
         target_func: Callable,
         target_kwargs: dict = {},
         optimizer: str = "L-BFGS-B",
+        opt_options: dict = {},
     ):
         """
         The target function should be like: 
@@ -393,6 +394,7 @@ class Optimization():
         self.optimizer = optimizer
         assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell",
                                   "shgo", "differential evolution", "bayesian optimization"]
+        self.opt_options = opt_options
 
     def _update_free_name_list(self):
         self.free_name_list = list(self.free_variables.keys())
@@ -577,7 +579,6 @@ class Optimization():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
-        opt_options: dict = {},
     ):
         """
         If not specifying the initial x, a random x within range will be used.  
@@ -633,21 +634,19 @@ class Optimization():
                 bounds=opt_bounds,
                 callback=opt_call_back,
                 method=self.optimizer,
-                options=opt_options,
+                options=self.opt_options,
             )
         elif self.optimizer == "shgo":
             scipy_res = shgo(
                 self._opt_func,
                 bounds=opt_bounds,
                 callback=opt_call_back,
-                # options=opt_options,
             )
         elif self.optimizer == "differential evolution":
             scipy_res = differential_evolution(
                 self._opt_func,
                 bounds=opt_bounds,
                 callback=opt_call_back,
-                # options=opt_options,
             )
         # elif self.optimizer == "bayesian optimization":
         #     bo_res = bayesian_optimization(
@@ -680,7 +679,6 @@ class MultiOpt():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
-        opt_options: dict = {},
         save_path: str = None,
     ):
         multi_result = MultiTraj()
@@ -692,7 +690,6 @@ class MultiOpt():
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
-                    opt_options=opt_options,
                 )
             except ValueError as e:
                 print(f"Capture a ValueError from optimization: {e}")
