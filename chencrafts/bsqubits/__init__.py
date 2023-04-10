@@ -19,7 +19,8 @@ from chencrafts.bsqubits.derive_var import (
 from chencrafts.bsqubits.error_rates import (
     ErrorChannel, 
     ErrorRate, 
-    basic_channels
+    basic_channels,
+    flxn_hf_flx_channels,
 )
 
 # set scqubits
