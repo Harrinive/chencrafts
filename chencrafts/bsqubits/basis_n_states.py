@@ -50,7 +50,7 @@ def coherent(basis: List[qt.Qobj], alpha: float) -> qt.Qobj:
     coef = coherent_coef_list(available_dim, alpha)
     return sum_of_basis(available_ket, coef)
 
-def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[float]]) -> qt.Qobj:
+def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[int | float, int | float]]) -> qt.Qobj:
     """
     phase_disp_pair for a two-legged cat: [(1, alpha), (1, -alpha)]
     """

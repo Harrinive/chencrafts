@@ -5,5 +5,6 @@ from chencrafts.cqed.pulses import (
 )
 
 from chencrafts.cqed.scq_helper import (
-    wavefunc_FT
+    wavefunc_FT,
+    label_convert,
 )
