@@ -1,6 +1,8 @@
 import numpy as np
-from scqubits.core.storage import WaveFunction
 from scipy.fft import fft, fftfreq
+
+from scqubits.core.storage import WaveFunction
+import scqubits as scq
 
 from typing import List, Tuple
 
@@ -24,13 +26,28 @@ def wavefunc_FT(
 
     return n_list, amp_p
 
+def label_convert(idx: Tuple | List | int, h_space: scq.HilbertSpace):
 
+    dims = h_space.subsystem_dims
 
+    if isinstance(idx, tuple | list):
+        assert (np.array(idx) < np.array(dims)).all(), f"index is not valid for system dimension {dims}"
 
+        drs_idx = 0
+        for dim_idx, bare_idx in enumerate(idx):
+            drs_idx += np.prod(dims[dim_idx+1:]) * bare_idx
+
+        return int(drs_idx)
     
+    elif isinstance(idx, int):
+        assert (idx < np.prod(dims)).all(), f"index is not valid for system size {np.prod(dims)}"
 
+        bare_idx_list = []
+        for dim_idx in range(len(dims)):
+            bare_idx_list.append(int(idx / np.prod(dims[dim_idx+1:])))
+            idx = idx % int(np.prod(dims[dim_idx+1:]))
 
+        return tuple(bare_idx_list)
 
-    
-
-
+    else:
+        raise ValueError(f"Only support list/tuple/int as an index.")
