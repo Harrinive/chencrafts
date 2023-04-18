@@ -324,7 +324,7 @@ class MultiTraj():
     def plot_target(self, ax=None, ylim=()):
         need_show = False
         if ax is None:
-            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=150)
+            fig, ax = plt.subplots(1, 1, figsize=(5, 4), dpi=150)
             need_show = True
 
         best = self.sort_traj()
