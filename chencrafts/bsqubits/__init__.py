@@ -23,6 +23,10 @@ from chencrafts.bsqubits.error_rates import (
     flxn_hf_flx_channels,
 )
 
+from chencrafts.bsqubits.systems import (
+    transmon_resonator,
+) 
+
 # set scqubits
 scq.set_units('GHz')
 scq.settings.T1_DEFAULT_WARNING = False

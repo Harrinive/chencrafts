@@ -6,7 +6,6 @@ from chencrafts.cqed.pulses import (
 
 from chencrafts.cqed.scq_helper import (
     wavefunc_FT,
-    label_convert,
 )
 
 from chencrafts.cqed.custom_sweeps import (
@@ -29,6 +28,7 @@ from chencrafts.cqed.decoherence import (
 )
 
 from chencrafts.cqed.mode_assignment import (
+    label_convert,
     organize_dressed_esys,
     single_mode_dressed_esys,
 )
@@ -38,4 +38,8 @@ from chencrafts.cqed.states_n_oprts import (
     cat,
     projector_w_basis,
     oprt_in_basis,
+)
+
+from chencrafts.cqed.flexible_sweep import (
+    FlexibleSweep,
 )

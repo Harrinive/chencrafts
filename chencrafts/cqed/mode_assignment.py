@@ -3,9 +3,34 @@ import qutip as qt
 
 from scqubits.core.hilbert_space import HilbertSpace
 
-from chencrafts.cqed.scq_helper import label_convert
-
 from typing import List, Tuple
+
+def label_convert(idx: Tuple | List | int, h_space: HilbertSpace):
+
+    dims = h_space.subsystem_dims
+
+    if isinstance(idx, tuple | list):
+        assert (np.array(idx) < np.array(dims)).all(), f"index is not valid for system dimension {dims}"
+
+        drs_idx = 0
+        for dim_idx, bare_idx in enumerate(idx):
+            drs_idx += np.prod(dims[dim_idx+1:]) * bare_idx
+
+        return int(drs_idx)
+    
+    elif isinstance(idx, int):
+        assert (idx < np.prod(dims)).all(), f"index is not valid for system size {np.prod(dims)}"
+
+        bare_idx_list = []
+        for dim_idx in range(len(dims)):
+            bare_idx_list.append(int(idx / np.prod(dims[dim_idx+1:])))
+            idx = idx % int(np.prod(dims[dim_idx+1:]))
+
+        return tuple(bare_idx_list)
+
+    else:
+        raise ValueError(f"Only support list/tuple/int as an index.")
+
 
 def organize_dressed_esys(
     hilbertspace: HilbertSpace,
