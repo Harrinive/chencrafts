@@ -1,21 +1,5 @@
 import scqubits as scq
 
-from chencrafts.bsqubits.ec_systems import (
-    CavityTmonSys,
-    CavityFlxnSys,
-)
-# from chencrafts.bsqubits.pulse_utils import *
-# from chencrafts.bsqubits.qoc_init import *
-from chencrafts.bsqubits.basis_n_states import (
-    coherent,
-    cat,
-    projector_w_basis,
-    oprt_in_basis,
-)
-from chencrafts.bsqubits.derive_var import (
-    DerivedVariableTmon, 
-    DerivedVariableFlxn, 
-)
 from chencrafts.bsqubits.error_rates import (
     ErrorChannel, 
     ErrorRate, 
@@ -24,11 +8,25 @@ from chencrafts.bsqubits.error_rates import (
 )
 
 from chencrafts.bsqubits.systems import (
-    transmon_resonator,
+    resonator_transmon,
+    resonator_fluxonium,
+    fluxonium_resonator_fluxonium,
 ) 
+
+from chencrafts.bsqubits.batched_custom_sweeps import (
+    batched_sweep_general,
+    batched_sweep_bare_decoherence,
+    batched_sweep_purcell_cats,
+    batched_sweep_purcell_fock,
+    batched_sweep_readout,
+    batched_sweep_total_decoherence,
+    batched_sweep_pulse,
+    batched_sweep_cat_code,
+)
 
 # set scqubits
 scq.set_units('GHz')
 scq.settings.T1_DEFAULT_WARNING = False
 scq.settings.PROGRESSBAR_DISABLED = True
 scq.settings.FUZZY_SLICING = True
+scq.settings.OVERLAP_THRESHOLD = 0.853

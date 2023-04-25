@@ -6,7 +6,7 @@ from matplotlib import colormaps
 from matplotlib import rcParams
 from chencrafts.toolbox import bar_plot_compare
 
-from typing import Callable
+from typing import Callable, List, Dict
 
 class ErrorChannel:
     def __init__(
@@ -33,7 +33,7 @@ class ErrorRate:
         return_dict: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> np.ndarray | Dict[str, np.ndarray]:
         """returns the total enabled error rate"""
         total_error = 0
         if return_dict:
@@ -56,8 +56,8 @@ class ErrorRate:
 
     def __getitem__(
         self,
-        error_name
-    ):
+        error_name: str | List[str],
+    ) -> ErrorChannel | ErrorRate:
         """calculate the error rate from a single channel"""
         if isinstance(error_name, str):
             return self.error_channels[error_name]
@@ -149,8 +149,8 @@ class ErrorRate:
     ):
 
         # error calculation
-        error_dict = self(**kwargs, return_dict=True)
-        del error_dict["total"]
+        error_dict: Dict = self(**kwargs, return_dict=True)
+        error_dict.pop("total")
         error_rate_list = list(error_dict.values())
         total_error_rate = np.sum(error_rate_list)
 

@@ -28,6 +28,7 @@ class FlexibleSweep(
         swept_para: Dict[str, List[float] | np.ndarray] = {},
         update_hilbertspace_by_keyword: Callable | None = None,
         subsys_update_info: Dict | None = None,
+        **kwargs,
     ):
         """
         Parameters
@@ -121,7 +122,13 @@ class FlexibleSweep(
             return self.sweep[para_name][further_slice][self.fixed_dim_slice]
 
         if key in self.sweep.keys():
-            return self.sweep[key][self.fixed_dim_slice]
+            arr = self.sweep[key]
+            try: 
+                arr = arr[self.fixed_dim_slice]
+            except KeyError:
+                # slice failed because it's an wrapped array 
+                pass
+            return arr
         
         elif key in self.swept_para.keys():
             return self._swept_para_meshgrids[key]
@@ -135,10 +142,13 @@ class FlexibleSweep(
         else:
             raise KeyError(f"Key {key} is not found in the sweep.")
 
-    def keys(self) -> List[str]:
+    def keys(self, sort: bool = True) -> List[str]:
         key_set = set(self.para.keys())
         key_set.update(self.swept_para.keys())
         key_set.update(self.sweep.keys())
+
+        if sort:
+            return sorted(list(key_set))
 
         return list(key_set)
     
@@ -147,3 +157,6 @@ class FlexibleSweep(
         
     def items(self) -> List[Tuple[str, NamedSlotsNdarray]]:
         return [(key, self[key]) for key in self.keys()]
+
+    def full_dict(self) -> Dict[str, NamedSlotsNdarray]:
+        return dict(self.items())

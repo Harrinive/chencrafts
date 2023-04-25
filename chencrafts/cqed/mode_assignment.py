@@ -50,7 +50,7 @@ def organize_dressed_esys(
         given by `ParameterSweep["dressed_indices"]`.
     eigensys:
         The eigenenergies and eigenstates of the bare Hilbert space. Usually given by
-        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`.
+        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. eigensys and dressed_indices should be given together.
     adjust_phase:
         If True, the phase of "bare element" of each eigenstate will be adjusted to be 0.
 
@@ -58,27 +58,28 @@ def organize_dressed_esys(
     -------
     Evals and evecs organized with bare index labels in two multi-dimensional arrays.
     """
+    if eigensys is None:
+        evals, evecs = hilbertspace.eigensys(hilbertspace.dimension)
+    else:
+        evals, evecs = eigensys
+
     if dressed_indices is None:
-        hilbertspace.generate_lookup()
+        hilbertspace.generate_lookup(dressed_esys=(evals, evecs))
         drs_idx_map = hilbertspace.dressed_index
     else:
         def drs_idx_map(bare_index_tuple):
             flattened_bare_index = label_convert(bare_index_tuple, hilbertspace)
             return dressed_indices[flattened_bare_index]
         
-    if eigensys is None:
-        evals, evecs = hilbertspace.eigensys(hilbertspace.dimension - 1)
-    else:
-        evals, evecs = eigensys
-
     dim_list = hilbertspace.subsystem_dims
 
     organized_evals: np.ndarray = np.ndarray(dim_list, dtype=float)
     organized_evecs: np.ndarray = np.ndarray(dim_list, dtype=qt.Qobj)
     for idx, bare_idx in enumerate(np.ndindex(tuple(dim_list))):
 
-        drs_idx = drs_idx_map(bare_idx)
-        if drs_idx is not None:
+        drs_idx = drs_idx_map(bare_idx)          
+
+        if drs_idx is not None and drs_idx < len(evals):
             evec = evecs[drs_idx]
             eval = evals[drs_idx]
 
@@ -99,7 +100,7 @@ def organize_dressed_esys(
 def single_mode_dressed_esys(
     hilbertspace: HilbertSpace,
     mode_idx: int,
-    state_label: Tuple[int] | List[int],
+    state_label: Tuple[int, ...] | List[int],
     dressed_indices: np.ndarray | None = None,
     eigensys = None,
     adjust_phase: bool = True,
@@ -117,7 +118,7 @@ def single_mode_dressed_esys(
     hilberspace:
         scq.HilberSpace object which include the desired mode
     mode_idx:
-        The index of the interested mode in the hilberspace's subsystem_list
+        The index of the resonator mode of interest in the hilberspace's subsystem_list
     state_label:
         the subset of the eigensys is calculated with other modes staying at bare state. 
         For example, we are looking for eigensystem for the first 

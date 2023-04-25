@@ -5,7 +5,7 @@ from scipy.constants import h, k
 
 from typing import Tuple
 
-def n_th(freq, temp, n_th_base=0.0):
+def n_th(freq, temp, n_th_base: float | np.ndarray = 0.0):
     """freq is in the unit of GHz, temp is in the unit of K"""
     return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1) + n_th_base
 
