@@ -160,3 +160,29 @@ def single_mode_dressed_esys(
         sm_evals.append(eval)
 
     return (sm_evals, sm_evecs)
+
+def dressed_state_component(hilbertspace: HilbertSpace, bare_label, dressed_esys=None):
+    if dressed_esys is None:
+        dressed_esys = hilbertspace.eigensys(hilbertspace.dimension)
+    _, evecs = dressed_esys
+
+    hilbertspace.generate_lookup(dressed_esys=dressed_esys)
+
+    drs_idx = hilbertspace.dressed_index(bare_label)
+    if drs_idx is None:
+        raise IndexError(f"no dressed state found for bare label {bare_label}")
+
+    evec_1 = evecs[drs_idx]
+    largest_occupation_label = np.argsort(np.abs(evec_1.data.toarray()[:, 0]))[::-1]
+
+    bare_label_list = []
+    prob_list = []
+    for idx in range(len(evec_1)):
+        drs_label = int(largest_occupation_label[idx])
+        bare_label = label_convert(drs_label, hilbertspace)
+        prob = (np.abs(evec_1.data.toarray()[:, 0])**2)[drs_label]
+
+        bare_label_list.append(bare_label)
+        prob_list.append(prob)
+
+    return bare_label_list, prob_list

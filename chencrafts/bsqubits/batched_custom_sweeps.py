@@ -75,7 +75,7 @@ def batched_sweep_bare_decoherence(
         kappa_s = PI2 * sweep["omega_s_GHz"] / params["Q_s"]
     )
     sweep.store_data(
-        n_th_s = n_th(sweep["omega_s_GHz"], params["T"], params["n_th_base"])
+        n_th_s = n_th(sweep["omega_s_GHz"], params["T_s"], params["n_th_base"])
     )
 
     # qubit decoherence

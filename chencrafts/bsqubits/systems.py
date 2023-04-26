@@ -110,6 +110,8 @@ def resonator_transmon(
     return {
         "sim_para": sim_para,
         "hilbertspace": h_space,
+        "qubit": qubit,
+        "res": cavity,
         "update_hilbertspace": update_hilbertspace,
         "update_hilbertspace_by_keyword": update_hilbertspace_by_keyword,
         "subsys_update_info": subsys_update_info,
@@ -218,6 +220,8 @@ def resonator_fluxonium(
     return {
         "sim_para": sim_para,
         "hilbertspace": h_space,
+        "qubit": qubit,
+        "res": cavity,
         "update_hilbertspace": update_hilbertspace,
         "update_hilbertspace_by_keyword": update_hilbertspace_by_keyword,
         "subsys_update_info": subsys_update_info,
@@ -390,6 +394,9 @@ def fluxonium_resonator_fluxonium(
     return {
         "sim_para": sim_para,
         "hilbertspace": h_space,
+        "qubit1": qubit1,
+        "res": cavity,
+        "qubit2": qubit2,
         "update_hilbertspace": update_hilbertspace,
         "update_hilbertspace_by_keyword": update_hilbertspace_by_keyword,
         "subsys_update_info": subsys_update_info,

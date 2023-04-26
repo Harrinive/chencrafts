@@ -27,7 +27,7 @@ def fill_in_kwargs_during_custom_sweep(
         elif arg in sweep.parameters.names:
             overall_kwargs[arg] = paramvals_tuple[sweep.parameters.index_by_name[arg]]
 
-        if arg in sweep.keys():
+        elif arg in sweep.keys():
             overall_kwargs[arg] = sweep[arg][paramindex_tuple]
 
         else:
