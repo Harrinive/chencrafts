@@ -8,9 +8,9 @@ from chencrafts.bsqubits.error_rates import (
 )
 
 from chencrafts.bsqubits.systems import (
-    resonator_transmon,
-    resonator_fluxonium,
-    fluxonium_resonator_fluxonium,
+    ResonatorTransmon,
+    ResonatorFluxonium,
+    FluxoniumResonatorFluxonium,
 ) 
 
 from chencrafts.bsqubits.batched_custom_sweeps import (
