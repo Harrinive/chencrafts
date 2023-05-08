@@ -13,7 +13,7 @@ def fill_in_kwargs_during_custom_sweep(
     This function will fill in the keyword arguments for function B.
 
     If not ignored, parameters in the external_kwargs will be given priority over the 
-    swept parameters and parameters calculated.
+    swept parameters and sweep[<kwarg>] calculated.
     """
     overall_kwargs = {}
     for arg in inspect.signature(func).parameters.keys():

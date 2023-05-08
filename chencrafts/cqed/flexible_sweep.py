@@ -55,6 +55,7 @@ class FlexibleSweep(
         _parameters = Parameters(self.swept_para)
         self._swept_para_meshgrids = _parameters.meshgrid_by_name()
         self.dims = _parameters.counts
+        self._subsys_update_info = self._all_subsys_update_info(subsys_update_info)
 
         # ParameterSweep
         self._complete_param_dict = self._get_complete_param_dict()
@@ -64,10 +65,11 @@ class FlexibleSweep(
             paramvals_by_name=self._complete_param_dict,
             update_hilbertspace=self._update_hilbertspace,
             evals_count=int(sim_para["evals_count"]),
-            subsys_update_info=self._all_subsys_update_info(subsys_update_info),
+            subsys_update_info=self._subsys_update_info,
             deepcopy=True,
             num_cpus=int(sim_para["num_cpus"]),
             override_update_func_check=True,
+            autorun=True,
         )   
 
     def _get_complete_param_dict(self) -> Dict[str, np.ndarray]:

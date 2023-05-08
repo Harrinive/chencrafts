@@ -65,17 +65,21 @@ def batched_sweep_bare_decoherence(
 ):
     """
     Should be called after batched_sweep_general
+
+    parameters in the external_kwargs will be given priority over the 
+    swept parameters
     """
     # some parameters for use
     qubit_dim = sweep.hilbertspace.subsystem_dims[qubit_mode_idx]
-    params = kwargs | sweep.parameters.meshgrid_by_name()
+    params = sweep.parameters.meshgrid_by_name() | kwargs 
+
     
     # cavity relaxation
     sweep.store_data(
         kappa_s = PI2 * sweep["omega_s_GHz"] / params["Q_s"]
     )
     sweep.store_data(
-        n_th_s = n_th(sweep["omega_s_GHz"], params["T_s"], params["n_th_base"])
+        n_th_s = n_th(sweep["omega_s_GHz"], params["temp_s"], params["n_th_base"])
     )
 
     # qubit decoherence
@@ -83,12 +87,14 @@ def batched_sweep_bare_decoherence(
         sweep.add_sweep(
             sweep_gamma_1, "kappa_a_1_"+channel, 
             mode_idx=qubit_mode_idx, channel_name="t1_"+channel, 
-            i_list=[0, 1], j_list=range(qubit_dim)
+            i_list=[0, 1], j_list=range(qubit_dim),
+            **kwargs
         )
     for channel in ["flux", "ng", "cc"]:
         sweep.add_sweep( 
             sweep_gamma_phi, "kappa_a_phi_"+channel, 
-            mode_idx=qubit_mode_idx, channel_name="tphi_1_over_f_"+channel, i=0, j=1
+            mode_idx=qubit_mode_idx, channel_name="tphi_1_over_f_"+channel, i=0, j=1,
+            **kwargs
         )
     total_kappa_1 = np.sum([
         sweep["kappa_a_1_"+channel] for channel in ["capacitive", "inductive", "quasiparticle_tunneling"]
@@ -117,7 +123,8 @@ def batched_sweep_purcell_fock(
 def batched_sweep_purcell_cats(
     sweep: ParameterSweep, res_mode_idx = 0, qubit_mode_idx = 1, **kwargs
 ):
-
+    # disp are in sweep.parameters (will be filled in in the sweep_purcell_factor)
+    # or can be from a external kwarg
     def cat_x(basis, disp):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
@@ -135,16 +142,19 @@ def batched_sweep_purcell_cats(
         sweep_purcell_factor, "purcell_factor_x",
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
         res_state_func = cat_x, qubit_state_index = 0,
+        **kwargs
     )
     sweep.add_sweep(
         sweep_purcell_factor, "purcell_factor_y",
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
         res_state_func = cat_y, qubit_state_index = 0,
+        **kwargs
     )
     sweep.add_sweep(
         sweep_purcell_factor, "purcell_factor_z",
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
         res_state_func = cat_z, qubit_state_index = 0,
+        **kwargs
     )
 
     sweep.store_data(
@@ -164,7 +174,7 @@ def batched_sweep_readout(
     """
     # some parameters for use
     qubit = sweep.hilbertspace.subsystem_list[qubit_mode_idx]
-    params = kwargs | sweep.parameters.meshgrid_by_name()
+    params = sweep.parameters.meshgrid_by_name() | kwargs 
 
     # some assupmtions should be made for a readout resonator
     detuning_ar = 2 * PI2   
@@ -173,7 +183,7 @@ def batched_sweep_readout(
 
 
     sweep.store_data(
-        chi_ar = params["chi_ar/kappa_r"] * params["kappa_r"],
+        chi_ar = params["chi_ar/kappa_r"] * params["kappa_r"] * np.ones_like(sweep["omega_a_GHz"]),
     )
 
     # critical photon number
@@ -284,7 +294,7 @@ def batched_sweep_pulse(
     batched_sweep_general,
     """
     # some parameters for use
-    params = kwargs | sweep.parameters.meshgrid_by_name()
+    params = sweep.parameters.meshgrid_by_name() | kwargs
 
     min_sigma = 1
     sigma = np.abs(params["sigma*2*K_a"] / sweep["non_lin"])
@@ -313,7 +323,7 @@ def batched_sweep_cat_code(
 
     # other parameters ralated to cat code's failure rate
 
-    params = kwargs | sweep.parameters.meshgrid_by_name()
+    params = sweep.parameters.meshgrid_by_name() | kwargs 
 
     sweep.store_data(
         n_bar_s = sweep["purcell_factor_cat"][..., 0]

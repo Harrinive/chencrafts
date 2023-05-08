@@ -5,7 +5,8 @@ from scqubits.core.param_sweep import ParameterSweep
 
 import numpy as np
 
-from typing import Dict, List, Tuple, Union, Any
+from typing import Dict, List, Tuple, Union, Any, Callable
+import copy
 
 class JointSystems:
     def __init__(
@@ -18,41 +19,60 @@ class JointSystems:
 
     def check_conv(
         self, 
-        bare_evecs: np.ndarray,
-        current_cut: int,
+        qubit_init_ret_evecs: Callable,
+        init_cut: int,
         convergence_range: Tuple[float, float] | None = (1e-10, 1e-6), 
         update: bool = True,
-    ) -> int:
-        # convergence checker: for all eigenvectors, check the smallness for 
-        # the last three numbers
-        conv = np.max(np.abs(bare_evecs[-3:, :]))  
-        # conv = np.max(np.abs(bare_evecs[-1][-3:]))
+    ) -> None:
+    
+        last_operation = 0
+        current_cut = init_cut
+        
+        while True:
+            bare_evecs = qubit_init_ret_evecs(current_cut)
 
-        if convergence_range is None or not update:
-            return -1
-        elif conv > convergence_range[1]:
-            return int(current_cut * 1.5)
-        elif conv < convergence_range[0]:
-            return int(current_cut / 1.5)
-        else:
-            return -1
+            # convergence checker: for all eigenvectors, check the smallness for 
+            # the last three numbers
+            conv = np.max(np.abs(bare_evecs[-3:, :]))  
+            # conv = np.max(np.abs(bare_evecs[-1][-3:]))
 
-    _dict: Dict[str, Any]
+            # to avoid the back-and-forth oscillation, we need to check the
+            # operational history. last_operation = 1 means the previous cut was large and 
+            # was reduced. And last_operation = -1 means the last cut is smaller and was 
+            # increased. 
+            if convergence_range is None or not update:
+                break
+            elif conv > convergence_range[1]:
+                last_operation = -1
+                current_cut = int(current_cut * 1.5)
+            elif conv < convergence_range[0]:
+                if last_operation == -1:
+                    # When last_operation = -1 (meaning the conv was too BIG and the cut 
+                    # number was reduced to a value that is too small) and the current conv is 
+                    # too SMALL, we should not increase the cut number again, it might leads to 
+                    # back-and-forth oscillation.
+                    break
+                last_operation = 1
+                current_cut = int(current_cut / 1.5)
+            else:
+                break
+
+    dict: Dict[str, Any]
 
     def keys(self):
-        return self._dict.keys()
+        return self.dict.keys()
 
     def values(self):
-        return self._dict.values()
+        return self.dict.values()
     
     def items(self):
-        return self._dict.items()
+        return self.dict.items()
     
     def __getitem__(self, key):
-        return self._dict[key]
+        return self.dict[key]
     
     def __iter__(self):
-        return self._dict.__iter__()
+        return self.dict.__iter__()
     
 
 
@@ -61,6 +81,20 @@ class JointSystems:
 # Transmon -- Resonator 
 
 class ResonatorTransmon(JointSystems):
+    def _qubit_init(self, cut):
+        self.qubit = scq.Transmon(
+            EJ = self.para.get("EJ_GHz", 5),
+            EC = self.para.get("EC_GHz", 0.2),
+            ng = self.para.get("ng", 0.25),
+            ncut = cut,
+            truncated_dim = int(self.sim_para["qubit_dim"]),
+            id_str = "qubit",
+        )
+
+        _, bare_evecs = self.qubit.eigensys(int(self.sim_para["qubit_dim"]))
+
+        return bare_evecs
+    
     def __init__(
         self,
         sim_para: Dict[str, Any],
@@ -76,6 +110,8 @@ class ResonatorTransmon(JointSystems):
         Parameters are set randomly and should be determined in the FlexibleSweep.para and 
         FlexibleSweep.swept_para.
         """
+        super().__init__(sim_para, para)
+
         # HilbertSpace
         self.res = scq.Oscillator(
             E_osc = para.get("E_osc_GHz", 5),
@@ -84,27 +120,9 @@ class ResonatorTransmon(JointSystems):
             l_osc = 1
         )
 
-        qubit_ncut = sim_para["qubit_ncut"]
-        while True:
-            self.qubit = scq.Transmon(
-                EJ = para.get("EJ_GHz", 5),
-                EC = para.get("EC_GHz", 0.2),
-                ng = para.get("ng", 0.25),
-                ncut = qubit_ncut,
-                truncated_dim = int(sim_para["qubit_dim"]),
-                id_str = "qubit",
-            )
-
-            _, bare_evecs = self.qubit.eigensys(int(sim_para["qubit_dim"]))
-            new_cut = self.check_conv(
-                bare_evecs, qubit_ncut, convergence_range, update_ncut
-            )
-            if new_cut == -1:
-                break
-            else:
-                qubit_ncut = new_cut
+        self.check_conv(self._qubit_init, sim_para["qubit_ncut"], convergence_range, update_ncut)
         if update_ncut:
-            sim_para["qubit_ncut"] = qubit_ncut
+            sim_para["qubit_ncut"] = self.qubit.ncut
 
         self.hilbertspace = HilbertSpace([self.res, self.qubit])
 
@@ -129,7 +147,6 @@ class ResonatorTransmon(JointSystems):
         self,
         hilbertspace: HilbertSpace, 
         E_osc_GHz: float, EJ_GHz: float, EC_GHz: float, ng: float, g_GHz: float,
-        **kwargs
     ):
         res: scq.Oscillator = hilbertspace.subsys_by_id_str("res")
         qubit: scq.Transmon = hilbertspace.subsys_by_id_str("qubit")
@@ -144,14 +161,19 @@ class ResonatorTransmon(JointSystems):
     def update_hilbertspace_by_keyword(
         self,
         ps: ParameterSweep,
-        E_osc_GHz: float, EJ_GHz: float, EC_GHz: float, ng: float, g_GHz: float,
         **kwargs
     ):
+        kwargs = copy.deepcopy(kwargs)
         self.update_hilbertspace(
-            ps.hilbertspace, E_osc_GHz, EJ_GHz, EC_GHz, ng, g_GHz
+            ps.hilbertspace, 
+            E_osc_GHz = kwargs.pop("E_osc_GHz", self.res.E_osc), 
+            EJ_GHz = kwargs.pop("EJ_GHz", self.qubit.EJ),
+            EC_GHz = kwargs.pop("EC_GHz", self.qubit.EC),
+            ng = kwargs.pop("ng", self.qubit.ng),
+            g_GHz = kwargs.pop("g_GHz", ps.hilbertspace.interaction_list[0].g_strength),
         )
 
-    def _dict(self) -> Dict[str, Any]:
+    def dict(self) -> Dict[str, Any]:
         return {
             "sim_para": self.sim_para,
             "hilbertspace": self.hilbertspace,
@@ -163,6 +185,20 @@ class ResonatorTransmon(JointSystems):
         }
 
 class ResonatorFluxonium(JointSystems):
+    def _qubit_init(self, cut):
+        self.qubit = scq.Fluxonium(
+            EJ = self.para.get("EJ_GHz", 5),
+            EC = self.para.get("EC_GHz", 0.2),
+            EL = self.para.get("EL_GHz", 0.5),
+            flux = self.para.get("flux", 0.5),
+            cutoff = cut,
+            truncated_dim = int(self.sim_para["qubit_dim"]),
+            id_str = "qubit",
+        )
+
+        _, bare_evecs = self.qubit.eigensys(int(self.sim_para["qubit_dim"]))
+
+        return bare_evecs
 
     def __init__(
         self,
@@ -187,28 +223,9 @@ class ResonatorFluxonium(JointSystems):
             l_osc = 1
         )
 
-        qubit_ncut = sim_para["qubit_cutoff"]
-        while True:
-            self.qubit = scq.Fluxonium(
-                EJ = para.get("EJ_GHz", 5),
-                EC = para.get("EC_GHz", 0.2),
-                EL = para.get("EL_GHz", 0.5),
-                flux = para.get("flux", 0.5),
-                cutoff = qubit_ncut,
-                truncated_dim = int(sim_para["qubit_dim"]),
-                id_str = "qubit",
-            )
-
-            _, bare_evecs = self.qubit.eigensys(int(sim_para["qubit_dim"]))
-            new_cut = self.check_conv(
-                bare_evecs, qubit_ncut, convergence_range, update_cutoff
-            )
-            if new_cut == -1:
-                break
-            else:
-                qubit_ncut = new_cut
+        self._qubit_init(sim_para["qubit_cutoff"])
         if update_cutoff:
-            sim_para["qubit_cutoff"] = qubit_ncut
+            sim_para["qubit_cutoff"] = self.qubit.cutoff
 
         self.hilbertspace = HilbertSpace([self.res, self.qubit])
 
@@ -235,7 +252,6 @@ class ResonatorFluxonium(JointSystems):
         hilbertspace: HilbertSpace,
         E_osc_GHz: float, EJ_GHz: float, EC_GHz: float, EL_GHz: float, flux: float,
         g_GHz: float,
-        **kwargs
     ):
         res: scq.Oscillator = hilbertspace.subsys_by_id_str("res")
         qubit: scq.Fluxonium = hilbertspace.subsys_by_id_str("qubit")
@@ -250,15 +266,20 @@ class ResonatorFluxonium(JointSystems):
     def update_hilbertspace_by_keyword(
         self,
         ps: ParameterSweep,
-        E_osc_GHz: float, EJ_GHz: float, EC_GHz: float, EL_GHz: float, flux: float, 
-        g_GHz: float,
-        **kwargs
+        **kwargs,
     ):
+        kwargs = copy.deepcopy(kwargs)
         self.update_hilbertspace(
-            ps.hilbertspace, E_osc_GHz, EJ_GHz, EC_GHz, EL_GHz, flux, g_GHz
+            ps.hilbertspace, 
+            E_osc_GHz = kwargs.pop("E_osc_GHz", self.res.E_osc), 
+            EJ_GHz = kwargs.pop("EJ_GHz", self.qubit.EJ),
+            EC_GHz = kwargs.pop("EC_GHz", self.qubit.EC),
+            EL_GHz = kwargs.pop("EL_GHz", self.qubit.EL),
+            flux = kwargs.pop("flux", self.qubit.flux),
+            g_GHz = kwargs.pop("g_GHz", self.hilbertspace.interaction_list[0].g_strength),
         )
 
-    def _dict(self) -> Dict[str, Any]:
+    def dict(self) -> Dict[str, Any]:
         return {
             "sim_para": self.sim_para,
             "hilbertspace": self.hilbertspace,
@@ -270,6 +291,36 @@ class ResonatorFluxonium(JointSystems):
         }
 
 class FluxoniumResonatorFluxonium(JointSystems):
+    def _qubit1_init(self, cut):
+        self.qubit1 = scq.Fluxonium(
+            EJ = self.para.get("EJ1_GHz", 5),
+            EC = self.para.get("EC1_GHz", 0.2),
+            EL = self.para.get("EL1_GHz", 0.5),
+            flux = self.para.get("flux1", 0.5),
+            cutoff = cut,
+            truncated_dim = int(self.sim_para["qubit_dim1"]),
+            id_str = "qubit1",
+        )
+
+        _, bare_evecs = self.qubit1.eigensys(int(self.sim_para["qubit_dim1"]))
+
+        return bare_evecs
+
+    def _qubit2_init(self, cut):
+        self.qubit2 = scq.Fluxonium(
+            EJ = self.para.get("EJ2_GHz", 5),
+            EC = self.para.get("EC2_GHz", 0.2),
+            EL = self.para.get("EL2_GHz", 0.5),
+            flux = self.para.get("flux2", 0.5),
+            cutoff = cut,
+            truncated_dim = int(self.sim_para["qubit_dim2"]),
+            id_str = "qubit2",
+        )
+
+        _, bare_evecs = self.qubit2.eigensys(int(self.sim_para["qubit_dim2"]))
+
+        return bare_evecs
+    
     def __init__(
         self,
         sim_para: Dict[str, Any],
@@ -285,6 +336,8 @@ class FluxoniumResonatorFluxonium(JointSystems):
         Parameters are set randomly and should be determined in the FlexibleSweep.para and 
         FlexibleSweep.swept_para.
         """
+        super().__init__(sim_para, para)
+
         # HilbertSpace
         self.res = scq.Oscillator(
             E_osc = para.get("E_osc_GHz", 5),
@@ -293,51 +346,13 @@ class FluxoniumResonatorFluxonium(JointSystems):
             l_osc = 1
         )
 
-        qubit_ncut1 = sim_para["qubit_cutoff1"]
-        while True:
-            self.qubit1 = scq.Fluxonium(
-                EJ = para.get("EJ1_GHz", 5),
-                EC = para.get("EC1_GHz", 0.2),
-                EL = para.get("EL1_GHz", 0.5),
-                flux = para.get("flux1", 0.5),
-                cutoff = qubit_ncut1,
-                truncated_dim = int(sim_para["qubit_dim1"]),
-                id_str = "qubit1",
-            )
-
-            _, bare_evecs = self.qubit1.eigensys(int(sim_para["qubit_dim1"]))
-            new_cut1 = self.check_conv(
-                bare_evecs, qubit_ncut1, convergence_range, update_cutoff
-            )
-            if new_cut1 == -1:
-                break
-            else:
-                qubit_ncut1 = new_cut1
+        self._qubit1_init(sim_para["qubit_cutoff1"])
         if update_cutoff:
-            sim_para["qubit_cutoff1"] = qubit_ncut1
+            sim_para["qubit_cutoff1"] = self.qubit1.cutoff
 
-        qubit_ncut2 = sim_para["qubit_cutoff2"]
-        while True:
-            self.qubit2 = scq.Fluxonium(
-                EJ = para.get("EJ2_GHz", 5),
-                EC = para.get("EC2_GHz", 0.2),
-                EL = para.get("EL2_GHz", 0.5),
-                flux = para.get("flux2", 0.5),
-                cutoff = qubit_ncut2,
-                truncated_dim = int(sim_para["qubit_dim2"]),
-                id_str = "qubit2",
-            )
-
-            _, bare_evecs = self.qubit2.eigensys(int(sim_para["qubit_dim2"]))
-            new_cut2 = self.check_conv(
-                bare_evecs, qubit_ncut2, convergence_range, update_cutoff
-            )
-            if new_cut2 == -1:
-                break
-            else:
-                qubit_ncut2 = new_cut2
+        self._qubit2_init(sim_para["qubit_cutoff2"])
         if update_cutoff:
-            sim_para["qubit_cutoff2"] = qubit_ncut2
+            sim_para["qubit_cutoff2"] = self.qubit2.cutoff
 
         self.hilbertspace = HilbertSpace([self.qubit1, self.res, self.qubit2])
 
@@ -378,7 +393,6 @@ class FluxoniumResonatorFluxonium(JointSystems):
         EJ1_GHz: float, EC1_GHz: float, EL1_GHz: float, flux1: float,
         EJ2_GHz: float, EC2_GHz: float, EL2_GHz: float, flux2: float,
         g1_GHz: float, g2_GHz: float,
-        **kwargs
     ):
         res: scq.Oscillator = hilbertspace.subsys_by_id_str("res")
         qubit1: scq.Fluxonium = hilbertspace.subsys_by_id_str("qubit1")
@@ -405,23 +419,26 @@ class FluxoniumResonatorFluxonium(JointSystems):
     def update_hilbertspace_by_keyword(
         self,    
         ps: ParameterSweep,
-        E_osc_GHz: float, 
-        EJ1_GHz: float, EC1_GHz: float, EL1_GHz: float, flux1: float,
-        EJ2_GHz: float, EC2_GHz: float, EL2_GHz: float, flux2: float,
-        g1_GHz: float, g2_GHz: float,
         **kwargs
     ):
+        kwargs = copy.deepcopy(kwargs)
         self.update_hilbertspace(
             ps.hilbertspace, 
-            E_osc_GHz,
-            EJ1_GHz, EC1_GHz, EL1_GHz, flux1,
-            EJ2_GHz, EC2_GHz, EL2_GHz, flux2,
-            g1_GHz, g2_GHz,
-            **kwargs
+            E_osc_GHz = kwargs.pop("E_osc_GHz", self.res.E_osc),
+            EJ1_GHz = kwargs.pop("EJ1_GHz", self.qubit1.EJ),
+            EC1_GHz = kwargs.pop("EC1_GHz", self.qubit1.EC),
+            EL1_GHz = kwargs.pop("EL1_GHz", self.qubit1.EL),
+            flux1 = kwargs.pop("flux1", self.qubit1.flux),
+            EJ2_GHz = kwargs.pop("EJ2_GHz", self.qubit2.EJ),
+            EC2_GHz = kwargs.pop("EC2_GHz", self.qubit2.EC),
+            EL2_GHz = kwargs.pop("EL2_GHz", self.qubit2.EL),
+            flux2 = kwargs.pop("flux2", self.qubit2.flux),
+            g1_GHz = kwargs.pop("g1_GHz", self.hilbertspace.interaction_list[0].g_strength),
+            g2_GHz = kwargs.pop("g2_GHz", self.hilbertspace.interaction_list[1].g_strength),
         )
 
 
-    def _dict(self) -> Dict[str, Any]:
+    def dict(self) -> Dict[str, Any]:
         return {
             "sim_para": self.sim_para,
             "hilbertspace": self.hilbertspace,
