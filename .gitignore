@@ -11,3 +11,5 @@ chencrafts/bsqubits/__pycache__/
 chencrafts/cqed/__pycache__/
 
 **.ipynb
+**.json
+**.pyc
