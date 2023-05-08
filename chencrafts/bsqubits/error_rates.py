@@ -6,7 +6,7 @@ from matplotlib import colormaps
 from matplotlib import rcParams
 from chencrafts.toolbox import bar_plot_compare
 
-from typing import Callable
+from typing import Callable, List, Dict
 
 class ErrorChannel:
     def __init__(
@@ -33,7 +33,7 @@ class ErrorRate:
         return_dict: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> np.ndarray | Dict[str, np.ndarray]:
         """returns the total enabled error rate"""
         total_error = 0
         if return_dict:
@@ -56,8 +56,8 @@ class ErrorRate:
 
     def __getitem__(
         self,
-        error_name
-    ):
+        error_name: str | List[str],
+    ) -> ErrorChannel | ErrorRate:
         """calculate the error rate from a single channel"""
         if isinstance(error_name, str):
             return self.error_channels[error_name]
@@ -149,8 +149,8 @@ class ErrorRate:
     ):
 
         # error calculation
-        error_dict = self(**kwargs, return_dict=True)
-        del error_dict["total"]
+        error_dict: Dict = self(**kwargs, return_dict=True)
+        error_dict.pop("total")
         error_rate_list = list(error_dict.values())
         total_error_rate = np.sum(error_rate_list)
 
@@ -263,65 +263,10 @@ class ErrorRate:
             plt.show()
 
 # ##############################################################################
-# some default error rate
-tmon_channels_no_purcell = ErrorRate()
-
-tmon_channels_no_purcell.add_channel(
-    "multiple_photon_loss",
-    lambda n_bar, T_M, kappa_s, *args, **kwargs: 
-        - np.log((1 + kappa_s * n_bar * T_M) * np.exp(-n_bar * kappa_s * T_M)) / T_M
-)
-tmon_channels_no_purcell.add_channel(
-    "photon_gain", 
-    lambda n_bar, kappa_s, n_th, *args, **kwargs: 
-        kappa_s * n_bar * n_th
-)
-tmon_channels_no_purcell.add_channel(
-    "anc_prepare", 
-    lambda tau_FD, sigma, T_W, Gamma_up, Gamma_down, T_M, *args, **kwargs: 
-        Gamma_up / (Gamma_up + Gamma_down) 
-        * (1 - np.exp(-(Gamma_up + Gamma_down) * (T_W + tau_FD + 8 * sigma))) / T_M
-)
-tmon_channels_no_purcell.add_channel(
-    "anc_relax_map", 
-    lambda Gamma_down, chi_sa, T_M, *args, **kwargs: 
-        np.pi * Gamma_down / (np.abs(chi_sa) * T_M)
-)
-tmon_channels_no_purcell.add_channel(
-    "anc_dephase_map", 
-    lambda Gamma_phi, chi_sa, T_M, *args, **kwargs: 
-        np.pi * Gamma_phi / (np.abs(chi_sa) * T_M)
-)
-tmon_channels_no_purcell.add_channel(
-    "anc_relax_ro", 
-    lambda n_bar, tau_m, tau_FD, Gamma_down_ro, kappa_s, *args, **kwargs: 
-        n_bar * kappa_s * Gamma_down_ro * (tau_m + tau_FD)
-)
-tmon_channels_no_purcell.add_channel(
-    "anc_excite_ro", 
-    lambda tau_m, Gamma_up_ro, T_M, *args, **kwargs: 
-        Gamma_up_ro * tau_m / T_M
-)
-tmon_channels_no_purcell.add_channel(
-    "Kerr_dephase", 
-    lambda n_bar, K_s, T_M, kappa_s, *args, **kwargs: 
-        kappa_s * n_bar * K_s**2 * T_M**2 / 6
-)
-tmon_channels_no_purcell.add_channel(
-    "ro_infidelity", 
-    lambda n_bar, M_eg, M_ge, T_M, kappa_s, *args, **kwargs: 
-        n_bar * kappa_s * M_eg + M_ge / T_M
-)
-tmon_channels_no_purcell.add_channel(
-    "high_order_int", 
-    lambda n_bar, chi_sa, T_M, chi_prime, *args, **kwargs: 
-        n_bar * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
-)
-tmon_channels_no_purcell.add_channel(
-    "pi_pulse_error", 
-    lambda n_bar, sigma, chi_sa, T_M, *args, **kwargs: 
-        n_bar * chi_sa**2 * (4 * sigma)**2 / (2 * T_M)
-)
+def qubit_g_to_e_prob(Gamma_up, Gamma_down, time):
+    return Gamma_up / (Gamma_up + Gamma_down) * (1 - np.exp(-(Gamma_up + Gamma_down) * time))
+def qubit_e_to_g_prob(Gamma_up, Gamma_down, time):
+    return Gamma_down / (Gamma_up + Gamma_down) * (1 - np.exp(-(Gamma_up + Gamma_down) * time))
 
 def manual_constr(g_sa, min_detuning, detuning_lower_bound, constr_amp, *args, **kwargs):
     detuning_undersize = 2 * np.pi * (g_sa * detuning_lower_bound - min_detuning)
@@ -348,8 +293,7 @@ basic_channels.add_channel(
 basic_channels.add_channel(
     "anc_prepare", 
     lambda T_W, Gamma_up, Gamma_down, T_M, tau_FD, *args, **kwargs: 
-        Gamma_up / (Gamma_up + Gamma_down) 
-        * (1 - np.exp(-(Gamma_up + Gamma_down) * (T_W + tau_FD))) / T_M
+        qubit_g_to_e_prob(Gamma_up, Gamma_down, T_W + tau_FD) / T_M
 )
 basic_channels.add_channel(
     "anc_relax_map", 
@@ -373,8 +317,8 @@ basic_channels.add_channel(
 )
 basic_channels.add_channel(
     "Kerr_dephase", 
-    lambda gamma_down, K_s, T_M, *args, **kwargs: 
-        gamma_down * K_s**2 * T_M**2 / 6
+    lambda gamma_down, K_s, T_M, n_bar_s, *args, **kwargs: 
+        n_bar_s * gamma_down * K_s**2 * T_M**2 / 3
 )
 basic_channels.add_channel(
     "ro_infidelity", 
@@ -383,11 +327,43 @@ basic_channels.add_channel(
 )
 basic_channels.add_channel(
     "pi_pulse_error", 
-    lambda n_bar_s, tau_p_eff, chi_sa, T_M, *args, **kwargs: 
-        n_bar_s * chi_sa**2 * tau_p_eff**2 / T_M
+    lambda gamma_down, n_bar_s, tau_p_eff, chi_sa, T_M, *args, **kwargs: 
+        (2 + 4 * gamma_down * T_M) * (n_bar_s * chi_sa**2 * tau_p_eff**2 / T_M)
 )
 basic_channels.add_channel(
     "high_order_int", 
     lambda n_bar_s, chi_sa, T_M, chi_prime, *args, **kwargs: 
         n_bar_s * chi_prime**2 * np.pi**2 / (2 * chi_sa**2 * T_M),
+)
+
+# ------------------------------------------------------------------------------
+flxn_hf_flx_channels = ErrorRate()
+flxn_hf_flx_channels.merge_channel(basic_channels)
+# ancilla initialization:
+flxn_hf_flx_channels.remove_channel("anc_prepare")
+flxn_hf_flx_channels.add_channel(
+    "rot_after_excitation",
+    lambda chi_sa, T_M, Gamma_up, n_bar_s, reset_no, *args, **kwargs: 
+        np.min([n_bar_s * chi_sa**2 * T_M**2 / 12 / reset_no**2, np.ones_like(chi_sa)], axis=0) * Gamma_up
+)
+flxn_hf_flx_channels.add_channel(
+    "anc_relax_reset_ro", 
+    lambda Gamma_up, Gamma_down_ro, Gamma_down, tau_m, tau_FD, reset_no, T_M, *args, **kwargs: 
+        qubit_g_to_e_prob(Gamma_up, Gamma_down, T_M / reset_no - tau_m - tau_FD) \
+        * (Gamma_down_ro * tau_m + Gamma_down * tau_FD) \
+        * reset_no / T_M
+)
+flxn_hf_flx_channels.add_channel(
+    "anc_excite_reset_ro", 
+    lambda Gamma_up, Gamma_up_ro, Gamma_down, tau_m, tau_FD, reset_no, T_M, *args, **kwargs: 
+        (1 - qubit_g_to_e_prob(Gamma_up, Gamma_down, T_M / reset_no - tau_m - tau_FD)) \
+        * (Gamma_up_ro * tau_m + Gamma_up * tau_FD) \
+        * reset_no / T_M
+)
+flxn_hf_flx_channels.add_channel(
+    "anc_reset_pulse_error", 
+    lambda n_bar_s, tau_p_eff, chi_sa, T_M, Gamma_up, Gamma_down, reset_no, tau_m, tau_FD, *args, **kwargs: 
+        qubit_g_to_e_prob(Gamma_up, Gamma_down, T_M / reset_no - tau_m - tau_FD) \
+        * 4 * n_bar_s * chi_sa**2 * tau_p_eff**2 \
+        * reset_no / T_M
 )

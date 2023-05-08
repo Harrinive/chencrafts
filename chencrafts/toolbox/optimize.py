@@ -13,6 +13,7 @@ from scipy.optimize import (
 # from robo.fmin import bayesian_optimization
 
 from typing import Callable, Dict, List
+import warnings
 
 from tqdm.notebook import tqdm
 import os
@@ -324,7 +325,7 @@ class MultiTraj():
     def plot_target(self, ax=None, ylim=()):
         need_show = False
         if ax is None:
-            fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=150)
+            fig, ax = plt.subplots(1, 1, figsize=(5, 4), dpi=150)
             need_show = True
 
         best = self.sort_traj()
@@ -662,6 +663,10 @@ class Optimization():
         #         np.ones_like(bo_res["y"]) * np.nan,
         #         fixed_para = self.fixed_variables,
         #     )
+
+        if not scipy_res.success:
+            warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x}")
+
 
         return result
 

@@ -30,7 +30,7 @@ def d2_coherent_coef_list(n, alpha) -> np.ndarray:
 
 def sum_of_basis(basis: List[qt.Qobj], coef_list) -> qt.Qobj:
     dims = basis[0].dims
-    N = np.prod(dims)
+    N = np.prod(np.array(dims))
 
     state = qt.zero_ket(N, dims=dims)
     for idx in range(len(coef_list)):
@@ -50,12 +50,12 @@ def coherent(basis: List[qt.Qobj], alpha: float) -> qt.Qobj:
     coef = coherent_coef_list(available_dim, alpha)
     return sum_of_basis(available_ket, coef)
 
-def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[float]]) -> qt.Qobj:
+def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[complex, complex]]) -> qt.Qobj:
     """
     phase_disp_pair for a two-legged cat: [(1, alpha), (1, -alpha)]
     """
     dims = basis[0].dims
-    N = np.prod(dims)
+    N = np.prod(np.array(dims))
     state = qt.zero_ket(N, dims=dims)
     
     for phase, disp in phase_disp_pair:
@@ -63,45 +63,24 @@ def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[float]]) -> qt.Qobj:
 
     return state.unit()
 
-def dressed_basis(
-    h_space: scq.HilbertSpace, 
-    dim_list: List[float], 
-    esys: Tuple[np.ndarray]
-):
-    if esys is None:
-        esys = h_space.eigensys(evals_count=np.prod(dim_list))
-    h_space.generate_lookup(dressed_esys=esys)
-
-    # basis
-    _, evecs = esys
-    drs_basis: np.ndarray = np.ndarray(dim_list, dtype=qt.Qobj)
-    for idx, bare_idx in enumerate(np.ndindex(dim_list)):
-
-        drs_idx = h_space.dressed_index(bare_idx)
-        if drs_idx is not None:
-            evec = evecs[drs_idx]
-            # make the "principle_val" have zero phase
-            principle_val = evec[idx, 0]
-            evec /= (principle_val) / np.abs(principle_val)
-            drs_basis[bare_idx] = evec
-        else:
-            drs_basis[bare_idx] = None
-
-    return drs_basis
-
+# ##############################################################################
 def projector_w_basis(basis: List[qt.Qobj]) -> qt.Qobj:
-    projector = 0
-    for ket in basis:
+    projector: qt.Qobj = basis[0] * basis[0].dag()
+    for ket in basis[1:]:
         projector = projector + ket * ket.dag()
     return projector
 
-def oprt_in_basis(oprt: qt.Qobj, states):
+def oprt_in_basis(oprt: np.ndarray | qt.Qobj, states):
     length = len(states)
+
+    if isinstance(oprt, np.ndarray):
+        oprt = qt.Qobj(oprt)
+    state_qobj = [qt.Qobj(state) for state in states if isinstance(state, np.ndarray)]
 
     data = np.zeros((length, length), dtype=complex)
     for j in range(length):
         for k in range(j, length):
-            elem = oprt.matrix_element(states[j], states[k])
+            elem = oprt.matrix_element(state_qobj[j], state_qobj[k])
             data[j, k] = elem
             data[k, j] = elem.conjugate()
 

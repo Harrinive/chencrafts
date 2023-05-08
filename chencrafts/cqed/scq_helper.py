@@ -1,6 +1,8 @@
 import numpy as np
-from scqubits.core.storage import WaveFunction
 from scipy.fft import fft, fftfreq
+
+from scqubits.core.storage import WaveFunction
+import scqubits as scq
 
 from typing import List, Tuple
 
@@ -23,14 +25,3 @@ def wavefunc_FT(
     amp_p = amp_p_dft * dx * np.exp(-1j * n_list * x0) / (np.sqrt(2*np.pi))
 
     return n_list, amp_p
-
-
-
-
-    
-
-
-
-    
-
-
