@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
 from matplotlib import rcParams
+from chencrafts.toolbox import bar_plot_compare
 
 from typing import Callable
 
@@ -223,51 +224,39 @@ class ErrorRate:
             raise TypeError("Should input a single dictionary or a list of "
                 "dictionaries")
 
-        # calculate errors
+        # calculate errors and obtain a label to each set of data
         errors = np.zeros((compare_num, self.enable_num))
-
         for i in range(compare_num):
             error_dict = self(**para_dicts[i], return_dict=True)
             del error_dict["total"]
             for j, err in enumerate(error_dict.values()):
                 errors[i, j] = err
 
+        label_list = []
+        for i in range(compare_num):
+            if labels is not None:
+                total = np.sum(errors[i, :])
+                label_list.append(labels[i] + f": {total:.2e}")
+            else:
+                total = np.sum(errors[i, :])
+                label_list.append(f"E{i:d}: {total:.2e}")
+        plot_dict = dict(zip(label_list, errors))
+
+        
         # plot 
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
             need_show = True
 
-        plot_width = 1 / (compare_num + 1)
-        plot_x = np.linspace(0, self.enable_num-1, self.enable_num) + 0.5 * plot_width
-        
-        for i in range(compare_num):
-            if labels is not None:
-                total = np.sum(errors[i, :])
-                lable_to_plot = labels[i] + f": {total:.2e}"
-            else:
-                total = np.sum(errors[i, :])
-                lable_to_plot = f"E{i:d}: {total:.2e}"
-                
-            ax.bar(
-                x = plot_x + i * plot_width, 
-                height = errors[i],
-                width = plot_width,
-                align = "edge",
-                label = lable_to_plot
-            )
-            
-        ax.set_xticks(plot_x + plot_width * compare_num / 2)
-        ax.set_xticklabels(
-            self.error_names, 
-            rotation=45, 
-            rotation_mode="anchor", 
-            horizontalalignment="right", 
-            verticalalignment="top", 
-            fontsize=rcParams["axes.labelsize"]
+        bar_plot_compare(
+            plot_dict,
+            x_ticks = self.error_names,
+            ax = ax,
+            figsize = figsize, 
+            dpi = dpi,
+            x_tick_rotation = 45, 
         )
         ax.set_ylabel(r"Error Rate / GHz")
-
-        ax.legend()
 
         if need_show:
             plt.tight_layout()

@@ -79,24 +79,65 @@ class NSArray(NamedSlotsNdarray):
     def __new__(
         cls, 
         input_array: np.ndarray | float, 
-        values_by_name: Dict[str, np.ndarray] = None
+        values_by_name: Dict[str, range | np.ndarray | None] = {}
     ) -> "NamedSlotsNdarray":
         if isinstance(input_array, float | int):
             return super().__new__(cls, np.array(input_array), {})
-        elif values_by_name is None:
-            raise ValueError("value_by_name shouldn't be None unless your input "
-            "arra is actually a float number.")
 
-        return super().__new__(cls, input_array, values_by_name)
+        elif isinstance(input_array, np.ndarray) and input_array.shape == tuple() and values_by_name == {}:
+            return super().__new__(cls, input_array, {})
+        
+        elif isinstance(input_array, NamedSlotsNdarray) and values_by_name == {}:
+            return super().__new__(cls, input_array, input_array.param_info)
+        
+        elif isinstance(input_array, NSArray) and values_by_name == {}:
+            return input_array.copy()
+        
+        elif values_by_name == {}:
+            raise ValueError("value_by_name shouldn't be empty unless your input "
+            "array is a float number.")
+        
+        elif isinstance(input_array, list | np.ndarray | range):
+            # set value to be range(dim) when it is None
+            for idx, (key, val) in enumerate(values_by_name.items()):
+                if val is None:
+                    values_by_name[key] = range(input_array.shape[idx])
+
+            input_array = np.array(input_array)
+            data_shape = np.array(input_array.shape)
+            name_shape = np.array([len(val) for val in values_by_name.values()])
+            if len(data_shape) != len(name_shape):
+                raise ValueError(f"Dimension of the input_array ({len(data_shape)}) doesn't match with the "
+                    f"length of named slots ({len(name_shape)})")
+            if (data_shape != name_shape).any():
+                raise ValueError(f"Shape of the input_array {data_shape} doesn't match with the "
+                    f"shape indicated by the named slots {name_shape}")
+            
+            ndarray_values_by_name = dict(zip(
+                values_by_name.keys(),
+                [np.array(val) for val in values_by_name.values()]
+            ))          # without this value-based slicing won't work
+
+            return super().__new__(cls, input_array, ndarray_values_by_name)
+    
+        else:
+            raise ValueError(f"Your input data is incompatible.")
 
     def __getitem__(self, index):
         if isinstance(index, dict):
             regular_index = []
             for key in self.param_info.keys():
                 try:
-                    regular_index.append(index[key])
+                    idx = index[key]
                 except KeyError:
-                    regular_index.append(slice(None))
+                    idx = slice(None)
+
+                if isinstance(idx, np.ndarray):
+                    if idx.shape == tuple():
+                        idx = float(idx)
+
+                regular_index.append(idx)
+
             return super().__getitem__(tuple(regular_index))
 
         return super().__getitem__(index)
@@ -106,6 +147,21 @@ class NSArray(NamedSlotsNdarray):
         Reshape breaks the structure of the naming method, return a normal ndarray
         """
         return np.array(super().reshape(*args, **kwargs))
+    
+    def transpose(self, axes = None):
+        transposed_data = np.array(super().transpose(axes))
+
+        if axes is None:
+            dim = len(self.shape)
+            axes = np.linspace(0, dim-1, dim, dtype=int)[::-1]
+
+        transposed_param_info = {}
+        key_list = list(self.param_info.keys())
+        for dim_idx in axes:
+            key = key_list[dim_idx]
+            transposed_param_info[key] = self.param_info[key]
+
+        return NSArray(transposed_data, transposed_param_info)
 
 
 def nd_interpolation(
@@ -138,6 +194,33 @@ def nd_interpolation(
 
     return interp
 
+def scatter_to_mesh(
+    x_data, y_data, z_data, 
+    x_remeshed=None, y_remeshed=None
+):
+    """
+    x_data, y_data, z_data should all be in the same shape. 
+    """
+    x_ravel = np.array(x_data).reshape(-1)
+    y_ravel = np.array(y_data).reshape(-1)
+    z_ravel = np.array(z_data).reshape(-1)
+
+    val_not_nan = list(np.logical_not(np.isnan(z_ravel)))
+
+    input_xy = np.transpose([
+        x_ravel[val_not_nan],
+        y_ravel[val_not_nan]
+    ])
+    interp = LinearNDInterpolator(
+        input_xy,
+        z_ravel[val_not_nan],
+    )
+
+    if x_remeshed is not None and y_remeshed is not None:
+        data = interp(x_remeshed, y_remeshed)
+        return interp, data
+    else:
+        return interp
 
 def merge_sort(arr: Union[List, np.ndarray], ascent: bool = True) -> np.ndarray:
     """

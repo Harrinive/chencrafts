@@ -1,9 +1,11 @@
 import time
 import os
 
+import dill
 import numpy as np
 import pandas as pd
 
+from typing import Any
 
 def datetime_dir(
     save_dir="./",
@@ -28,7 +30,7 @@ def datetime_dir(
     if not os.path.exists(current_date_dir):
         os.mkdir(current_date_dir)
 
-    print(f"Current save directory: {current_date_dir}")
+    print(f"Current datetime directory: {current_date_dir}")
     return current_date_dir
 
 def save_variable_dict(file_name, variable_dict):
@@ -77,3 +79,18 @@ def load_variable_list_dict(file_name, throw_nan=True, orient='columns'):
         new_val = new_val[~np.isnan(val)]
         variable_list_dict[key] = new_val
     return variable_list_dict
+
+def dill_dump(obj: Any, filename: str) -> None:
+    filename = os.path.normpath(filename)
+    file = open(filename, "wb")
+    dill.dump(obj, file)
+    file.close()
+
+def dill_load(filename: str) -> Any:
+    filename = os.path.normpath(filename)
+    file = open(filename, "rb")
+    obj = dill.load(file)
+    file.close()
+
+    return obj
+

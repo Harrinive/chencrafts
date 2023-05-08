@@ -24,7 +24,7 @@ from chencrafts.toolbox.save import (
     save_variable_dict,
     load_variable_dict,
 )
-from chencrafts.toolbox.plot import IntCmap, filter
+from chencrafts.toolbox.plot import Cmap, filter
 
 
 # ##############################################################################
@@ -121,7 +121,7 @@ class OptTraj():
 
     @property
     def final_full_para(self) -> Dict[str, float]:
-        return self._x_arr_2_dict(self.para_traj[-1, :]) | self.fixed_para
+        return self.fixed_para | self._x_arr_2_dict(self.para_traj[-1, :])
 
     @property
     def init_para(self, full=False) -> Dict[str, float]:
@@ -129,7 +129,7 @@ class OptTraj():
 
     @property
     def init_full_para(self) -> Dict[str, float]:
-        return self._x_arr_2_dict(self.para_traj[0, :]) | self.fixed_para
+        return self.fixed_para | self._x_arr_2_dict(self.para_traj[0, :])
 
     @property
     def final_target(self) -> float:
@@ -306,17 +306,20 @@ class MultiTraj():
                 fixed_para_file_name=f"{path}/fixed.csv"
             )
 
-    def best_traj(self, select_num=1) -> OptTraj | MultiTraj:
+    def sort_traj(self, select_num=1) -> MultiTraj:
+        if select_num > self.length:
+            raise ValueError(f"Do not have enough data to sort. ")
+
         sort = np.argsort(self._target_list())
         new_traj = MultiTraj()
         for sorted_idx in range(select_num):
             idx = int(sort[sorted_idx])
             new_traj.append(self[idx])
 
-        if select_num == 1:
-            return new_traj[0]
-        else:
-            return new_traj
+        return new_traj
+    
+    def best_traj(self) -> OptTraj:
+        return self.sort_traj(1)[0]
 
     def plot_target(self, ax=None, ylim=()):
         need_show = False
@@ -324,8 +327,8 @@ class MultiTraj():
             fig, ax = plt.subplots(1, 1, figsize=(3, 2.5), dpi=150)
             need_show = True
 
-        best = self.best_traj()
-        cmap = IntCmap(self.length)
+        best = self.sort_traj()
+        cmap = Cmap(self.length)
         for idx, traj in enumerate(self.traj_list):
             if traj == best:
                 filter_name = "emph"
@@ -368,14 +371,15 @@ class Optimization():
         target_func: Callable,
         target_kwargs: dict = {},
         optimizer: str = "L-BFGS-B",
+        opt_options: dict = {},
     ):
         """
         The target function should be like: 
         target_func(full_variable_dict, **kwargs)  
         Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, bayesian optimization
         """
-        self.fixed_variables = fixed_variables
-        self.free_variables = free_variable_ranges
+        self.fixed_variables = fixed_variables.copy()
+        self.free_variables = free_variable_ranges.copy()
         self._update_free_name_list()
 
         # the value stored in self.default_variables is dynamic - it is always
@@ -390,6 +394,7 @@ class Optimization():
         self.optimizer = optimizer
         assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell",
                                   "shgo", "differential evolution", "bayesian optimization"]
+        self.opt_options = opt_options
 
     def _update_free_name_list(self):
         self.free_name_list = list(self.free_variables.keys())
@@ -459,9 +464,9 @@ class Optimization():
     ):
         self._check_exist(variable)
 
-        if variable in self.free_variables():
+        if variable in self.free_variables:
             self.free_variables[variable] = range
-        elif variable in self.fixed_variables():
+        elif variable in self.fixed_variables:
             self.free_variables[variable] = range
             del self.fixed_variables[variable]
 
@@ -573,7 +578,7 @@ class Optimization():
         init_x: dict = {},
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
-        check_kwargs: dict = {}
+        check_kwargs: dict = {},
     ):
         """
         If not specifying the initial x, a random x within range will be used.  
@@ -629,7 +634,7 @@ class Optimization():
                 bounds=opt_bounds,
                 callback=opt_call_back,
                 method=self.optimizer,
-                # options={"maxls": 20}
+                options=self.opt_options,
             )
         elif self.optimizer == "shgo":
             scipy_res = shgo(
@@ -674,15 +679,24 @@ class MultiOpt():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
+        save_path: str = None,
     ):
         multi_result = MultiTraj()
         for _ in tqdm(range(run_num)):
-            result = self.optimize.run(
-                init_x={},
-                call_back=call_back,
-                check_func=check_func,
-                check_kwargs=check_kwargs,
-            )
+
+            try: 
+                result = self.optimize.run(
+                    init_x={},
+                    call_back=call_back,
+                    check_func=check_func,
+                    check_kwargs=check_kwargs,
+                )
+            except ValueError as e:
+                print(f"Capture a ValueError from optimization: {e}")
+                continue
+
             multi_result.append(result)
+            if save_path is not None:
+                multi_result.save(save_path)
 
         return multi_result
