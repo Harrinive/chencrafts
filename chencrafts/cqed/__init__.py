@@ -2,6 +2,7 @@ from chencrafts.cqed.pulses import (
     Sinusoidal,
     Gaussian, 
     DRAGGaussian,
+    Interpolated,
 )
 
 from chencrafts.cqed.scq_helper import (

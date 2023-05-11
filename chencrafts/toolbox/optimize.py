@@ -580,6 +580,7 @@ class Optimization():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
+        print_scipy_result: bool = True,
     ):
         """
         If not specifying the initial x, a random x within range will be used.  
@@ -667,6 +668,8 @@ class Optimization():
         if not scipy_res.success:
             warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x}")
 
+        if print_scipy_result:
+            print(scipy_res)
 
         return result
 
@@ -695,6 +698,7 @@ class MultiOpt():
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
+                    print_scipy_result=False,
                 )
             except ValueError as e:
                 print(f"Capture a ValueError from optimization: {e}")
