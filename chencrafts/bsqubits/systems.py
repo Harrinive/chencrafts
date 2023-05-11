@@ -215,6 +215,8 @@ class ResonatorFluxonium(JointSystems):
         Parameters are set randomly and should be determined in the FlexibleSweep.para and 
         FlexibleSweep.swept_para.
         """
+        super().__init__(sim_para, para)
+        
         # HilbertSpace
         self.res = scq.Oscillator(
             E_osc = para.get("E_osc_GHz", 5),

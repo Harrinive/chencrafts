@@ -375,9 +375,20 @@ class Optimization():
         opt_options: dict = {},
     ):
         """
-        The target function should be like: 
+        Optimize using a wrapper for `scipy.minimize`. Different from the original minimizer, 
+        the cost function should take a dictionary as input. The dictionary contains the 
+        parameters passed from the optimizer. 
+
+        Fixed variables and the range for free variables should be specified in the 
+        initialization of the `Optimization` class. During optimization, the class will pass
+        both of the fixed and free variables to the target function as a dictonary. 
+        Also, target_kwargs will be passed to the target function as keyword arguments.
+
+        So, the target function should be of the form: 
         target_func(full_variable_dict, **kwargs)  
-        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, bayesian optimization
+
+        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, 
+        bayesian optimization
         """
         self.fixed_variables = fixed_variables.copy()
         self.free_variables = free_variable_ranges.copy()
@@ -580,6 +591,7 @@ class Optimization():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
+        print_scipy_result: bool = True,
     ):
         """
         If not specifying the initial x, a random x within range will be used.  
@@ -667,6 +679,8 @@ class Optimization():
         if not scipy_res.success:
             warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x}")
 
+        if print_scipy_result:
+            print(scipy_res)
 
         return result
 
@@ -695,6 +709,7 @@ class MultiOpt():
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
+                    print_scipy_result=False,
                 )
             except ValueError as e:
                 print(f"Capture a ValueError from optimization: {e}")

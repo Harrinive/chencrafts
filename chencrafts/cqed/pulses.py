@@ -1,8 +1,25 @@
 import numpy as np
 from scipy.integrate import odeint
+from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
 
 # ##############################################################################
 class PulseBase:
+    """
+    This class takes duration and the drive operator's matrix element as inputs. 
+    It'll by default use a square envelope. The drive amplitude will be automatically 
+    determined by 
+        rotation_angle / duration
+    and the envelope amplitude will be 
+        drive_amp / np.abs(tgt_mat_elem)
+    You can also specify the drive amplitude by setting pulse.env_amp or pulse.drive_amp. 
+    drive_amp is the overall coefficient of drive Hamiltonian (including the matrix element),
+    while env_amp does not include the matrix element. They are correlated and adjusted
+    simutaneously.
+
+    Users can also specify an arbitrary envelope function by setting
+    pulse.custom_envelope_I and pulse.custom_envelope_Q.
+    """
     def __init__(
         self,
         base_angular_freq: float,
@@ -11,41 +28,116 @@ class PulseBase:
         tgt_mat_elem: float, 
         init_time: float = 0,
     ) -> None:
+        """
+        Parameters
+        ----------
+        base_angular_freq : float
+            The angular frequency of the desired transitions of the undriven Hamiltonian.
+        duration : float
+            The duration of the pulse.
+        rotation_angle : float
+            The desired rotation angle that the pulse want to achieve.
+        tgt_mat_elem : float
+            The matrix element of the drive operator for the transition.
+        init_time : float, optional
+            The initial time of the pulse, by default 0.
+
+        """
         self.base_angular_freq = base_angular_freq
         self.duration = duration
         self.rotation_angle = rotation_angle
         self.tgt_mat_elem = tgt_mat_elem
         self.init_time = init_time
 
-        self.drive_amp = rotation_angle / duration 
-        self.env_amp = self.drive_amp / np.abs(tgt_mat_elem)
+        self._drive_amp = rotation_angle / duration 
+        self._env_amp = self._drive_amp / np.abs(tgt_mat_elem)
         self.drive_freq = self.base_angular_freq
 
-        self.custom_envelope = None
+        self.custom_envelope_I = None
+        self.custom_envelope_Q = None
 
-    def envelope(self, t):
+    @property
+    def env_amp(self):
+        return self._env_amp
+    
+    @env_amp.setter
+    def env_amp(self, new_env_amp):
+        self._env_amp = new_env_amp
+        self._drive_amp = self._env_amp * np.abs(self.tgt_mat_elem)
+
+    @property
+    def drive_amp(self):
+        return self._drive_amp
+    
+    @drive_amp.setter
+    def drive_amp(self, new_drive_amp):
+        self._drive_amp = new_drive_amp
+        self._env_amp = self._drive_amp / np.abs(self.tgt_mat_elem)
+
+    def envelope_I(self, t):
         """Only support scalar t"""
         self._check_input_t(t)
 
-        if self.custom_envelope is not None:
-            return self.custom_envelope(t)
+        if self.custom_envelope_I is not None:
+            return self.custom_envelope_I(t)
 
-        return self.env_amp
+        return self._env_amp
+    
+    def envelope_Q(self, t):
+        """Only support scalar t"""
+        self._check_input_t(t)
+
+        if self.custom_envelope_Q is not None:
+            return self.custom_envelope_Q(t)
+
+        return 0
         
     def __call__(self, t) -> float:
         """Only support scalar t"""
         self._check_input_t(t)
 
-        env = self.envelope(t)
+        env_I = self.envelope_I(t)
+        env_Q = self.envelope_Q(t)
         t_bias = t - self.init_time
-        return env * np.cos(self.drive_freq * t_bias)
+        return env_I * np.cos(self.drive_freq * t_bias) \
+            + env_Q * np.sin(self.drive_freq * t_bias)
 
     def _check_input_t(self, t):
         if not isinstance(t, float | int):
             raise TypeError("The input time should be a 0d number")
 
+    def plot(self, t_list = None, env_only = False, ax=None):
+        if t_list is None:
+            t_list = np.linspace(self.init_time, self.init_time + self.duration, 100)
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        if not env_only:
+            ax.plot(t_list, [self(t) for t in t_list])
+        ax.plot(t_list, [self.envelope_I(t) for t in t_list], label = "I")
+        ax.plot(t_list, [self.envelope_Q(t) for t in t_list], label = "Q")
+
+        ax.legend()
+
+        return ax        
+
 # ##############################################################################
 class Sinusoidal(PulseBase):
+    """
+    This class takes duration and the drive operator's matrix element as inputs. 
+    It'll by default use a square envelope. The drive amplitude will be automatically 
+    determined by 
+        rotation_angle / duration / np.abs(tgt_mat_elem)
+
+    You can also specify the drive amplitude by setting pulse.env_amp or pulse.drive_amp. 
+    drive_amp is the overall coefficient of drive Hamiltonian (including the matrix element),
+    while env_amp does not include the matrix element. They are correlated and adjusted
+    simutaneously.
+
+    Users can also specify an arbitrary envelope function by setting
+    pulse.custom_envelope_I and pulse.custom_envelope_Q.
+    """
     def __init__(
         self,
         base_angular_freq: float,
@@ -64,9 +156,27 @@ class Sinusoidal(PulseBase):
         )
 
         # modify the drive freq with the Bloch–Siegert shift
-        if with_freq_shift:
-            self.freq_shift = self.drive_amp**2 / self.base_angular_freq / 4
-            self.drive_freq = self.base_angular_freq - self.freq_shift * 1
+        self.with_freq_shift = with_freq_shift
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+
+    def _bloch_siegert_shift(self):
+        if self.with_freq_shift:
+            freq_shift = self._drive_amp**2 / self.base_angular_freq / 4
+            return freq_shift
+        else:
+            return 0
+    
+    @PulseBase.drive_amp.setter
+    def drive_amp(self, new_drive_amp):
+        super(Sinusoidal, Sinusoidal).drive_amp.__set__(self, new_drive_amp)
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+
+    @PulseBase.env_amp.setter
+    def env_amp(self, new_env_amp):
+        super(Sinusoidal, Sinusoidal).env_amp.__set__(self, new_env_amp)
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+
+
 
 # ##############################################################################
 def _gaussian_function(t, t_mid, sigma, amp=1):
@@ -87,6 +197,10 @@ def _gaussian_mean_amp(duration, sigma):
     return mean_amp_scale
 
 class Gaussian(PulseBase):
+    """
+    Pulse with Gaussian envelope. The drive amplitude will be automatically
+    determined using the rotation_angle, duration and sigma.
+    """
     def __init__(
         self, 
         base_angular_freq: float, 
@@ -95,6 +209,7 @@ class Gaussian(PulseBase):
         rotation_angle: float = np.pi, 
         tgt_mat_elem: float = 1.0,
         init_time: float = 0,
+        with_freq_shift: bool = True,
     ) -> None:
         super().__init__(
             base_angular_freq, 
@@ -109,31 +224,43 @@ class Gaussian(PulseBase):
 
         # evaluate the effective pulse amplitude
         mean_amp_scale = _gaussian_mean_amp(duration, sigma)
-        self.drive_amp = self.rotation_angle / mean_amp_scale / self.duration
-        self.env_amp = self.drive_amp / np.abs(tgt_mat_elem)
+        self._drive_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self._env_amp = self._drive_amp / np.abs(tgt_mat_elem)
 
         # set envelope to be 0 at the beginning and the end
-        self.env_bias = _gaussian_function(0, self.duration/2, sigma, self.env_amp)
+        self.env_bias = _gaussian_function(0, self.duration/2, sigma, self._env_amp)
 
         # Bloch–Siegert shift
-        sine_drive_amp = self.rotation_angle / self.duration
-        self.freq_shift = (sine_drive_amp)**2 / self.base_angular_freq / 4
-        self.drive_freq = self.base_angular_freq - self.freq_shift
+        self.with_freq_shift = with_freq_shift
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
 
-        self.custom_envelope = None
+    def _bloch_siegert_shift(self):
+        if self.with_freq_shift:
+            sine_drive_amp = self.rotation_angle / self.duration
+            freq_shift = (sine_drive_amp)**2 / self.base_angular_freq / 4
+            return freq_shift
+        else:
+            return 0
+        
+    @PulseBase.drive_amp.setter
+    def drive_amp(self, new_drive_amp):
+        super(Gaussian, Gaussian).drive_amp.__set__(self, new_drive_amp)
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
 
-    def envelope(self, t):
+    @PulseBase.env_amp.setter
+    def env_amp(self, new_env_amp):
+        super(Gaussian, Gaussian).env_amp.__set__(self, new_env_amp)
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+
+    def envelope_I(self, t):
         """Only support scalar t"""
         self._check_input_t(t)
-
-        if self.custom_envelope is not None:
-            return self.custom_envelope(t)
 
         return _gaussian_function(
             t,
             self.t_mid,
             self.sigma,
-            self.env_amp
+            self._env_amp
         ) - self.env_bias
         
 
@@ -187,7 +314,7 @@ class DRAGGaussian(PulseBase):
         base_angular_freq: float, 
         duration: float, 
         sigma: float, 
-        non_lin: float = 0, 
+        non_lin: float = np.inf, 
         order: int = 5,
         rotation_angle: float = np.pi, 
         tgt_mat_elem: float = 1, 
@@ -220,12 +347,23 @@ class DRAGGaussian(PulseBase):
 
         # evaluate the effective pulse amplitude
         mean_amp_scale = _gaussian_mean_amp(duration, sigma)
-        self.drive_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self._drive_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self._env_amp = self._drive_amp / np.abs(tgt_mat_elem)
 
         # set envelope to be 0 at the beginning and the end
-        self.drive_env_bias = _gaussian_function(0, self.duration/2, sigma, self.drive_amp)
+        self._env_bias = _gaussian_function(0, self.duration/2, sigma, self._env_amp)
 
         self.reset()
+
+    @PulseBase.env_amp.setter
+    def env_amp(self, new_drive_amp):
+        super(DRAGGaussian, DRAGGaussian).env_amp.__set__(self, new_drive_amp)
+        self._env_bias = _gaussian_function(0, self.duration/2, self.sigma, self._env_amp)
+
+    @PulseBase.drive_amp.setter
+    def drive_amp(self, new_drive_amp):
+        super(DRAGGaussian, DRAGGaussian).drive_amp.__set__(self, new_drive_amp)
+        self._env_bias = _gaussian_function(0, self.duration/2, self.sigma, self._env_amp)
 
     def reset(self):
         self.t_n_phase = [self.init_time, 0]
@@ -235,7 +373,7 @@ class DRAGGaussian(PulseBase):
         if not isinstance(t, float):
             raise TypeError("The input time should be a float")
 
-        eps_pi_2 = (_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias)**2
+        eps_pi_2 = (_gaussian_function(t, self.t_mid, self.sigma, self._env_amp) - self._env_bias)**2
         detuning = (self.leaking_elem_ratio**2 - 4) / (4 * self.non_lin) * eps_pi_2
         if self.order == 5:
             detuning -= (self.leaking_elem_ratio**4 - 7*self.leaking_elem_ratio**2 + 12) \
@@ -254,30 +392,96 @@ class DRAGGaussian(PulseBase):
 
         return phase
 
-    def envelope(self, t):
+    def envelope_I(self, t):
         """Only support scalar t"""
         self._check_input_t(t)
 
-        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) - self.drive_env_bias
-        eps_pi_dot = -_gaussian_function(t, self.t_mid, self.sigma, self.drive_amp) * (t - self.t_mid) / self.sigma**2
+        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self._env_amp) - self._env_bias
 
         eps_x = eps_pi
-        eps_y = - eps_pi_dot / self.non_lin
         if self.order == 5:
             eps_x += (
                 + (self.leaking_elem_ratio**2 - 4) / (8 * self.non_lin**2) * eps_pi**3
                 - (13*self.leaking_elem_ratio**4 - 76*self.leaking_elem_ratio**2 + 112) / (128*self.non_lin**4) * eps_pi**5
             )
+
+        return eps_x
+    
+    def envelope_Q(self, t):
+        """Only support scalar t"""
+        self._check_input_t(t)
+
+        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self._env_amp) - self._env_bias
+        eps_pi_dot = -_gaussian_function(t, self.t_mid, self.sigma, self._env_amp) * (t - self.t_mid) / self.sigma**2
+
+        eps_y = - eps_pi_dot / self.non_lin
+        if self.order == 5:
             eps_y += 33*(self.leaking_elem_ratio**2 - 2) / (24*self.non_lin**3) * eps_pi**2 * eps_pi_dot
 
-        return eps_x, eps_y
+        return eps_y
 
-    
     def __call__(self, t, *args, **kwargs):
         """Only support scalar t"""
         self._check_input_t(t)
 
         phase = self.phase(t)
-        eps_x, eps_y = self.envelope(t)
+        eps_x = self.envelope_I(t)
+        eps_y = self.envelope_Q(t)
 
-        return (eps_x * np.cos(phase) + eps_y * np.sin(phase)) / np.abs(self.tgt_mat_elem)
+        return (eps_x * np.cos(phase) + eps_y * np.sin(phase))
+
+
+# ##############################################################################
+class Interpolated(PulseBase):
+    def __init__(
+        self, 
+        base_angular_freq: float, 
+        duration: float, 
+        # rotation_angle: float, 
+        # tgt_mat_elem: float, 
+        init_time: float = 0,
+        I_data: np.ndarray = np.array([1, 1]),
+        Q_data: np.ndarray = np.array([1, 1]),
+        interpolation_mode: str = "linear",
+    ) -> None:
+        """
+        Pulse with envelope interpolated from the given data points for I and Q. 
+        The data points should includes the initial and final points.
+
+        Parameters
+        ----------
+        interpolation_mode : str
+            The mode of interpolation. Can be "linear", "nearest", "zero", "slinear",
+            See scipy.interpolate.interp1d for details. 
+        
+        """
+        super().__init__(
+            base_angular_freq, 
+            duration, 
+            np.pi,  # useless
+            1,      # useless
+            init_time,
+        )
+        
+        self.interpolation_mode = interpolation_mode
+
+        self.I_t_list = np.linspace(self.init_time, self.init_time + self.duration, len(I_data))
+        self.Q_t_list = np.linspace(self.init_time, self.init_time + self.duration, len(Q_data))
+        self.I_data = I_data
+        self.Q_data = Q_data
+        self.I_func = self._points_to_func(self.I_t_list, self.I_data)
+        self.Q_func = self._points_to_func(self.Q_t_list, self.Q_data)
+
+    def envelope_I(self, t):
+        return self.I_func(t)
+    
+    def envelope_Q(self, t):
+        return self.Q_func(t)
+
+    def _points_to_func(self, t_list, data):
+        return interp1d(
+            t_list,
+            data,
+            kind = self.interpolation_mode,
+            fill_value = "extrapolate",
+        )
