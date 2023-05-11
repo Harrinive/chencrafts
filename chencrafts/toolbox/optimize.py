@@ -375,9 +375,20 @@ class Optimization():
         opt_options: dict = {},
     ):
         """
-        The target function should be like: 
+        Optimize using a wrapper for `scipy.minimize`. Different from the original minimizer, 
+        the cost function should take a dictionary as input. The dictionary contains the 
+        parameters passed from the optimizer. 
+
+        Fixed variables and the range for free variables should be specified in the 
+        initialization of the `Optimization` class. During optimization, the class will pass
+        both of the fixed and free variables to the target function as a dictonary. 
+        Also, target_kwargs will be passed to the target function as keyword arguments.
+
+        So, the target function should be of the form: 
         target_func(full_variable_dict, **kwargs)  
-        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, bayesian optimization
+
+        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, 
+        bayesian optimization
         """
         self.fixed_variables = fixed_variables.copy()
         self.free_variables = free_variable_ranges.copy()
