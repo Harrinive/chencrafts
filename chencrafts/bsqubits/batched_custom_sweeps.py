@@ -128,15 +128,15 @@ def batched_sweep_purcell_cats(
     def cat_x(basis, disp):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
-        return cat(basis, [(1, disp), (1, -disp), (1, 1j * disp), (1, -1j * disp)])
+        return cat([(1, disp), (1, -disp), (1, 1j * disp), (1, -1j * disp)], basis)
     def cat_y(basis, disp):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
-        return cat(basis, [(1, disp), (1, -disp), (1j, 1j * disp), (1j, -1j * disp)])
+        return cat([(1, disp), (1, -disp), (1j, 1j * disp), (1j, -1j * disp)], basis)
     def cat_z(basis, disp):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
-        return cat(basis, [(1, disp), (1, -disp)])
+        return cat([(1, disp), (1, -disp)], basis)
     
     sweep.add_sweep(
         sweep_purcell_factor, "purcell_factor_x",

@@ -50,10 +50,25 @@ def coherent(basis: List[qt.Qobj], alpha: float) -> qt.Qobj:
     coef = coherent_coef_list(available_dim, alpha)
     return sum_of_basis(available_ket, coef)
 
-def cat(basis: List[qt.Qobj], phase_disp_pair: List[Tuple[complex, complex]]) -> qt.Qobj:
+def cat(phase_disp_pair: List[Tuple[complex, complex]], basis: List[qt.Qobj] | None = None) -> qt.Qobj:
     """
-    phase_disp_pair for a two-legged cat: [(1, alpha), (1, -alpha)]
+    Return a cat state with given phase and displacement.
+
+    Parameters
+    ----------
+    phase_disp_pair
+        for a two-legged cat: [(1, alpha), (1, -alpha)]
+
+    basis
+        [ket0, ket1, ket2, ...]. If None, use Fock basis.
     """
+    if basis is None:
+        disp_list = [disp for phase, disp in phase_disp_pair]
+        max_disp = np.max(np.abs(disp_list))
+        max_n = int(max_disp**2 + 5 * max_disp)
+
+        basis = [qt.fock(max_n, n) for n in range(max_n)]
+
     dims = basis[0].dims
     N = np.prod(np.array(dims))
     state = qt.zero_ket(N, dims=dims)

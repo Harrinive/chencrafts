@@ -36,7 +36,7 @@ def sample_from_range(range_dict: Dict) -> Dict[float]:
     return new_dict
 
 # ##############################################################################
-TARGET_NORMALIZE = 1e-7
+TARGET_NORMALIZE = 1
 
 def nan_2_flat_val(full_variables, possible_nan_value):
     """
@@ -598,11 +598,14 @@ class Optimization():
         Call back function: call_back(full_dict, target, constr)  
         Check legal initialization func: check_func(full_dict, **check_kwargs)
         """
-        if init_x == {}:
-            init_x = self.opt_init(check_func=check_func,
-                                   check_kwargs=check_kwargs)
+        init_x_random = self.opt_init(
+            check_func=check_func,
+            check_kwargs=check_kwargs
+        )
+        init_x_combined = init_x_random | init_x
+        
 
-        init_x_arr = self._x_dict_2_arr(self._normalize_input(init_x))
+        init_x_arr = self._x_dict_2_arr(self._normalize_input(init_x_combined))
 
         def evaluate_record(x):
             x_dict = self._x_arr_2_dict(x)
@@ -677,7 +680,7 @@ class Optimization():
         #     )
 
         if not scipy_res.success:
-            warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x}")
+            warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x_combined}")
 
         if print_scipy_result:
             print(scipy_res)
