@@ -27,6 +27,7 @@ class PulseBase:
         rotation_angle: float,
         tgt_mat_elem: float, 
         init_time: float = 0,
+        init_phase: float = 0,
     ) -> None:
         """
         Parameters
@@ -55,6 +56,8 @@ class PulseBase:
 
         self.custom_envelope_I = None
         self.custom_envelope_Q = None
+
+        self.init_phase = init_phase
 
     @property
     def env_amp(self):
@@ -91,6 +94,14 @@ class PulseBase:
             return self.custom_envelope_Q(t)
 
         return 0
+
+    def phase(self, t):
+        """Only support scalar t"""
+        self._check_input_t(t)
+
+        t_bias = t - self.init_time
+        phase = self.drive_freq * t_bias + self.init_phase
+        return phase
         
     def __call__(self, t) -> float:
         """Only support scalar t"""
@@ -98,9 +109,9 @@ class PulseBase:
 
         env_I = self.envelope_I(t)
         env_Q = self.envelope_Q(t)
-        t_bias = t - self.init_time
-        return env_I * np.cos(self.drive_freq * t_bias) \
-            + env_Q * np.sin(self.drive_freq * t_bias)
+        phase = self.phase(t)
+
+        return env_I * np.cos(phase) + env_Q * np.sin(phase)
 
     def _check_input_t(self, t):
         if not isinstance(t, float | int):
@@ -145,6 +156,7 @@ class Sinusoidal(PulseBase):
         rotation_angle: float = np.pi,
         tgt_mat_elem: float = 1.0, 
         init_time: float = 0,
+        init_phase: float = 0,
         with_freq_shift: bool = True,
     ) -> None:
         super().__init__(
@@ -153,6 +165,7 @@ class Sinusoidal(PulseBase):
             rotation_angle,
             tgt_mat_elem, 
             init_time,
+            init_phase,
         )
 
         # modify the drive freq with the Bloch–Siegert shift
@@ -209,6 +222,7 @@ class Gaussian(PulseBase):
         rotation_angle: float = np.pi, 
         tgt_mat_elem: float = 1.0,
         init_time: float = 0,
+        init_phase: float = 0,
         with_freq_shift: bool = True,
     ) -> None:
         super().__init__(
@@ -217,6 +231,7 @@ class Gaussian(PulseBase):
             rotation_angle, 
             tgt_mat_elem,
             init_time,
+            init_phase,
         )
 
         self.sigma = sigma
@@ -320,6 +335,7 @@ class DRAGGaussian(PulseBase):
         tgt_mat_elem: float = 1, 
         leaking_mat_elem: float = np.sqrt(2), 
         init_time: float = 0,
+        init_phase: float = 0,
     ) -> None:
         
         if order != 2 and order != 5:
@@ -337,6 +353,7 @@ class DRAGGaussian(PulseBase):
             rotation_angle, 
             tgt_mat_elem, 
             init_time,
+            init_phase,
         )
 
         self.sigma = sigma
@@ -366,7 +383,7 @@ class DRAGGaussian(PulseBase):
         self._env_bias = _gaussian_function(0, self.duration/2, self.sigma, self._env_amp)
 
     def reset(self):
-        self.t_n_phase = [self.init_time, 0]
+        self.t_n_phase = [self.init_time, self.init_phase]
 
     def drive_freq_func(self, t, *args):
         """Only support scalar t"""
@@ -419,17 +436,7 @@ class DRAGGaussian(PulseBase):
             eps_y += 33*(self.leaking_elem_ratio**2 - 2) / (24*self.non_lin**3) * eps_pi**2 * eps_pi_dot
 
         return eps_y
-
-    def __call__(self, t, *args, **kwargs):
-        """Only support scalar t"""
-        self._check_input_t(t)
-
-        phase = self.phase(t)
-        eps_x = self.envelope_I(t)
-        eps_y = self.envelope_Q(t)
-
-        return (eps_x * np.cos(phase) + eps_y * np.sin(phase))
-
+    
 
 # ##############################################################################
 class Interpolated(PulseBase):
@@ -440,6 +447,7 @@ class Interpolated(PulseBase):
         # rotation_angle: float, 
         # tgt_mat_elem: float, 
         init_time: float = 0,
+        init_phase: float = 0,
         I_data: np.ndarray = np.array([1, 1]),
         Q_data: np.ndarray = np.array([1, 1]),
         interpolation_mode: str = "linear",
@@ -461,6 +469,7 @@ class Interpolated(PulseBase):
             np.pi,  # useless
             1,      # useless
             init_time,
+            init_phase,
         )
         
         self.interpolation_mode = interpolation_mode
@@ -485,3 +494,11 @@ class Interpolated(PulseBase):
             kind = self.interpolation_mode,
             fill_value = "extrapolate",
         )
+    
+    def plot(self, t_list = None, env_only = False, ax=None):
+        ax = super().plot(t_list, env_only, ax)
+
+        ax.scatter(self.I_t_list, self.I_data, label = "I data")
+        ax.scatter(self.Q_t_list, self.Q_data, label = "Q data")
+
+        return ax
