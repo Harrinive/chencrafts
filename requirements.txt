@@ -4,3 +4,4 @@ scipy
 sympy
 tqdm
 pandas
+dill
