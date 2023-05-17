@@ -3,6 +3,8 @@ from scipy.integrate import odeint
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
+from typing import Tuple
+
 # ##############################################################################
 class PulseBase:
     """
@@ -131,7 +133,36 @@ class PulseBase:
 
         ax.legend()
 
-        return ax        
+        return ax 
+
+    def discretized_IQ(
+        self, 
+        time_steps: int | None = None
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Discretize the pulse into a list of I and Q values.
+
+        Parameters
+        ----------
+        time_steps : int, optional
+            The number of time steps to discretize the pulse, by default to be [0, 1, ..., duration]. 
+
+        Returns
+        -------
+        time_list, I_list, Q_list : np.ndarray
+            They are all 1d arrays of the same length.
+        """
+        if time_steps is None:
+            time_steps = int(self.duration)
+        t_list = np.linspace(self.init_time, self.init_time + self.duration, time_steps + 1)
+
+        # sample the middle point of each time interval
+        t_mid_list = t_list[:-1] + (t_list[1] - t_list[0]) / 2
+        I_list = np.array([self.envelope_I(t) for t in t_mid_list])
+        Q_list = np.array([self.envelope_Q(t) for t in t_mid_list])
+        
+        return t_list[:-1], I_list, Q_list
+
 
 # ##############################################################################
 class Sinusoidal(PulseBase):
@@ -148,6 +179,10 @@ class Sinusoidal(PulseBase):
 
     Users can also specify an arbitrary envelope function by setting
     pulse.custom_envelope_I and pulse.custom_envelope_Q.
+
+    Use the pulse object:
+        pulse(t) to get the pulse value at time t
+        pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
     """
     def __init__(
         self,
@@ -159,6 +194,24 @@ class Sinusoidal(PulseBase):
         init_phase: float = 0,
         with_freq_shift: bool = True,
     ) -> None:
+        """
+        Parameters
+        ----------
+        base_angular_freq : float
+            The angular frequency of the desired transitions of the undriven Hamiltonian.
+        duration : float
+            The duration of the pulse.
+        rotation_angle : float, optional
+            The desired rotation angle that the pulse want to achieve. By default np.pi.
+        tgt_mat_elem : float, optional
+            The matrix element of the drive operator for the transition. By default 1.0.
+        init_time : float, optional
+            The initial time of the pulse, by default 0.
+        init_phase : float, optional    
+            The initial phase of the pulse, by default 0.
+        with_freq_shift : bool, optional
+            Whether to include the Bloch–Siegert shift, by default True.
+        """
         super().__init__(
             base_angular_freq, 
             duration, 
@@ -213,6 +266,10 @@ class Gaussian(PulseBase):
     """
     Pulse with Gaussian envelope. The drive amplitude will be automatically
     determined using the rotation_angle, duration and sigma.
+
+    Use the pulse object:
+        pulse(t) to get the pulse value at time t
+        pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
     """
     def __init__(
         self, 
@@ -223,8 +280,29 @@ class Gaussian(PulseBase):
         tgt_mat_elem: float = 1.0,
         init_time: float = 0,
         init_phase: float = 0,
-        with_freq_shift: bool = True,
+        with_freq_shift: bool = False,
     ) -> None:
+        """
+        Parameters
+        ----------
+        base_angular_freq : float
+            The angular frequency of the desired transitions of the undriven Hamiltonian.
+        duration : float
+            The duration of the pulse.
+        sigma : float
+            The standard deviation of the Gaussian envelope.
+        rotation_angle : float, optional
+            The desired rotation angle that the pulse want to achieve. By default np.pi.
+        tgt_mat_elem : float, optional
+            The matrix element of the drive operator for the transition. By default 1.0.
+        init_time : float, optional
+            The initial time of the pulse, by default 0.    
+        init_phase : float, optional
+            The initial phase of the pulse, by default 0.
+        with_freq_shift : bool, optional    
+            Whether to include the Bloch-Siegert shift, by default True. Currently it's 
+            kind of inaccurate and don't use it!
+        """
         super().__init__(
             base_angular_freq, 
             duration, 
@@ -337,6 +415,30 @@ class DRAGGaussian(PulseBase):
         init_time: float = 0,
         init_phase: float = 0,
     ) -> None:
+        """
+        Parameters
+        ----------
+        base_angular_freq : float
+            The angular frequency of the desired transitions of the undriven Hamiltonian.
+        duration : float
+            The duration of the pulse.
+        sigma : float   
+            The standard deviation of the Gaussian envelope.
+        non_lin : float, optional
+            The non-linearity of the undriven hamiltonian. By default np.inf.
+        order : int, optional
+            The order of the DRAG correction. Can be 2 or 5. By default 5.
+        rotation_angle : float, optional
+            The desired rotation angle that the pulse want to achieve. By default np.pi.
+        tgt_mat_elem : float, optional
+            The matrix element of the drive operator for the transition. By default 1.0.
+        leaking_mat_elem : float, optional
+            The matrix element of the drive operator for the leaking transition. By default np.sqrt(2).
+        init_time : float, optional
+            The initial time of the pulse, by default 0.
+        init_phase : float, optional
+            The initial phase of the pulse, by default 0.
+        """
         
         if order != 2 and order != 5:
             raise ValueError(f"Currently the code only support order = 2 or 5!")
@@ -449,7 +551,7 @@ class Interpolated(PulseBase):
         init_time: float = 0,
         init_phase: float = 0,
         I_data: np.ndarray = np.array([1, 1]),
-        Q_data: np.ndarray = np.array([1, 1]),
+        Q_data: np.ndarray = np.array([0, 0]),
         interpolation_mode: str = "linear",
     ) -> None:
         """
@@ -458,10 +560,23 @@ class Interpolated(PulseBase):
 
         Parameters
         ----------
+        base_angular_freq : float
+            The angular frequency of the desired transitions of the undriven Hamiltonian.
+        duration : float
+            The duration of the pulse.
+        init_time : float, optional
+            The initial time of the pulse, by default 0.
+        init_phase : float, optional
+            The initial phase of the pulse, by default 0.
+        I_data : np.ndarray, optional
+            The data points for the I quadrature, should include the initial and final points.
+            By default it's np.array([1, 1]), indicating a square pulse with amplitude 1.
+        Q_data : np.ndarray, optional
+            The data points for the Q quadrature, should include the initial and final points.
+            By default it's np.array([0, 0]), indicating no Q quadrature.
         interpolation_mode : str
             The mode of interpolation. Can be "linear", "nearest", "zero", "slinear",
             See scipy.interpolate.interp1d for details. 
-        
         """
         super().__init__(
             base_angular_freq, 
