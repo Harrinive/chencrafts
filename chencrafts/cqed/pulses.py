@@ -13,10 +13,10 @@ class PulseBase:
     determined by 
         rotation_angle / duration
     and the envelope amplitude will be 
-        drive_amp / np.abs(tgt_mat_elem)
-    You can also specify the drive amplitude by setting pulse.env_amp or pulse.drive_amp. 
-    drive_amp is the overall coefficient of drive Hamiltonian (including the matrix element),
-    while env_amp does not include the matrix element. They are correlated and adjusted
+        rabi_amp / np.abs(tgt_mat_elem)
+    You can also specify the drive amplitude by setting pulse.drive_amp or pulse.rabi_amp. 
+    rabi_amp is the overall coefficient of drive Hamiltonian (including the matrix element),
+    while drive_amp does not include the matrix element. They are correlated and adjusted
     simutaneously.
 
     Users can also specify an arbitrary envelope function by setting
@@ -52,8 +52,8 @@ class PulseBase:
         self.tgt_mat_elem = tgt_mat_elem
         self.init_time = init_time
 
-        self._drive_amp = rotation_angle / duration 
-        self._env_amp = self._drive_amp / np.abs(tgt_mat_elem)
+        self._rabi_amp = rotation_angle / duration 
+        self._drive_amp = self._rabi_amp / np.abs(tgt_mat_elem)
         self.drive_freq = self.base_angular_freq
 
         self.custom_envelope_I = None
@@ -62,22 +62,22 @@ class PulseBase:
         self.init_phase = init_phase
 
     @property
-    def env_amp(self):
-        return self._env_amp
-    
-    @env_amp.setter
-    def env_amp(self, new_env_amp):
-        self._env_amp = new_env_amp
-        self._drive_amp = self._env_amp * np.abs(self.tgt_mat_elem)
-
-    @property
     def drive_amp(self):
         return self._drive_amp
     
     @drive_amp.setter
     def drive_amp(self, new_drive_amp):
         self._drive_amp = new_drive_amp
-        self._env_amp = self._drive_amp / np.abs(self.tgt_mat_elem)
+        self._rabi_amp = self._drive_amp * np.abs(self.tgt_mat_elem)
+
+    @property
+    def rabi_amp(self):
+        return self._rabi_amp
+    
+    @rabi_amp.setter
+    def rabi_amp(self, new_rabi_amp):
+        self._rabi_amp = new_rabi_amp
+        self._drive_amp = self._rabi_amp / np.abs(self.tgt_mat_elem)
 
     def envelope_I(self, t):
         """Only support scalar t"""
@@ -86,7 +86,7 @@ class PulseBase:
         if self.custom_envelope_I is not None:
             return self.custom_envelope_I(t)
 
-        return self._env_amp
+        return self._drive_amp
     
     def envelope_Q(self, t):
         """Only support scalar t"""
@@ -165,20 +165,20 @@ class PulseBase:
 
 
 # ##############################################################################
-class Sinusoidal(PulseBase):
+class GeneralPulse(PulseBase):
     """
-    This class takes duration and the drive operator's matrix element as inputs. 
-    It'll by default use a square envelope. The drive amplitude will be automatically 
-    determined by 
+    A class for generating a general pulse whose envelope can be customized. By 
+    default, it'll use a square envelope. Users can also specify an arbitrary envelope 
+    function by setting pulse.custom_envelope_I and pulse.custom_envelope_Q.
+    
+    When specifying a target matrix element and the desired rotation angle, the 
+    drive amplitude will be automatically determined by 
         rotation_angle / duration / np.abs(tgt_mat_elem)
 
-    You can also specify the drive amplitude by setting pulse.env_amp or pulse.drive_amp. 
-    drive_amp is the overall coefficient of drive Hamiltonian (including the matrix element),
-    while env_amp does not include the matrix element. They are correlated and adjusted
+    You can also specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+    rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+    while drive_amp does not include the matrix element. They are correlated and adjusted
     simutaneously.
-
-    Users can also specify an arbitrary envelope function by setting
-    pulse.custom_envelope_I and pulse.custom_envelope_Q.
 
     Use the pulse object:
         pulse(t) to get the pulse value at time t
@@ -195,6 +195,23 @@ class Sinusoidal(PulseBase):
         with_freq_shift: bool = True,
     ) -> None:
         """
+        A class for generating a general pulse whose envelope can be customized. By 
+        default, it'll use a square envelope. Users can also specify an arbitrary envelope 
+        function by setting pulse.custom_envelope_I and pulse.custom_envelope_Q.
+        
+        When specifying a target matrix element and the desired rotation angle, the 
+        drive amplitude will be automatically determined by 
+            rotation_angle / duration / np.abs(tgt_mat_elem)
+
+        You can also specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+        rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+        while drive_amp does not include the matrix element. They are correlated and adjusted
+        simutaneously.
+
+        Use the pulse object:
+            pulse(t) to get the pulse value at time t
+            pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+            
         Parameters
         ----------
         base_angular_freq : float
@@ -210,7 +227,7 @@ class Sinusoidal(PulseBase):
         init_phase : float, optional    
             The initial phase of the pulse, by default 0.
         with_freq_shift : bool, optional
-            Whether to include the Bloch–Siegert shift, by default True.
+            Whether to include the Bloch-Siegert shift, by default True.
         """
         super().__init__(
             base_angular_freq, 
@@ -227,21 +244,20 @@ class Sinusoidal(PulseBase):
 
     def _bloch_siegert_shift(self):
         if self.with_freq_shift:
-            freq_shift = self._drive_amp**2 / self.base_angular_freq / 4
+            freq_shift = self._rabi_amp**2 / self.base_angular_freq / 4
             return freq_shift
         else:
             return 0
     
+    @PulseBase.rabi_amp.setter
+    def rabi_amp(self, new_rabi_amp):
+        super(GeneralPulse, GeneralPulse).rabi_amp.__set__(self, new_rabi_amp)
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+
     @PulseBase.drive_amp.setter
     def drive_amp(self, new_drive_amp):
-        super(Sinusoidal, Sinusoidal).drive_amp.__set__(self, new_drive_amp)
+        super(GeneralPulse, GeneralPulse).drive_amp.__set__(self, new_drive_amp)
         self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
-
-    @PulseBase.env_amp.setter
-    def env_amp(self, new_env_amp):
-        super(Sinusoidal, Sinusoidal).env_amp.__set__(self, new_env_amp)
-        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
-
 
 
 # ##############################################################################
@@ -265,11 +281,17 @@ def _gaussian_mean_amp(duration, sigma):
 class Gaussian(PulseBase):
     """
     Pulse with Gaussian envelope. The drive amplitude will be automatically
-    determined using the rotation_angle, duration and sigma.
+    determined using the rotation_angle, duration and sigma. 
+
+    You can also specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+    rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+    while drive_amp does not include the matrix element. They are correlated and adjusted
+    simutaneously.
 
     Use the pulse object:
         pulse(t) to get the pulse value at time t
         pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+        Parameters
     """
     def __init__(
         self, 
@@ -283,7 +305,19 @@ class Gaussian(PulseBase):
         with_freq_shift: bool = False,
     ) -> None:
         """
-        Parameters
+        Pulse with Gaussian envelope. The drive amplitude will be automatically
+        determined using the rotation_angle, duration and sigma. 
+
+        You can also specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+        rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+        while drive_amp does not include the matrix element. They are correlated and adjusted
+        simutaneously.
+
+        Use the pulse object:
+            pulse(t) to get the pulse value at time t
+            pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+            Parameters
+        
         ----------
         base_angular_freq : float
             The angular frequency of the desired transitions of the undriven Hamiltonian.
@@ -317,11 +351,11 @@ class Gaussian(PulseBase):
 
         # evaluate the effective pulse amplitude
         mean_amp_scale = _gaussian_mean_amp(duration, sigma)
-        self._drive_amp = self.rotation_angle / mean_amp_scale / self.duration
-        self._env_amp = self._drive_amp / np.abs(tgt_mat_elem)
+        self._rabi_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self._drive_amp = self._rabi_amp / np.abs(tgt_mat_elem)
 
         # set envelope to be 0 at the beginning and the end
-        self.env_bias = _gaussian_function(0, self.duration/2, sigma, self._env_amp)
+        self.env_bias = _gaussian_function(0, self.duration/2, sigma, self._drive_amp)
 
         # Bloch–Siegert shift
         self.with_freq_shift = with_freq_shift
@@ -329,20 +363,20 @@ class Gaussian(PulseBase):
 
     def _bloch_siegert_shift(self):
         if self.with_freq_shift:
-            sine_drive_amp = self.rotation_angle / self.duration
-            freq_shift = (sine_drive_amp)**2 / self.base_angular_freq / 4
+            sine_rabi_amp = self.rotation_angle / self.duration
+            freq_shift = (sine_rabi_amp)**2 / self.base_angular_freq / 4
             return freq_shift
         else:
             return 0
         
+    @PulseBase.rabi_amp.setter
+    def rabi_amp(self, new_rabi_amp):
+        super(Gaussian, Gaussian).rabi_amp.__set__(self, new_rabi_amp)
+        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+
     @PulseBase.drive_amp.setter
     def drive_amp(self, new_drive_amp):
         super(Gaussian, Gaussian).drive_amp.__set__(self, new_drive_amp)
-        self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
-
-    @PulseBase.env_amp.setter
-    def env_amp(self, new_env_amp):
-        super(Gaussian, Gaussian).env_amp.__set__(self, new_env_amp)
         self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
 
     def envelope_I(self, t):
@@ -353,7 +387,7 @@ class Gaussian(PulseBase):
             t,
             self.t_mid,
             self.sigma,
-            self._env_amp
+            self._drive_amp
         ) - self.env_bias
         
 
@@ -466,23 +500,23 @@ class DRAGGaussian(PulseBase):
 
         # evaluate the effective pulse amplitude
         mean_amp_scale = _gaussian_mean_amp(duration, sigma)
-        self._drive_amp = self.rotation_angle / mean_amp_scale / self.duration
-        self._env_amp = self._drive_amp / np.abs(tgt_mat_elem)
+        self._rabi_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self._drive_amp = self._rabi_amp / np.abs(tgt_mat_elem)
 
         # set envelope to be 0 at the beginning and the end
-        self._env_bias = _gaussian_function(0, self.duration/2, sigma, self._env_amp)
+        self._env_bias = _gaussian_function(0, self.duration/2, sigma, self._drive_amp)
 
         self.reset()
 
-    @PulseBase.env_amp.setter
-    def env_amp(self, new_drive_amp):
-        super(DRAGGaussian, DRAGGaussian).env_amp.__set__(self, new_drive_amp)
-        self._env_bias = _gaussian_function(0, self.duration/2, self.sigma, self._env_amp)
-
     @PulseBase.drive_amp.setter
-    def drive_amp(self, new_drive_amp):
-        super(DRAGGaussian, DRAGGaussian).drive_amp.__set__(self, new_drive_amp)
-        self._env_bias = _gaussian_function(0, self.duration/2, self.sigma, self._env_amp)
+    def drive_amp(self, new_rabi_amp):
+        super(DRAGGaussian, DRAGGaussian).drive_amp.__set__(self, new_rabi_amp)
+        self._env_bias = _gaussian_function(0, self.duration/2, self.sigma, self._drive_amp)
+
+    @PulseBase.rabi_amp.setter
+    def rabi_amp(self, new_rabi_amp):
+        super(DRAGGaussian, DRAGGaussian).rabi_amp.__set__(self, new_rabi_amp)
+        self._env_bias = _gaussian_function(0, self.duration/2, self.sigma, self._drive_amp)
 
     def reset(self):
         self.t_n_phase = [self.init_time, self.init_phase]
@@ -492,7 +526,7 @@ class DRAGGaussian(PulseBase):
         if not isinstance(t, float):
             raise TypeError("The input time should be a float")
 
-        eps_pi_2 = (_gaussian_function(t, self.t_mid, self.sigma, self._env_amp) - self._env_bias)**2
+        eps_pi_2 = (_gaussian_function(t, self.t_mid, self.sigma, self._drive_amp) - self._env_bias)**2
         detuning = (self.leaking_elem_ratio**2 - 4) / (4 * self.non_lin) * eps_pi_2
         if self.order == 5:
             detuning -= (self.leaking_elem_ratio**4 - 7*self.leaking_elem_ratio**2 + 12) \
@@ -515,7 +549,7 @@ class DRAGGaussian(PulseBase):
         """Only support scalar t"""
         self._check_input_t(t)
 
-        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self._env_amp) - self._env_bias
+        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self._drive_amp) - self._env_bias
 
         eps_x = eps_pi
         if self.order == 5:
@@ -530,8 +564,8 @@ class DRAGGaussian(PulseBase):
         """Only support scalar t"""
         self._check_input_t(t)
 
-        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self._env_amp) - self._env_bias
-        eps_pi_dot = -_gaussian_function(t, self.t_mid, self.sigma, self._env_amp) * (t - self.t_mid) / self.sigma**2
+        eps_pi = _gaussian_function(t, self.t_mid, self.sigma, self._drive_amp) - self._env_bias
+        eps_pi_dot = -_gaussian_function(t, self.t_mid, self.sigma, self._drive_amp) * (t - self.t_mid) / self.sigma**2
 
         eps_y = - eps_pi_dot / self.non_lin
         if self.order == 5:

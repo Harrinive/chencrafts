@@ -1,5 +1,5 @@
 from chencrafts.cqed.pulses import (
-    Sinusoidal,
+    GeneralPulse,
     Gaussian, 
     DRAGGaussian,
     Interpolated,
