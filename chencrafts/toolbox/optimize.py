@@ -12,7 +12,7 @@ from scipy.optimize import (
 )
 # from robo.fmin import bayesian_optimization
 
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Any
 import warnings
 
 from tqdm.notebook import tqdm
@@ -29,7 +29,7 @@ from chencrafts.toolbox.plot import Cmap, filter
 
 
 # ##############################################################################
-def sample_from_range(range_dict: Dict) -> Dict[float]:
+def sample_from_range(range_dict: Dict[Any, List[float, float]]) -> Dict[Any, float]:
     new_dict = {}
     for key, (low, high) in range_dict.items():
         new_dict[key] = np.random.uniform(low, high)
@@ -62,6 +62,10 @@ def nan_2_flat_val(full_variables, possible_nan_value):
 
 # ##############################################################################
 class OptTraj():
+    """
+    A record of the optimization trajectory, includes the parameters, target, and constraints
+    at each iteration. You can save and load it using a csv file.
+    """
     def __init__(
         self,
         para_name: List[str],
@@ -70,6 +74,23 @@ class OptTraj():
         constr_traj: np.ndarray,
         fixed_para: Dict[str, float] = {},
     ):
+        """
+        Parameters
+        ----------
+        para_name : List[str]
+            The name of the parameters that changes during the optimization.
+        para_traj : np.ndarray
+            The trajectory of the parameters. The shape should be (iteration, para_num).
+        target_traj : np.ndarray
+            The trajectory of the target function evaluations. 
+            The shape should be (iteration, ).
+        constr_traj : np.ndarray
+            The trajectory of the constraint function evaluations.
+            The shape should be (iteration, ).
+        fixed_para : Dict[str, float], optional
+            The parameters that are fixed during the optimization. Should be specified by
+            a dictionary with name and value pairs, by default {}. 
+        """
         self.para_name = para_name
         self.para_traj = para_traj
         self.target_traj = target_traj
@@ -81,6 +102,14 @@ class OptTraj():
 
     @classmethod
     def from_file(cls, file_name, fixed_para_file_name = None):
+        """
+        Load a OptTraj object from a csv file, which comes from the save method of the
+        OptTraj object.
+        
+        If the fixed_para_file_name is not None,
+        the fixed_para will be loaded from the file. Otherwise, the fixed_para will be
+        an empty dictionary.
+        """
         traj_dict = load_variable_list_dict(file_name, throw_nan=False)
 
         para_name = [name for name in traj_dict.keys() if name not in [
@@ -107,8 +136,13 @@ class OptTraj():
         return instance
 
     def __getitem__(self, name) -> np.ndarray:
-        idx = self.para_name.index(name)
-        return self.para_traj[:, idx]
+        if name == "target":
+            return self.target_traj
+        elif name == "constr":
+            return self.constr_traj
+        else:
+            idx = self.para_name.index(name)
+            return self.para_traj[:, idx]
 
     def _x_arr_2_dict(self, x: np.ndarray | List):
         return dict(zip(self.para_name, x))
@@ -118,29 +152,42 @@ class OptTraj():
 
     @property
     def final_para(self, full=False) -> Dict[str, float]:
+        """The final free parameters of the optimization, in the form of a dictionary."""
         return self._x_arr_2_dict(self.para_traj[-1, :])
 
     @property
     def final_full_para(self) -> Dict[str, float]:
+        """
+        The final full parameters of the optimization, including the free and fixed parameters,
+        in the form of a dictionary.
+        """
         return self.fixed_para | self._x_arr_2_dict(self.para_traj[-1, :])
 
     @property
-    def init_para(self, full=False) -> Dict[str, float]:
+    def init_para(self) -> Dict[str, float]:
+        """The initial free parameters of the optimization, in the form of a dictionary."""
         return self._x_arr_2_dict(self.para_traj[0, :])
 
     @property
     def init_full_para(self) -> Dict[str, float]:
+        """
+        The initial full parameters of the optimization, including the free and fixed parameters,
+        in the form of a dictionary.
+        """
         return self.fixed_para | self._x_arr_2_dict(self.para_traj[0, :])
 
     @property
     def final_target(self) -> float:
+        """The final target function value of the optimization."""
         return self.target_traj[-1]
 
     @property
     def init_target(self) -> float:
+        """The initial target function value of the optimization."""
         return self.target_traj[0]
 
     def copy(self) -> "OptTraj":
+        """Return a copy of the OptTraj object."""
         new_result = OptTraj(
             self.para_name,
             self.para_traj.copy(),
@@ -150,7 +197,20 @@ class OptTraj():
         )
         return new_result
 
-    def append(self, para_dict: dict, target: float, constr: float) -> None:
+    def append(self, para_dict: Dict[str, float], target: float, constr: float) -> None:
+        """
+        Append a record from a new iteration to the OptTraj object.
+
+        Parameters
+        ----------
+        para_dict : Dict[str, float]
+            The free parameters of the new iteration, in the form of a dictionary.
+        target : float
+            The target function value of the new iteration.
+        constr : float
+            The constraint function value of the new iteration.
+        
+        """
         para_arr = self._x_dict_2_arr(para_dict)
         self.para_traj = np.append(self.para_traj, [para_arr], axis=0)
         self.target_traj = np.append(self.target_traj, target)
@@ -158,6 +218,18 @@ class OptTraj():
         self.length += 1
 
     def to_dict(self) -> Dict:
+        """
+        Returns a dictionary containing all the parameters, target, and constraints of the
+        optimization trajectory. 
+
+        Returns
+        -------
+        Dict
+            The dictionary contains the following keys:
+            - "target": the target function trajectory
+            - "constr": the constraint function trajectory
+            - the name of the free parameters: the free parameter trajectory
+        """
         traj_dict = {}
         for idx, key in enumerate(self.para_name):
             traj_dict[key] = self.para_traj[:, idx]
@@ -173,8 +245,19 @@ class OptTraj():
             new_var[:, idx] = (new_var[:, idx] - low) / (high - low)
 
         return new_var
+    
+    def store_optimizer_result(self, opt_result) -> None:
+        """
+        Usually a result object will be given by the optimizer. This method will store the
+        result in the OptTraj object.
+        """
+        self.opt_result = opt_result
 
     def plot(self, para_range_dict: dict = {}, ax = None) -> None:
+        """
+        Plot the optimization trajectory. With x axis as the iteration number, and y axis
+        as the normalized parameters, target, and constraints.
+        """
         # need further updating: use twin y axis for the target_traj
         normalized_para = self._normalize_para(para_range_dict)
         max_target = np.max(self.target_traj)
@@ -203,8 +286,30 @@ class OptTraj():
         y_name,
         c: str = "white",
         destination_only: bool = True, 
-        background_interp: Callable = None,
+        background_interp: Callable | None = None,
     ) -> None:
+        """
+        Plot the optimization trajectory in 2D. With x axis as the normalized x parameter,
+        and y axis as the normalized y parameter. The color of the trajectory is specified
+        by the parameter c.
+
+        Parameters
+        ----------
+        ax: matplotlib.axes.Axes
+            The axes to plot the trajectory.
+        x_name: str
+            The name of the x parameter.
+        y_name: str
+            The name of the y parameter.
+        c: str, optional
+            The color of the trajectory, by default "white".
+        destination_only: bool, optional
+            Whether to only plot the destination point, by default True.
+        background_interp: Callable, optional
+            The function to evaluate the a number (which is usually the background of the
+            2D plot). The function should take the x and y parameter as input, and return
+            a number. The number will be used as the text of the destination point.
+        """
         x = self[x_name]
         y = self[y_name]
 
@@ -221,15 +326,35 @@ class OptTraj():
             ax.text(x[-1], y[-1], text, ha="left", va="center", c=c, fontsize=7)
 
     def save(self, file_name, fixed_para_file_name = None):
+        """
+        Save the OptTraj object to a csv file. Can be loaded using the OptTraj.from_file() 
+        class method.
+
+        Parameters
+        ----------
+        file_name : str
+            The file name to save the OptTraj object.
+        fixed_para_file_name : str, optional
+            The file name to save the fixed_para dictionary, by default None.
+        """
         save_variable_list_dict(file_name, self.to_dict())
         if fixed_para_file_name is not None:
             save_variable_dict(fixed_para_file_name, self.fixed_para)
 
 
 class MultiTraj():
+    """
+    A class that stores multiple OptTraj objects. It usually comes from running the optimization
+    multiple times.
+
+    You can save and load it using a folder. 
+    """
     def __init__(
         self,
     ):
+        """
+        An empty MultiTraj object.
+        """
         self.traj_list: List[OptTraj] = []
         self.length = 0
 
@@ -238,6 +363,9 @@ class MultiTraj():
         cls,
         traj_list: List[OptTraj],
     ) -> "MultiTraj":
+        """
+        Create a MultiTraj object from a list of OptTraj objects.
+        """
         new_list = cls()
         for traj in traj_list:
             new_list.append(traj)
@@ -249,6 +377,14 @@ class MultiTraj():
         path,
         with_fixed = True,
     ) -> "MultiTraj":
+        """
+        Load a MultiTraj object from a folder. The folder should contain a list of csv files,
+        each of which is an OptTraj object. The file name should be in the form of "0.csv",
+        "1.csv", "2.csv", etc. 
+
+        If with_fixed is True, the folder should also contain a file named "fixed.csv", which
+        contains the fixed_para dictionary of the OptTraj objects.
+        """
         multi_traj = cls()
 
         path = os.path.normpath(path)
@@ -290,6 +426,9 @@ class MultiTraj():
         self,
         traj: OptTraj,
     ) -> None:
+        """
+        Append an OptTraj object to the MultiTraj object.
+        """
         self.traj_list.append(traj)
         self.length += 1
 
@@ -298,7 +437,14 @@ class MultiTraj():
         path: str,
     ) -> None:
         """
-        Assume all of the OptTraj have the same fixed_para
+        Save the MultiTraj object to a folder. The folder will contain a list of csv files,
+        each of which is an OptTraj object. The file name will be in the form of "0.csv",
+        "1.csv", "2.csv", etc.
+
+        Fixed parameters will be saved in a file named "fixed.csv", will be empty if there
+        is no fixed parameters.
+
+        Here we assume all of the OptTraj have the same fixed_para. 
         """
         path = os.path.normpath(path)
         for idx in range(self.length):
@@ -308,6 +454,10 @@ class MultiTraj():
             )
 
     def sort_traj(self, select_num=1) -> MultiTraj:
+        """
+        Sort the trajectories by the final target function value, from small to large,
+        and return the top select_num trajectories as a new instance of MultiTraj.
+        """
         if select_num > self.length:
             raise ValueError(f"Do not have enough data to sort. ")
 
@@ -320,9 +470,16 @@ class MultiTraj():
         return new_traj
     
     def best_traj(self) -> OptTraj:
+        """
+        Return an OptTraj instance with the smallest final target function value.
+        """
         return self.sort_traj(1)[0]
 
     def plot_target(self, ax=None, ylim=()):
+        """
+        Plot the target function trajectories of the optimization. The x axis is the iteration
+        and the y axis is the target function value.
+        """
         need_show = False
         if ax is None:
             fig, ax = plt.subplots(1, 1, figsize=(5, 4), dpi=150)
@@ -365,6 +522,21 @@ class MultiTraj():
 
 # ##############################################################################
 class Optimization():
+    """
+    Optimize using a wrapper for `scipy.minimize`. There are three major difference 
+    between this class and the original scipy minimizer
+        - The cost function now takes a dictionary as input. The dictionary contains the 
+          parameters passed from the optimizer. 
+        - When optimizing, the parameters are automatically normalized to the range of [0, 1]. 
+          Of course, it'll be denormalized when passed to the cost function.
+        - Users can define fixed and free parameters using dictionaries. They can 
+          fix and free parameters using the `fix` and `free` methods. Both of the parameters
+          will be passed to the cost function in a dictonary.
+
+    Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution
+
+    Currently it doesn't support the constraint function & gradient based optimizers.
+    """
     def __init__(
         self,
         fixed_variables: Dict[str, float],
@@ -375,27 +547,38 @@ class Optimization():
         opt_options: dict = {},
     ):
         """
-        Optimize using a wrapper for `scipy.minimize`. Different from the original minimizer, 
-        the cost function should take a dictionary as input. The dictionary contains the 
-        parameters passed from the optimizer. 
+        Initialize the Optimization class.
 
-        Fixed variables and the range for free variables should be specified in the 
-        initialization of the `Optimization` class. During optimization, the class will pass
-        both of the fixed and free variables to the target function as a dictonary. 
-        Also, target_kwargs will be passed to the target function as keyword arguments.
+        Parameters
+        ----------
+        fixed_variables : Dict[str, float]
+            The fixed variables, in the form of a dictionary with name and value pairs.
+        free_variable_ranges : Dict[str, List[float]]
+            The range of the free variables, in the form of a dictionary with name and
+            range pairs. For example: {"var_1": [0, 1], "var_2": [0, 2]}.
+        target_func : Callable
+            The target function to be optimized. The function should take a dictionary
+            as input, which contains the fixed and free variables as keys. The function 
+            should return a float number.
 
-        So, the target function should be of the form: 
-        target_func(full_variable_dict, **kwargs)  
-
-        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution, 
-        bayesian optimization
+            The form of the function should be:
+                target_func(full_variable_dict, **kwargs)
+        target_kwargs : dict, optional
+            The keyword arguments to be passed to the target function, by default {}.
+        optimizer : str, optional
+            The optimizer to be used, by default "L-BFGS-B". Supported optimizers:
+            "L-BFGS-B", "Nelder-Mead", "Powell", "shgo", "differential evolution",
+        opt_options : dict, optional
+            The options to be passed to the optimizer, by default {}.
         """
+        
         self.fixed_variables = fixed_variables.copy()
         self.free_variables = free_variable_ranges.copy()
         self._update_free_name_list()
 
         # the value stored in self.default_variables is dynamic - it is always
-        # the same as the one stored in self.fixed_variables
+        # the same as the one stored in self.fixed_variables and the middle point
+        # of the range for the free variables
         self.default_variables = fixed_variables.copy()
         for key, (low, high) in self.free_variables.items():
             self.default_variables[key] = (low + high) / 2
@@ -423,16 +606,11 @@ class Optimization():
     def _fix(
         self,
         variable: str,
-        value: float = None,
+        value: float | None = None,
     ):
         self._check_exist(variable)
 
-        if value is not None:
-            if value != self.default_variables[variable]:
-                self.default_variables[variable] = value
-                # print(f"Fixing the value of {variable} different from the "
-                # "default value leads to the changing of default value.")
-        else:
+        if value is None:
             value = self.default_variables[variable]
 
         if variable in self.fixed_variables:
@@ -441,12 +619,17 @@ class Optimization():
             self.fixed_variables[variable] = value
             del self.free_variables[variable]
 
+        # dynamically update the default value
+        self.default_variables[variable] = value
+        
     def fix(
         self,
         variables=None,
         **kwargs,
     ):
         """
+        Fix a variable to a number.
+
         The method accpets:
         Optimize.fix("var"), 
         Optimize.fix(["var_1", "var_2"]), 
@@ -482,16 +665,23 @@ class Optimization():
             self.free_variables[variable] = range
             del self.fixed_variables[variable]
 
+        # dynamically update the default value
+        self.default_variables[variable] = (range[0] + range[1]) / 2
+
     def free(
         self,
-        variables: dict = None,
+        variables: Dict | None = None,
         fix_rest: bool = False,
         **kwargs,
     ):
         """
+        Free a variable and specify its range.
+
         The method accpets: 
         Optimize.fix({"var_1": (0, 1), "var_2": (0, 2)}), 
         Optimize.fix(var_1 = (0, 1), var_2 = (0, 2))
+
+        If fix_rest is True, the rest of the variables will be fixed to the default value.
         """
 
         if variables is None:
@@ -510,7 +700,11 @@ class Optimization():
 
         self._update_free_name_list()
 
-    def _normalize_input(self, variables: dict):
+    def _normalize_input(self, variables: Dict[str, float]) -> Dict[str, float]:
+        """
+        Normalize the input variables to the range of [0, 1], according to the range
+        specified in self.free_variables.
+        """
         new_var = variables.copy()
 
         for var, range in self.free_variables.items():
@@ -519,7 +713,7 @@ class Optimization():
 
         return new_var
 
-    def _denormalize_input(self, variables: dict):
+    def _denormalize_input(self, variables: Dict[str, float]) -> Dict[str, float]:
         new_var = variables.copy()
 
         for var, range in self.free_variables.items():
@@ -537,12 +731,12 @@ class Optimization():
     def _x_arr_2_dict(self, x: np.ndarray | List):
         return dict(zip(self.free_name_list, x))
 
-    def _x_dict_2_arr(self, x: dict):
+    def _x_dict_2_arr(self, x: Dict):
         return [x[name] for name in self.free_name_list]
 
-    def target(self, free_var: dict | List):
+    def target(self, free_var: Dict[str, float]):
         """
-        Input: free variable dict
+        Calculate the target function value with the free variables.
         """
         return self.target_func(self.fixed_variables | free_var, **self.target_kwargs)
 
@@ -560,53 +754,100 @@ class Optimization():
 
     def opt_init(
         self,
-        x_dict: dict = {},
+        init_x: Dict[str, float] = {},
         check_func: Callable = lambda *args, **kwargs: True,
-        check_kwargs: dict = {}
-    ) -> OptTraj:
+        check_kwargs: Dict = {}
+    ) -> Dict[str, float]:
         """
-        check legal initialization func: check_func(full_dict, **check_kwargs)
+        Initialize the optimization. If not specifying the initial x, a random x within range
+        will be used.
+
+        Parameters
+        ----------
+        init_x : Dict[str, float], optional
+            The initial free parameters of the optimization, in the form of a dictionary,
+            by default {}. If it doesn't contain all the free parameters, the rest of the
+            parameters will be initialized randomly.
+        check_func : Callable, optional
+            The function to check whether the initialization is legal, by default
+            is (lambda *args, **kwargs: True). The function should take a dictionary as 
+            an input, which contains both of the fixed and free variables. 
+            The function should return a boolean value. So it will look like:
+                check_func(full_dict, **check_kwargs)
+        check_kwargs: Dict, optional
+            A dictionary of the key word argument, will be passed to the function.
         """
-        if x_dict == {}:
-            while True:
-                norm_init = np.random.uniform(
-                    low=0,
-                    high=1,
-                    size=len(self.free_name_list)
-                )
-                norm_init_dict = dict(
-                    zip(self.free_name_list, norm_init))
-                denorm_init_dict = self._denormalize_input(norm_init_dict)
-                if check_func(self.fixed_variables | denorm_init_dict, **check_kwargs):
-                    return denorm_init_dict
-        else:
+        max_trial = 100
+        count = 0
+
+        while True:
+            norm_init = np.random.uniform(
+                low=0,
+                high=1,
+                size=len(self.free_name_list)
+            )
+            norm_init_dict = dict(
+                zip(self.free_name_list, norm_init))
             denorm_init_dict = self._denormalize_input(norm_init_dict)
-            if not check_func(self.fixed_variables | denorm_init_dict, **check_kwargs):
-                raise ValueError(f"invalid")
-            return denorm_init_dict
+
+            full_init = self.fixed_variables | denorm_init_dict | init_x
+            if check_func(full_init, **check_kwargs):
+                return denorm_init_dict
+            
+            count += 1
+            if count >= max_trial:
+                raise ValueError(f"Cannot find a legal initialization in {count} trials.")
 
     def run(
         self,
         init_x: dict = {},
-        call_back: Callable = None,
+        call_back: Callable | None = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
-        print_scipy_result: bool = True,
+        file_name: str | None = None,
+        fixed_para_file_name: str | None = None,
     ):
         """
-        If not specifying the initial x, a random x within range will be used.  
-        Call back function: call_back(full_dict, target, constr)  
-        Check legal initialization func: check_func(full_dict, **check_kwargs)
+        Run the optimization.
+
+        Parameters
+        ----------
+        init_x : Dict[str, float], optional
+            The initial free parameters of the optimization, in the form of a dictionary,
+            by default {}. If it doesn't contain all the free parameters, the rest of the
+            parameters will be initialized randomly.
+        call_back : Callable, optional
+            The function to be called after each iteration, by default None. The function
+            should take the following arguments:
+            - free_var: the free variables of the current iteration, in the form of a
+                dictionary.
+            - target: the target function value of the current iteration.
+            - constr: the constraint function value of the current iteration. \n
+        check_func : Callable, optional
+            The function to check whether the initialization is legal, by default is 
+            (lambda *args, **kwargs: True). The function should take a dictionary as 
+            an input, which contains both of the fixed and free variables. 
+            The function should return a boolean value. So it will look like:
+                check_func(full_dict, **check_kwargs)
+        check_kwargs: Dict, optional
+            A dictionary of the key word argument, will be passed to the function.
+        file_name : str, optional
+            The file name to save the OptTraj object, by default None. If not None, the 
+            result will be saved as the optimization goes. 
+        fixed_para_file_name : str, optional
+            The file name to save the fixed_para dictionary, by default None.
         """
-        init_x_random = self.opt_init(
+
+        init_x_combined = self.opt_init(
+            init_x=init_x,
             check_func=check_func,
             check_kwargs=check_kwargs
         )
-        init_x_combined = init_x_random | init_x
         
-
         init_x_arr = self._x_dict_2_arr(self._normalize_input(init_x_combined))
 
+        # evaluate the target function and constraint function, in order for the
+        # record to be saved in the OptTraj object
         def evaluate_record(x):
             x_dict = self._x_arr_2_dict(x)
             denorm_x = self._denormalize_input(x_dict)
@@ -626,22 +867,30 @@ class Optimization():
             fixed_para = self.fixed_variables
         )
 
+        # the callback function for the scipy optimizer
         def opt_call_back(x, convergence=None):
+            # record the result
             denorm_x, target, constr = evaluate_record(x)
-
             result.append(
                 denorm_x,
                 target,
                 constr
             )
 
+            # save the result on the fly
+            if file_name is not None:
+                suffix = "_Running_DO_NOT_OPEN"
+                result.save(file_name + suffix, fixed_para_file_name)
+
+            # call the user specified callback function
             if call_back is not None:
                 call_back(
                     denorm_x.copy(),
-                    target,
-                    constr,
+                    target=target,
+                    constr=target,
                 )
 
+        # run the scipy optimizer
         opt_bounds = [[0.0, 1.0]] * len(self.free_name_list)
         if self.optimizer in ("L-BFGS-B", "Nelder-Mead", "Powell"):
             scipy_res = minimize(
@@ -678,21 +927,33 @@ class Optimization():
         #         np.ones_like(bo_res["y"]) * np.nan,
         #         fixed_para = self.fixed_variables,
         #     )
+        else:
+            raise ValueError(f"Optimizer {self.optimizer} is not supported.")
+        
+        # save the result: delete the file with suffix
+        if file_name is not None:
+            suffix = "_Running_DO_NOT_OPEN"
+            os.remove(file_name + suffix)
+            result.save(file_name, fixed_para_file_name)
 
         if not scipy_res.success:
             warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x_combined}")
 
-        if print_scipy_result:
-            print(scipy_res)
+        result.store_optimizer_result(scipy_res)
 
         return result
 
 
 class MultiOpt():
+    """
+    Run the optimization multiple times. 
+    """
     def __init__(
         self,
         optimize: Optimization,
     ):
+        """
+        """
         self.optimize = optimize
 
     def run(
@@ -701,8 +962,34 @@ class MultiOpt():
         call_back: Callable = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
-        save_path: str = None,
+        save_path: str | None = None,
     ):
+        """
+        Run the optimization multiple times.
+
+        Parameters
+        ----------
+        run_num : int
+            The number of times to run the optimization.
+        call_back : Callable, optional
+            The function to be called after each iteration, by default None. The function
+            should take the following arguments:
+            - free_var: the free variables of the current iteration, in the form of a
+                dictionary.
+            - target: the target function value of the current iteration.
+            - constr: the constraint function value of the current iteration. \n
+        check_func : Callable, optional
+            The function to check whether the initialization is legal, by default
+            is (lambda *args, **kwargs: True). The function should take a dictionary as
+            an input, which contains both of the fixed and free variables.
+            The function should return a boolean value. So it will look like:
+                check_func(full_dict, **check_kwargs)
+        check_kwargs: Dict, optional
+            A dictionary of the key word argument, will be passed to the check function.
+        save_path : str, optional
+            The path to save the MultiTraj object, by default None. If not None, the
+            result will be saved as the optimization goes.                
+        """
         multi_result = MultiTraj()
         for _ in tqdm(range(run_num)):
 
