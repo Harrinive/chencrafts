@@ -3,7 +3,7 @@ from scipy.integrate import odeint
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
-from typing import Tuple
+from typing import Tuple, List
 
 # ##############################################################################
 class PulseBase:
@@ -39,7 +39,9 @@ class PulseBase:
         duration : float
             The duration of the pulse.
         rotation_angle : float
-            The desired rotation angle that the pulse want to achieve.
+            The desired rotation angle that the pulse want to achieve. Leave it alone if you
+            want to directly specify the drive amplitude later by setting pulse.drive_amp 
+            = <value>.
         tgt_mat_elem : float
             The matrix element of the drive operator for the transition.
         init_time : float, optional
@@ -48,7 +50,7 @@ class PulseBase:
         """
         self.base_angular_freq = base_angular_freq
         self.duration = duration
-        self.rotation_angle = rotation_angle
+        self._rotation_angle = rotation_angle
         self.tgt_mat_elem = tgt_mat_elem
         self.init_time = init_time
 
@@ -175,14 +177,15 @@ class GeneralPulse(PulseBase):
     drive amplitude will be automatically determined by 
         rotation_angle / duration / np.abs(tgt_mat_elem)
 
-    You can also specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
-    rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
-    while drive_amp does not include the matrix element. They are correlated and adjusted
-    simutaneously.
-
-    Use the pulse object:
-        pulse(t) to get the pulse value at time t
-        pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+    To use the pulse object:
+        - pulse(t) to get the pulse value at time t
+        - pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+        - specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+        rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+        while drive_amp does not include the matrix element. They are correlated and adjusted
+        simutaneously. Note: They'll make the rotation_angle invalid.
+        - After defining the pulse, modifying any of the parameters will make the rotation
+        invalid. It's better to redefine the pulse.
     """
     def __init__(
         self,
@@ -198,20 +201,21 @@ class GeneralPulse(PulseBase):
         A class for generating a general pulse whose envelope can be customized. By 
         default, it'll use a square envelope. Users can also specify an arbitrary envelope 
         function by setting pulse.custom_envelope_I and pulse.custom_envelope_Q.
-        
+
         When specifying a target matrix element and the desired rotation angle, the 
         drive amplitude will be automatically determined by 
             rotation_angle / duration / np.abs(tgt_mat_elem)
 
-        You can also specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
-        rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
-        while drive_amp does not include the matrix element. They are correlated and adjusted
-        simutaneously.
-
-        Use the pulse object:
-            pulse(t) to get the pulse value at time t
-            pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
-            
+        To use the pulse object:
+            - pulse(t) to get the pulse value at time t
+            - pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+            - specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+            rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+            while drive_amp does not include the matrix element. They are correlated and adjusted
+            simutaneously. Note: They'll make the rotation_angle invalid.
+            - After defining the pulse, modifying any of the parameters will make the rotation
+            invalid. It's better to redefine the pulse.
+                
         Parameters
         ----------
         base_angular_freq : float
@@ -219,7 +223,10 @@ class GeneralPulse(PulseBase):
         duration : float
             The duration of the pulse.
         rotation_angle : float, optional
-            The desired rotation angle that the pulse want to achieve. By default np.pi.
+            The desired rotation angle that the pulse want to achieve, this will automatically
+            determine the drive amplitude for the user. By default np.pi.
+            Leave it alone if you want to directly specify the drive amplitude later by 
+            setting pulse.drive_amp = <value>.
         tgt_mat_elem : float, optional
             The matrix element of the drive operator for the transition. By default 1.0.
         init_time : float, optional
@@ -288,10 +295,15 @@ class Gaussian(PulseBase):
     while drive_amp does not include the matrix element. They are correlated and adjusted
     simutaneously.
 
-    Use the pulse object:
-        pulse(t) to get the pulse value at time t
-        pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
-        Parameters
+    To use the pulse object:
+        - pulse(t) to get the pulse value at time t
+        - pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+        - specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+        rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+        while drive_amp does not include the matrix element. They are correlated and adjusted
+        simutaneously. Note: They'll make the rotation_angle invalid.
+        - After defining the pulse, modifying any of the parameters will make the rotation
+        invalid. It's better to redefine the pulse.
     """
     def __init__(
         self, 
@@ -313,10 +325,15 @@ class Gaussian(PulseBase):
         while drive_amp does not include the matrix element. They are correlated and adjusted
         simutaneously.
 
-        Use the pulse object:
-            pulse(t) to get the pulse value at time t
-            pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
-            Parameters
+        To use the pulse object:
+            - pulse(t) to get the pulse value at time t
+            - pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
+            - specify the drive amplitude by setting either pulse.drive_amp or pulse.rabi_amp. 
+            rabi_amp is the overall coefficient of driven Hamiltonian (including the matrix element),
+            while drive_amp does not include the matrix element. They are correlated and adjusted
+            simutaneously. Note: They'll make the rotation_angle invalid.
+            - After defining the pulse, modifying any of the parameters will make the rotation
+            invalid. It's better to redefine the pulse.
         
         ----------
         base_angular_freq : float
@@ -326,7 +343,10 @@ class Gaussian(PulseBase):
         sigma : float
             The standard deviation of the Gaussian envelope.
         rotation_angle : float, optional
-            The desired rotation angle that the pulse want to achieve. By default np.pi.
+            The desired rotation angle that the pulse want to achieve, this will automatically
+            determine the drive amplitude for the user. By default np.pi.
+            Leave it alone if you want to directly specify the drive amplitude later by 
+            setting pulse.drive_amp = <value>.
         tgt_mat_elem : float, optional
             The matrix element of the drive operator for the transition. By default 1.0.
         init_time : float, optional
@@ -350,12 +370,13 @@ class Gaussian(PulseBase):
         self.t_mid = self.init_time + self.duration/2
 
         # evaluate the effective pulse amplitude
+        # mean_amp_scale is the average amplitude of the gaussian in the time interval
         mean_amp_scale = _gaussian_mean_amp(duration, sigma)
-        self._rabi_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self._rabi_amp = self._rotation_angle / mean_amp_scale / self.duration
         self._drive_amp = self._rabi_amp / np.abs(tgt_mat_elem)
 
         # set envelope to be 0 at the beginning and the end
-        self.env_bias = _gaussian_function(0, self.duration/2, sigma, self._drive_amp)
+        self._drive_amp_bias = _gaussian_function(0, self.duration/2, sigma, self._drive_amp)
 
         # Bloch–Siegert shift
         self.with_freq_shift = with_freq_shift
@@ -363,7 +384,7 @@ class Gaussian(PulseBase):
 
     def _bloch_siegert_shift(self):
         if self.with_freq_shift:
-            sine_rabi_amp = self.rotation_angle / self.duration
+            sine_rabi_amp = self._rotation_angle / self.duration
             freq_shift = (sine_rabi_amp)**2 / self.base_angular_freq / 4
             return freq_shift
         else:
@@ -373,11 +394,13 @@ class Gaussian(PulseBase):
     def rabi_amp(self, new_rabi_amp):
         super(Gaussian, Gaussian).rabi_amp.__set__(self, new_rabi_amp)
         self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+        self._drive_amp_bias = _gaussian_function(0, self.duration/2, self.sigma, self._drive_amp)
 
     @PulseBase.drive_amp.setter
     def drive_amp(self, new_drive_amp):
         super(Gaussian, Gaussian).drive_amp.__set__(self, new_drive_amp)
         self.drive_freq = self.base_angular_freq - self._bloch_siegert_shift()
+        self._drive_amp_bias = _gaussian_function(0, self.duration/2, self.sigma, self._drive_amp)
 
     def envelope_I(self, t):
         """Only support scalar t"""
@@ -388,7 +411,7 @@ class Gaussian(PulseBase):
             self.t_mid,
             self.sigma,
             self._drive_amp
-        ) - self.env_bias
+        ) - self._drive_amp_bias
         
 
 # ##############################################################################
@@ -500,7 +523,7 @@ class DRAGGaussian(PulseBase):
 
         # evaluate the effective pulse amplitude
         mean_amp_scale = _gaussian_mean_amp(duration, sigma)
-        self._rabi_amp = self.rotation_angle / mean_amp_scale / self.duration
+        self._rabi_amp = self._rotation_angle / mean_amp_scale / self.duration
         self._drive_amp = self._rabi_amp / np.abs(tgt_mat_elem)
 
         # set envelope to be 0 at the beginning and the end
@@ -584,13 +607,17 @@ class Interpolated(PulseBase):
         # tgt_mat_elem: float, 
         init_time: float = 0,
         init_phase: float = 0,
-        I_data: np.ndarray = np.array([1, 1]),
-        Q_data: np.ndarray = np.array([0, 0]),
+        I_data: np.ndarray | List = np.array([1, 1]),
+        Q_data: np.ndarray | List = np.array([0, 0]),
         interpolation_mode: str = "linear",
     ) -> None:
         """
         Pulse with envelope interpolated from the given data points for I and Q. 
         The data points should includes the initial and final points.
+
+        To use the pulse object:
+            - pulse(t) to get the pulse value at time t
+            - pulse.envelope_I(t) and pulse.envelope_Q(t) to get the envelope for two quadratures
 
         Parameters
         ----------
@@ -625,8 +652,8 @@ class Interpolated(PulseBase):
 
         self.I_t_list = np.linspace(self.init_time, self.init_time + self.duration, len(I_data))
         self.Q_t_list = np.linspace(self.init_time, self.init_time + self.duration, len(Q_data))
-        self.I_data = I_data
-        self.Q_data = Q_data
+        self.I_data = np.array(I_data)
+        self.Q_data = np.array(Q_data)
         self.I_func = self._points_to_func(self.I_t_list, self.I_data)
         self.Q_func = self._points_to_func(self.Q_t_list, self.Q_data)
 
