@@ -77,7 +77,7 @@ def load_variable_dict(file_name) -> Dict[str, float]:
 def save_variable_list_dict(
     file_name, 
     variable_list_dict: Dict[str, np.ndarray], 
-    orient = Literal['columns', 'index'],
+    orient: Literal['columns', 'index'] = 'columns',
 ) -> None:
     """
     Save a dictionary contains name-value_list pairs to a csv file.
@@ -91,8 +91,8 @@ def save_variable_list_dict(
 
 def load_variable_list_dict(
     file_name, 
-    throw_nan=True, 
-    orient='columns'
+    throw_nan = True, 
+    orient: Literal['columns', 'index'] = 'columns'
 ) -> Dict[str, np.ndarray]:
     """
     Load a dictionary contains name-value_list pairs from a csv file. The file should be
