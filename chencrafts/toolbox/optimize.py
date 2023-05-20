@@ -151,7 +151,7 @@ class OptTraj():
         return [x[name] for name in self.para_name]
 
     @property
-    def final_para(self, full=False) -> Dict[str, float]:
+    def final_para(self) -> Dict[str, float]:
         """The final free parameters of the optimization, in the form of a dictionary."""
         return self._x_arr_2_dict(self.para_traj[-1, :])
 
@@ -161,7 +161,12 @@ class OptTraj():
         The final full parameters of the optimization, including the free and fixed parameters,
         in the form of a dictionary.
         """
-        return self.fixed_para | self._x_arr_2_dict(self.para_traj[-1, :])
+        return self.fixed_para | self.final_para
+    
+    @property
+    def final_target(self) -> float:
+        """The final target function value of the optimization."""
+        return self.target_traj[-1]
 
     @property
     def init_para(self) -> Dict[str, float]:
@@ -174,17 +179,35 @@ class OptTraj():
         The initial full parameters of the optimization, including the free and fixed parameters,
         in the form of a dictionary.
         """
-        return self.fixed_para | self._x_arr_2_dict(self.para_traj[0, :])
-
-    @property
-    def final_target(self) -> float:
-        """The final target function value of the optimization."""
-        return self.target_traj[-1]
+        return self.fixed_para | self.init_para
 
     @property
     def init_target(self) -> float:
         """The initial target function value of the optimization."""
         return self.target_traj[0]
+    
+    def _best_target_idx(self):
+        return np.argmin(self.target_traj)
+    
+    @property
+    def best_para(self) -> Dict[str, float]:
+        """The free parameters that gives the best target function value."""
+        idx = self._best_target_idx()
+        return self._x_arr_2_dict(self.para_traj[idx, :])
+    
+    @property
+    def best_full_para(self) -> Dict[str, float]:
+        """
+        The full parameters that gives the best target function value, including the free and
+        fixed parameters.
+        """
+        return self.fixed_para | self.best_para
+    
+    @property
+    def best_target(self) -> float:
+        """The best target function value."""
+        idx = self._best_target_idx()
+        return self.target_traj[idx]
 
     def copy(self) -> "OptTraj":
         """Return a copy of the OptTraj object."""
@@ -547,7 +570,19 @@ class Optimization():
         opt_options: dict = {},
     ):
         """
-        Initialize the Optimization class.
+        Optimize using a wrapper for `scipy.minimize`. There are three major difference 
+        between this class and the original scipy minimizer
+            - The cost function now takes a dictionary as input. The dictionary contains the 
+            parameters passed from the optimizer. 
+            - When optimizing, the parameters are automatically normalized to the range of [0, 1]. 
+            Of course, it'll be denormalized when passed to the cost function.
+            - Users can define fixed and free parameters using dictionaries. They can 
+            fix and free parameters using the `fix` and `free` methods. Both of the parameters
+            will be passed to the cost function in a dictonary.
+
+        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution
+
+        Currently it doesn't support the constraint function & gradient based optimizers.
 
         Parameters
         ----------
@@ -555,14 +590,12 @@ class Optimization():
             The fixed variables, in the form of a dictionary with name and value pairs.
         free_variable_ranges : Dict[str, List[float]]
             The range of the free variables, in the form of a dictionary with name and
-            range pairs. For example: {"var_1": [0, 1], "var_2": [0, 2]}.
+            range pairs. For example: `{"var_1": [0, 1], "var_2": [0, 2]}`.
         target_func : Callable
             The target function to be optimized. The function should take a dictionary
             as input, which contains the fixed and free variables as keys. The function 
-            should return a float number.
-
-            The form of the function should be:
-                target_func(full_variable_dict, **kwargs)
+            should return a float number. The form of the function should be:
+                `target_func(full_variable_dict, **kwargs)`
         target_kwargs : dict, optional
             The keyword arguments to be passed to the target function, by default {}.
         optimizer : str, optional
