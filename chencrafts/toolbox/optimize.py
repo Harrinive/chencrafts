@@ -580,7 +580,8 @@ class Optimization():
             fix and free parameters using the `fix` and `free` methods. Both of the parameters
             will be passed to the cost function in a dictonary.
 
-        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, shgo, differential evolution
+        Supported optimizers: L-BFGS-B, Nelder-Mead, Powell, TNC, SLSQP, shgo, 
+        differential evolution
 
         Currently it doesn't support the constraint function & gradient based optimizers.
 
@@ -620,8 +621,8 @@ class Optimization():
         self.target_kwargs = target_kwargs
 
         self.optimizer = optimizer
-        assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell",
-                                  "shgo", "differential evolution", "bayesian optimization"]
+        assert self.optimizer in ["L-BFGS-B", "Nelder-Mead", "Powell", "TNC", "SLSQP", 
+                                  "shgo", "differential evolution"]
         self.opt_options = opt_options
 
     def _update_free_name_list(self):
@@ -925,7 +926,7 @@ class Optimization():
 
         # run the scipy optimizer
         opt_bounds = [[0.0, 1.0]] * len(self.free_name_list)
-        if self.optimizer in ("L-BFGS-B", "Nelder-Mead", "Powell"):
+        if self.optimizer in ("L-BFGS-B", "Nelder-Mead", "Powell", "TNC", "SLSQP"):
             scipy_res = minimize(
                 self._opt_func,
                 x0=init_x_arr,
