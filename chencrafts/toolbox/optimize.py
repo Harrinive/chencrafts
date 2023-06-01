@@ -814,6 +814,16 @@ class Optimization():
         max_trial = 100
         count = 0
 
+        # check init_x is within the range
+        for var, val in init_x.items():
+            if var in self.free_variables:
+                low, high = self.free_variables[var]
+                if val < low or val > high:
+                    raise ValueError(f"init_x[{var}] = {val} is not within the range of [{low}, {high}].")
+            else:
+                raise ValueError(f"{var} in init_x is not a free variable.")
+
+        # randomly initialize the free variables not specified in init_x until it is legal
         while True:
             norm_init = np.random.uniform(
                 low=0,
@@ -993,7 +1003,7 @@ class MultiOpt():
     def run(
         self,
         run_num,
-        call_back: Callable = None,
+        call_back: Callable | None = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
         save_path: str | None = None,
@@ -1033,7 +1043,6 @@ class MultiOpt():
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
-                    print_scipy_result=False,
                 )
             except ValueError as e:
                 print(f"Capture a ValueError from optimization: {e}")
