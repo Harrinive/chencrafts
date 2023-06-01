@@ -108,7 +108,7 @@ class PulseBase:
         if not isinstance(t, float | int):
             raise TypeError("The input time should be a 0d number")
 
-    def plot(self, t_list = None, env_only = False, ax=None):
+    def plot(self, t_list = None, env_only = False, ax = None):
         if t_list is None:
             t_list = np.linspace(self.init_time, self.init_time + self.duration, 100)
 
