@@ -4,5 +4,5 @@ chencrafts/version.py
 
 .vscode/settings.json
 
-**.pyc
-**.ipynb
+*.pyc
+*.ipynb
