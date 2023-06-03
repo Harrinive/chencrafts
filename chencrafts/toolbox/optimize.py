@@ -17,6 +17,7 @@ import warnings
 
 from tqdm.notebook import tqdm
 import os
+import copy
 
 # from chencrafts.bsqubits.error_rates import manual_constr
 from chencrafts.toolbox.save import (
@@ -606,8 +607,9 @@ class Optimization():
             The options to be passed to the optimizer, by default {}.
         """
         
-        self.fixed_variables = fixed_variables.copy()
-        self.free_variables = free_variable_ranges.copy()
+        self.fixed_variables = copy.deepcopy(fixed_variables)
+        self.free_variables = copy.deepcopy(free_variable_ranges)
+        self._process_free_fix_overlap()
         self._update_free_name_list()
 
         # the value stored in self.default_variables is dynamic - it is always
@@ -625,7 +627,29 @@ class Optimization():
                                   "shgo", "differential evolution"]
         self.opt_options = opt_options
 
+    def _process_free_fix_overlap(self):
+        """
+        check if there is any overlap between the free and fixed variables. If there is,
+        leave the variable in the free_variables only.
+        """
+        var_to_remove = []
+        for var in self.fixed_variables.keys():
+            if var in self.free_variables.keys():
+                var_to_remove.append(var)
+
+        if len(var_to_remove) > 0:
+            warnings.warn(
+                f"There are some overlaps between free and fixed variables. "
+                f"Those variables are set to be freed: {var_to_remove}"
+            )
+        for var in var_to_remove:
+            del self.fixed_variables[var]
+
     def _update_free_name_list(self):
+        """
+        Update the order and name of the free variables. Should be called when the free
+        and fixed variables are changed.
+        """
         self.free_name_list = list(self.free_variables.keys())
         # print(f"Current order of input: {self.free_name_list}")
 
@@ -725,7 +749,7 @@ class Optimization():
             raise ValueError(f"Only accept dict as the input.")
 
         for key, val in variables.items():
-            self._free(key, val)
+            self._free(key, copy(val))
 
         if fix_rest:
             remaining_var = [var for var in self.free_variables.keys()
