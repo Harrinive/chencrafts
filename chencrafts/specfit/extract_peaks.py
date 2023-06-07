@@ -5,6 +5,50 @@ from scipy.optimize import curve_fit
 from typing import Dict, List, Tuple
 
 # ##############################################################################
+class Click():
+    """
+    A class that distinguish between click and drag events
+    """
+    def __init__(
+        self, 
+        ax, 
+        func, 
+        button = 1,
+        args = tuple(),
+    ):
+        self.ax = ax
+        self.func = func
+        self.button = button
+        self.press = False
+        self.move = False
+        self.args = args
+
+        self.c1 = self.ax.figure.canvas.mpl_connect('button_press_event', self.onpress)
+        self.c2 = self.ax.figure.canvas.mpl_connect('button_release_event', self.onrelease)
+        self.c3 = self.ax.figure.canvas.mpl_connect('motion_notify_event', self.onmove)
+
+
+    def onpress(self, event):
+        self.press=True
+
+    def onmove(self, event):
+        if self.press:
+            self.move=True
+
+    def onrelease(self, event):
+        if self.press and not self.move:
+            if event.inaxes == self.ax:
+                if event.button == self.button:
+                    self.func(event, *self.args)
+        self.press=False; self.move=False
+
+    def disconnect(self):
+        self.ax.figure.canvas.mpl_disconnect(self.c1)
+        self.ax.figure.canvas.mpl_disconnect(self.c2)
+        self.ax.figure.canvas.mpl_disconnect(self.c3)
+
+
+# ##############################################################################
 # extract data
 def remove_repeated_legend(ax=None):
     """remove repeated legend"""
@@ -274,12 +318,12 @@ def get_peaks(
         plot_peaks(extracted_peaks, scat_list, ax=ax, cmap="rainbow")
         plot_peaks({"Current picks": coords}, scat_list, ax=ax, cmap="gray")
         
-    fig = plt.gcf()
-    cid = fig.canvas.mpl_connect("button_release_event", onclick)
+    # if move the mouse when holding the click, then it's not considered as a click
+    click = Click(ax, onclick)
 
     plt.show(block=True)
 
-    fig.canvas.mpl_disconnect(cid)
+    click.disconnect()
 
     # save the extracted data
     if coords != []:
@@ -337,11 +381,10 @@ def remove_peaks(extracted_peaks, remove_index_range_tuple=(np.inf, np.inf), ax=
         remove_all_scattered_dots(scat_list)
         plot_peaks(extracted_peaks, scat_list, ax=ax, cmap="rainbow")
 
-    # connect the function with the click event
-    fig = plt.gcf()
-    cid = fig.canvas.mpl_connect("button_release_event", onclick)
+    # if move the mouse when holding the click, then it's not considered as a click
+    click = Click(ax, onclick)
 
     plt.show(block=True)
 
-    # disconnect the function with the click event
-    fig.canvas.mpl_disconnect(cid)
+    click.disconnect()
+

@@ -3,6 +3,7 @@ from chencrafts.version import version as __version__
 import numpy as np
 
 import matplotlib as mpl
+import matplotlib.font_manager as mpl_font
 import matplotlib_inline.backend_inline
 
 import scqubits as scq
@@ -11,7 +12,9 @@ from cycler import cycler
 
 # set matplotlib 
 mpl.rcParams = mpl.rcParamsDefault.copy()
+# figure format
 matplotlib_inline.backend_inline.set_matplotlib_formats("png")
+# color cycle
 PGL_cycler = cycler(color = [
     "#0c2e6d", "#b63566", "#91adc2", "#e9c2c3", "#AEB358"
 ])
@@ -30,6 +33,19 @@ red_green_blue_purple_cycler = cycler(color = [
 ])
 mpl.rcParams["axes.prop_cycle"] = PGL_cycler
 mpl.rcParams['text.usetex'] = False
+# disable font warning message
+font_selected = None
+try:
+    font_names = mpl_font.get_font_names()
+    for font in ["IBM Plex Sans", "Roboto", "Arial", "Helvetica"]:
+        if font in font_names:
+            font_selected = font
+            break
+    if not font_selected:
+        font_selected = "sans-serif"
+
+except AttributeError:
+    font_selected = "sans-serif"
 
 
 # set numpy 
