@@ -7,6 +7,7 @@ PACKAGES = [
     'chencrafts/toolbox',
     'chencrafts/bsqubits',
     'chencrafts/cqed',
+    'chenrafts/specfit',
 ]
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
