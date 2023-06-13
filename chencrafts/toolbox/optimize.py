@@ -412,6 +412,9 @@ class MultiTraj():
         multi_traj = cls()
 
         path = os.path.normpath(path)
+        if not os.path.exists(path):    # check path exists
+            raise FileNotFoundError(f"Path {path} doesn't exist.")
+
         if with_fixed:
             fixed_path = f"{path}/fixed.csv"
         else:
@@ -1060,15 +1063,19 @@ class MultiOpt():
             The path to save the MultiTraj object, by default None. If not None, the
             result will be saved as the optimization goes.                
         """
-        multi_result = MultiTraj()
-        for _ in tqdm(range(run_num)):
+        if save_path is not None:
+            save_path = os.path.normpath(save_path)
 
+        multi_result = MultiTraj()
+        for iter_num in tqdm(range(run_num)):
             try: 
                 result = self.optimize.run(
                     init_x={},
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
+                    file_name=f"{save_path}/Iteration_{iter_num}.csv",
+                    fixed_para_file_name=f"{save_path}/fixed.csv",
                 )
             except ValueError as e:
                 print(f"Capture a ValueError from optimization: {e}")
@@ -1076,6 +1083,10 @@ class MultiOpt():
 
             multi_result.append(result)
             if save_path is not None:
+                try:
+                    os.remove(f"{save_path}/Iteration_{iter_num}.csv")
+                except FileNotFoundError:
+                    pass
                 multi_result.save(save_path)
 
         return multi_result
