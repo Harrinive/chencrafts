@@ -149,7 +149,8 @@ def MSE(
                         print_sideband = ", sideband"
                     else:
                         print_sideband = ""
-                    print(f"({p, freq_exp}): {transition_idx[0]} <-> {transition_idx[1]} {print_sideband}")
+                    print(f"({p:.2f}, {freq_exp:.2f}): {transition_idx[0]} <-> {transition_idx[1]}"
+                          rf"; err: {np.sqrt(min_error):.2e} {print_sideband}")
 
                 error += min_error
                 

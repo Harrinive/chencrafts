@@ -412,6 +412,9 @@ class MultiTraj():
         multi_traj = cls()
 
         path = os.path.normpath(path)
+        if not os.path.exists(path):    # check path exists
+            raise FileNotFoundError(f"Path {path} doesn't exist.")
+
         if with_fixed:
             fixed_path = f"{path}/fixed.csv"
         else:
@@ -551,8 +554,8 @@ class Optimization():
     between this class and the original scipy minimizer
         - The cost function now takes a dictionary as input. The dictionary contains the 
           parameters passed from the optimizer. 
-        - When optimizing, the parameters are automatically normalized to the range of [0, 1]. 
-          Of course, it'll be denormalized when passed to the cost function.
+        - When optimizing, the parameters are automatically normalized to the range of [0, 1].
+          Of course, it'll be denormalized when passed to the cost function. 
         - Users can define fixed and free parameters using dictionaries. They can 
           fix and free parameters using the `fix` and `free` methods. Both of the parameters
           will be passed to the cost function in a dictonary.
@@ -566,9 +569,9 @@ class Optimization():
         fixed_variables: Dict[str, float],
         free_variable_ranges: Dict[str, List[float]],
         target_func: Callable,
-        target_kwargs: dict = {},
+        target_kwargs: Dict = {},
         optimizer: str = "L-BFGS-B",
-        opt_options: dict = {},
+        opt_options: Dict = {},
     ):
         """
         Optimize using a wrapper for `scipy.minimize`. There are three major difference 
@@ -792,7 +795,7 @@ class Optimization():
     def _x_dict_2_arr(self, x: Dict):
         return [x[name] for name in self.free_name_list]
 
-    def target(self, free_var: Dict[str, float]):
+    def target_w_free_var(self, free_var: Dict[str, float]):
         """
         Calculate the target function value with the free variables.
         """
@@ -800,13 +803,15 @@ class Optimization():
 
     def _opt_func(self, x):
         """
-        Input should be a LIST of free variable in the order of self.free_name_list. 
+        The function that will be directly fed to the optimizer. 
+
+        x should be a LIST of free variable in the order of self.free_name_list. 
         But this is totally implicit for the user. 
         """
         x_dict = self._x_arr_2_dict(x)
         denorm_x = self._denormalize_input(x_dict)
 
-        target = self._normalize_output(self.target(denorm_x))
+        target = self._normalize_output(self.target_w_free_var(denorm_x))
 
         return target
 
@@ -1001,7 +1006,10 @@ class Optimization():
         # save the result: delete the file with suffix
         if file_name is not None:
             suffix = "_Running_DO_NOT_OPEN"
-            os.remove(file_name + suffix)
+            try:
+                os.remove(file_name + suffix)
+            except FileNotFoundError:
+                pass
             result.save(file_name, fixed_para_file_name)
 
         if not scipy_res.success:
@@ -1058,22 +1066,24 @@ class MultiOpt():
             The path to save the MultiTraj object, by default None. If not None, the
             result will be saved as the optimization goes.                
         """
-        multi_result = MultiTraj()
-        for _ in tqdm(range(run_num)):
+        if save_path is not None:
+            save_path = os.path.normpath(save_path)
 
+        multi_result = MultiTraj()
+        for iter_num in tqdm(range(run_num)):
             try: 
                 result = self.optimize.run(
                     init_x={},
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
+                    file_name=f"{save_path}/{iter_num}.csv",
+                    fixed_para_file_name=f"{save_path}/fixed.csv",
                 )
             except ValueError as e:
                 print(f"Capture a ValueError from optimization: {e}")
                 continue
 
             multi_result.append(result)
-            if save_path is not None:
-                multi_result.save(save_path)
 
         return multi_result
