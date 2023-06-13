@@ -1006,7 +1006,10 @@ class Optimization():
         # save the result: delete the file with suffix
         if file_name is not None:
             suffix = "_Running_DO_NOT_OPEN"
-            os.remove(file_name + suffix)
+            try:
+                os.remove(file_name + suffix)
+            except FileNotFoundError:
+                pass
             result.save(file_name, fixed_para_file_name)
 
         if not scipy_res.success:
@@ -1074,7 +1077,7 @@ class MultiOpt():
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
-                    file_name=f"{save_path}/Iteration_{iter_num}.csv",
+                    file_name=f"{save_path}/{iter_num}.csv",
                     fixed_para_file_name=f"{save_path}/fixed.csv",
                 )
             except ValueError as e:
@@ -1082,11 +1085,5 @@ class MultiOpt():
                 continue
 
             multi_result.append(result)
-            if save_path is not None:
-                try:
-                    os.remove(f"{save_path}/Iteration_{iter_num}.csv")
-                except FileNotFoundError:
-                    pass
-                multi_result.save(save_path)
 
         return multi_result
