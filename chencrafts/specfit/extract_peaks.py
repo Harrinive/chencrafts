@@ -89,7 +89,7 @@ def plot_peaks(extracted_peaks: Dict, existed_scatter_list=[], ax=None, cmap='ta
             *zip(*value), 
             label=key, 
             color=plt.cm.get_cmap(cmap)(idx / scatter_series_num), 
-            zorder=1, 
+            zorder=10, 
             s=3
         ) for idx, (key, value) in enumerate(extracted_peaks.items()) if value != []
     ]
