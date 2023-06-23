@@ -10,7 +10,7 @@ import qutip as qt
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
-from typing import Dict, List, Tuple, Callable
+from typing import Dict, List, Tuple, Callable, Any
 import copy
 
 class FlexibleSweep(
@@ -27,19 +27,42 @@ class FlexibleSweep(
         sim_para: Dict[str, float | int],
         swept_para: Dict[str, List[float] | np.ndarray] = {},
         update_hilbertspace_by_keyword: Callable | None = None,
-        subsys_update_info: Dict | None = None,
+        subsys_update_info: Dict[str, Any] = {},
+        default_update_info: List | None = None,
         **kwargs,
     ):
         """
+        FlexibleSweep is a wrapper of scq.ParameterSweep. It allows for flexible
+        parameter sweeping by defining fixed and swept parameters. 
+
         Parameters
         ----------
+        hilbertspace: HilbertSpace
+            scq.HilbertSpace object
+        para: Dict[str, float]
+            A dictionary of default parameters when not swept over. It's not necessary 
+            neither required to include the parameters in swept_para.
+        sim_para: Dict[str, float | int]
+            Must contain key `"evals_count"` and `"num_cpus"` for scq.ParameterSweep.
+            evals_count: the number of eigenvalues to be calculated, and num_cpus: the 
+            number of cpus to be used.
+        swept_para: Dict[str, List[float] | np.ndarray]
+            A dictionary of parameters to be swept. The values are lists or numpy arrays.
         update_hilbertspace_by_keyword:
             A function that takes the signature 
             function(HilbertSpace, <keyword 1>, <keyword 2>, ...) 
             It's not necessary to include all of the parameters in para and swept_para.
         subsys_update_info: 
+            Specify whether a parameter change will update a subsystem in the HilbertSpace.
+            Should be a dictionary of the form {<parameter name>: <subsys update info>}.
+            If <subsys update info> is None, then no update will be triggered.
+            If <subsys update info> is a list, then the list should contain the id_str of 
+            the subsystems to be updated.
             If a parameter name is not included in the dictionary, then it is assumed that 
-            the parameter DO NOT affect the HilbertSpace at all.
+            the parameter's <subsys update info> is the `subsys_update_default_info`.
+        default_update_info: List | None
+            If a parameter is not included in the `subsys_update_info` dictionary, then
+            the parameter's <subsys update info> is the `subsys_update_default_info`.
         """
         # Parameters
         self.para = para
@@ -55,7 +78,7 @@ class FlexibleSweep(
         _parameters = Parameters(self.swept_para)
         self._swept_para_meshgrids = _parameters.meshgrid_by_name()
         self.dims = _parameters.counts
-        self._subsys_update_info = self._all_subsys_update_info(subsys_update_info)
+        self._subsys_update_info = self._all_subsys_update_info(subsys_update_info, default_update_info)
 
         # ParameterSweep
         self._complete_param_dict = self._get_complete_param_dict()
@@ -82,14 +105,14 @@ class FlexibleSweep(
 
         return param_by_name
 
-    def _all_subsys_update_info(self, subsys_update_info) -> Dict:
+    def _all_subsys_update_info(self, subsys_update_info, default) -> Dict:
         subsys_update_info = copy.deepcopy(subsys_update_info)
         for key in self.para.keys():
             if key not in subsys_update_info.keys():
-                subsys_update_info[key] = None
+                subsys_update_info[key] = default
         for key in self.swept_para.keys():
             if key not in subsys_update_info.keys():
-                subsys_update_info[key] = None
+                subsys_update_info[key] = default
         
         return subsys_update_info
 
