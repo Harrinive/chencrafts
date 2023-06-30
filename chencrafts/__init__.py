@@ -43,11 +43,9 @@ try:
             break
     if not font_selected:
         font_selected = "sans-serif"
-
 except AttributeError:
     font_selected = "sans-serif"
-
+mpl.rcParams["font.family"] = font_selected
 
 # set numpy 
 np.set_printoptions(precision=5)
-
