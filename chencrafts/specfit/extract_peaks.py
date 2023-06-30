@@ -5,6 +5,8 @@ from scipy.optimize import curve_fit
 
 from typing import Dict, List, Tuple
 
+from chencrafts.toolbox import remove_repeated_legend
+
 # ##############################################################################
 class Click():
     """
@@ -51,13 +53,6 @@ class Click():
 
 # ##############################################################################
 # extract data
-def remove_repeated_legend(ax=None):
-    """remove repeated legend"""
-    if ax is None:
-        ax = plt.gca()
-    handles, labels = ax.get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys())
 
 def plot_peaks(extracted_peaks: Dict, existed_scatter_list=[], ax=None, cmap='tab10'):
     """
