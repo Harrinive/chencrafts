@@ -1,9 +1,12 @@
 import numpy as np
-
+import qutip as qt
+from scqubits.core.hilbert_space import HilbertSpace
 from scipy.special import erfc
 from scipy.constants import h, k
 
-from typing import Tuple
+from typing import Tuple, Callable, List
+from chencrafts.cqed.mode_assignment import single_mode_dressed_esys
+
 
 def n_th(freq, temp, n_th_base: float | np.ndarray = 0.0):
     """freq is in the unit of GHz, temp is in the unit of K"""
@@ -70,3 +73,81 @@ def qubit_shot_noise_dephasing_w_res(
 
     return Gamma_phi
 
+def purcell_factor(
+    hilbertspace: HilbertSpace,
+    res_mode_idx: int, qubit_mode_idx: int, 
+    res_state_func: Callable | int = 0, qubit_state_index: int = 0,
+    collapse_op_list: List[qt.Qobj] = [],
+    dressed_indices: np.ndarray | None = None, eigensys = None,
+    **kwargs
+) -> List[float]:
+    """
+    It returns some factors between two mode: osc and qubit, in order to 
+    calculate the decay rate of the state's occupation probability. The returned numbers, 
+    say, n_osc and n_qubit, can be used in this way:  
+     - state's decay rate = n_osc * osc_decay_rate + n_qubit * qubit_decay_rate
+
+    Parameters
+    ----------
+    osc_mode_idx, qubit_mode_idx:
+        The index of the two modes in the hilberspace's subsystem_list
+    osc_state_func, qubit_state_index:
+        The purcell decay rate of a joint system when the joint state can be described by 
+        some bare product state of osc and B. Those two arguments can be an integer
+        (default, 0), indicating a bare fock state. Additionally, A_state_func can
+        also be set to a function with signature `osc_state_func(<some basis of osc mode>, 
+        **kwargs)`. Such a fuction should check the validation of the basis, and raise a
+        RuntimeError if invalid.
+    dressed_indeces: 
+        An array mapping the FLATTENED bare state label to the eigenstate label. Usually
+        given by `ParameterSweep["dressed_indices"]`.
+    eigensys: 
+        The eigensystem for the hilbertspace.
+    collapse_op_list:
+        If empty, the purcell factors will be evaluated assuming the collapse operators
+        are osc mode's annilation operator and qubit mode's sigma_minus operator. Otherwise,
+        will calculate the factors using operators specified by the user by:
+         - factor = qutip.expect(operator, state) for all operators
+    kwargs:
+        kwyword arguments for osc_state_func
+
+    Returns
+    -------
+    Purcell factors
+    """
+
+    # obtain collapse operators
+    if collapse_op_list == []:
+        collapse_op_list = [
+            hilbertspace.annihilate(hilbertspace.subsystem_list[res_mode_idx]),
+            hilbertspace.hubbard_operator(0, 1, hilbertspace.subsystem_list[qubit_mode_idx])
+        ]
+
+    # Construct the desired state
+    state_label = np.zeros_like(hilbertspace.subsystem_dims, dtype=int)
+    state_label[qubit_mode_idx] = qubit_state_index
+
+    _, osc_evecs = single_mode_dressed_esys(
+        hilbertspace,
+        res_mode_idx,
+        tuple(state_label),
+        dressed_indices,
+        eigensys,
+    )
+    try: 
+        if callable(res_state_func):
+            state = res_state_func(osc_evecs, **kwargs)
+        else:
+            state = osc_evecs[res_state_func]
+    except (RuntimeError, IndexError):
+        # if the state is invalid
+        return [np.nan] * len(collapse_op_list)
+        
+    # calculate expectation value of collapse operators
+    factor_list = []
+    for op in collapse_op_list:
+        factor_list.append(
+            qt.expect(op.dag() * op, state)
+        )
+
+    return factor_list
