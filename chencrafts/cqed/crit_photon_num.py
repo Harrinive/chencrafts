@@ -3,14 +3,12 @@ import qutip as qt
 
 import scqubits as scq
 from scqubits.core.hilbert_space import HilbertSpace
-from scqubits.core.param_sweep import ParameterSweep
 import scipy as sp
 
 from chencrafts.cqed.mode_assignment import single_mode_dressed_esys
 
 import itertools
 from typing import List, Tuple, Literal
-import warnings
 
 # ##############################################################################
 def n_crit_by_diag(
