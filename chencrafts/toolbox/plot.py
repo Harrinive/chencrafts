@@ -9,6 +9,14 @@ from typing import Dict, List, Tuple
 
 from chencrafts.toolbox.data_processing import nd_interpolation
 
+def remove_repeated_legend(ax=None):
+    """remove repeated legend"""
+    if ax is None:
+        ax = plt.gca()
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys())
+
 def filter(c, filter_name):
     if filter_name in ["translucent", "trans"]:
         r, g, b, a = c

@@ -15,9 +15,14 @@ from scipy.optimize import (
 from typing import Callable, Dict, List, Any
 import warnings
 
-from tqdm.notebook import tqdm
+import chencrafts.settings as settings
 import os
 import copy
+
+if settings.IN_IPYTHON:
+    from tqdm.notebook import tqdm
+else:
+    from tqdm import tqdm
 
 # from chencrafts.bsqubits.error_rates import manual_constr
 from chencrafts.toolbox.save import (
@@ -412,6 +417,9 @@ class MultiTraj():
         multi_traj = cls()
 
         path = os.path.normpath(path)
+        if not os.path.exists(path):    # check path exists
+            raise FileNotFoundError(f"Path {path} doesn't exist.")
+
         if with_fixed:
             fixed_path = f"{path}/fixed.csv"
         else:
@@ -595,7 +603,8 @@ class Optimization():
             range pairs. For example: `{"var_1": [0, 1], "var_2": [0, 2]}`.
         target_func : Callable
             The target function to be optimized. The function should take a dictionary
-            as input, which contains the fixed and free variables as keys. The function 
+            as the first positional argument, and the dictionary will contain the sanpled 
+            fixed and free variables as key-value pairs. The function 
             should return a float number. The form of the function should be:
                 `target_func(full_variable_dict, **kwargs)`
         target_kwargs : dict, optional
@@ -749,7 +758,7 @@ class Optimization():
             raise ValueError(f"Only accept dict as the input.")
 
         for key, val in variables.items():
-            self._free(key, copy(val))
+            self._free(key, copy.copy(val))
 
         if fix_rest:
             remaining_var = [var for var in self.free_variables.keys()
@@ -1003,7 +1012,10 @@ class Optimization():
         # save the result: delete the file with suffix
         if file_name is not None:
             suffix = "_Running_DO_NOT_OPEN"
-            os.remove(file_name + suffix)
+            try:
+                os.remove(file_name + suffix)
+            except FileNotFoundError:
+                pass
             result.save(file_name, fixed_para_file_name)
 
         if not scipy_res.success:
@@ -1028,7 +1040,8 @@ class MultiOpt():
 
     def run(
         self,
-        run_num,
+        run_num: int,
+        target_threshold: float | None = None,
         call_back: Callable | None = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
@@ -1041,6 +1054,9 @@ class MultiOpt():
         ----------
         run_num : int
             The number of times to run the optimization.
+        target_threshold : float, optional
+            The threshold of the target function value. If the target function value is
+            found smaller than the threshold, the optimization will stop, by default None.
         call_back : Callable, optional
             The function to be called after each iteration, by default None. The function
             should take the following arguments:
@@ -1060,22 +1076,40 @@ class MultiOpt():
             The path to save the MultiTraj object, by default None. If not None, the
             result will be saved as the optimization goes.                
         """
-        multi_result = MultiTraj()
-        for _ in tqdm(range(run_num)):
+        if save_path is not None:
+            save_path = os.path.normpath(save_path)
 
+        multi_result = MultiTraj()
+        for _ in tqdm(range(run_num), disable=settings.PROGRESSBAR_DISABLED):
+            # run the optimization with random initialization
             try: 
+                if save_path is not None:
+                    # pass the save path to the optimization object
+                    save_kwargs = dict(
+                        file_name=f"{save_path}/{multi_result.length}.csv",
+                        fixed_para_file_name=f"{save_path}/fixed.csv",
+                    )
+                else:
+                    save_kwargs = {}
                 result = self.optimize.run(
-                    init_x={},
+                    init_x={},      # random initialization
                     call_back=call_back,
                     check_func=check_func,
                     check_kwargs=check_kwargs,
+                    **save_kwargs,
                 )
             except ValueError as e:
+                # when a value error is captured, we just skip this iteration
                 print(f"Capture a ValueError from optimization: {e}")
                 continue
 
+            # append the result to the multi_result, which will be returned
             multi_result.append(result)
-            if save_path is not None:
-                multi_result.save(save_path)
+
+            # if the target function value is smaller than the threshold, stop the loop
+            # for searching for a better result
+            if target_threshold is not None:
+                if result.final_target < target_threshold:
+                    break
 
         return multi_result

@@ -7,7 +7,7 @@ PACKAGES = [
     'chencrafts/toolbox',
     'chencrafts/bsqubits',
     'chencrafts/cqed',
-    'chenrafts/specfit',
+    'chencrafts/specfit',
 ]
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -15,14 +15,16 @@ with open(os.path.join(CURRENT_DIR, "requirements.txt")) as requirements:
     INSTALL_REQUIRES = requirements.read().splitlines()
 
 setuptools.setup(name='chencrafts', 
-      version=VERSION,
-      description='Danyang Chen\'s personal toolbox',
-      url='https://github.com/Harrinive/chencrafts',
-      author='Danyang Chen',
-      author_email='DanyangChen2026@u.northwestern.edu',
-      license='MIT',
-      packages=PACKAGES,
-      zip_safe=False)
+    version=VERSION,
+    description='Danyang Chen\'s personal toolbox',
+    url='https://github.com/Harrinive/chencrafts',
+    author='Danyang Chen',
+    author_email='DanyangChen2026@u.northwestern.edu',
+    license='MIT',
+    packages=PACKAGES,
+    zip_safe=False,
+    install_requires=INSTALL_REQUIRES,
+)
 
 def write_version_py(filename="chencrafts/version.py"):
     if os.path.exists(filename):

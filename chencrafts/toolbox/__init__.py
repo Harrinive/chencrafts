@@ -22,6 +22,7 @@ from chencrafts.toolbox.save import (
     dill_load,
 )
 from chencrafts.toolbox.plot import (
+    remove_repeated_legend,
     filter,
     Cmap,
     bar_plot_compare,

@@ -5,28 +5,24 @@ from scqubits.core.hilbert_space import HilbertSpace
 
 from typing import List, Tuple
 
-def label_convert(idx: Tuple | List | int, h_space: HilbertSpace):
-
-    dims = h_space.subsystem_dims
+def label_convert(
+    idx: Tuple[int] | List[int] | int, 
+    h_space: HilbertSpace | None = None, 
+    dims: List[int] | None = None
+):
+    """
+    Convert between a tuple/list of bare state label and the corresponding FLATTENED
+    index. It's the combination of `np.ravel_multi_index` and `np.unravel_index`.
+    """
+    if dims is None:
+        assert h_space is not None, "Either HilbertSpace or dims should be given."
+        dims = h_space.subsystem_dims
 
     if isinstance(idx, tuple | list):
-        assert (np.array(idx) < np.array(dims)).all(), f"index is not valid for system dimension {dims}"
-
-        drs_idx = 0
-        for dim_idx, bare_idx in enumerate(idx):
-            drs_idx += np.prod(dims[dim_idx+1:]) * bare_idx
-
-        return int(drs_idx)
+        return np.ravel_multi_index(idx, dims)
     
     elif isinstance(idx, int):
-        assert (idx < np.prod(dims)).all(), f"index is not valid for system size {np.prod(dims)}"
-
-        bare_idx_list = []
-        for dim_idx in range(len(dims)):
-            bare_idx_list.append(int(idx / np.prod(dims[dim_idx+1:])))
-            idx = idx % int(np.prod(dims[dim_idx+1:]))
-
-        return tuple(bare_idx_list)
+        return np.unravel_index(idx, dims)
 
     else:
         raise ValueError(f"Only support list/tuple/int as an index.")

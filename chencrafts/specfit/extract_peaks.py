@@ -1,8 +1,11 @@
+from warnings import warn
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
 from typing import Dict, List, Tuple
+
+from chencrafts.toolbox import remove_repeated_legend
 
 # ##############################################################################
 class Click():
@@ -50,13 +53,6 @@ class Click():
 
 # ##############################################################################
 # extract data
-def remove_repeated_legend(ax=None):
-    """remove repeated legend"""
-    if ax is None:
-        ax = plt.gca()
-    handles, labels = ax.get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys())
 
 def plot_peaks(extracted_peaks: Dict, existed_scatter_list=[], ax=None, cmap='tab10'):
     """
@@ -88,7 +84,7 @@ def plot_peaks(extracted_peaks: Dict, existed_scatter_list=[], ax=None, cmap='ta
             *zip(*value), 
             label=key, 
             color=plt.cm.get_cmap(cmap)(idx / scatter_series_num), 
-            zorder=1, 
+            zorder=10, 
             s=3
         ) for idx, (key, value) in enumerate(extracted_peaks.items()) if value != []
     ]
@@ -220,6 +216,12 @@ def polish_peaks(x_list, y_list, data, peak_tuple, index_range_tuple) -> Tuple[i
     -------
         (x, y), new peak
     """
+    if index_range_tuple[0] == 1 and index_range_tuple[1] <= 4:
+        warn("Warning: the index_range_tuple is too small, the peak will be set to be che closest grid point.")
+        x_idx, y_idx = _find_xy_index_w_value(
+            x_list, y_list, peak_tuple[0], peak_tuple[1])
+        return x_list[x_idx], y_list[y_idx]
+
     # translate range to left and right index
     x_left_idx, x_right_idx, y_left_idx, y_right_idx = _slice_w_center_and_range(
         x_list, y_list, peak_tuple, index_range_tuple

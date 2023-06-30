@@ -184,11 +184,11 @@ class GeneralPulse(PulseBase):
     def __init__(
         self,
         base_angular_freq: float,
-        duration: float,
+        duration: float = 1.0,
         rotation_angle: float = np.pi,
         tgt_mat_elem: float = 1.0, 
-        init_time: float = 0,
-        init_phase: float = 0,
+        init_time: float = 0.0,
+        init_phase: float = 0.0,
         with_freq_shift: bool = True,
     ) -> None:
         """
