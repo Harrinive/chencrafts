@@ -5,10 +5,6 @@ from scqubits.core.param_sweep import ParameterSweep
 from scqubits.core.namedslots_array import NamedSlotsNdarray, Parameters
 
 import numpy as np
-import qutip as qt
-
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 
 from typing import Dict, List, Tuple, Callable, Any
 import copy
@@ -23,10 +19,11 @@ class FlexibleSweep(
     def __init__(
         self,
         hilbertspace: HilbertSpace,
-        para: Dict[str, float],
-        sim_para: Dict[str, float | int],
+        para: Dict[str, float] = {"x": 0.0},    # a dummy parameter
         swept_para: Dict[str, List[float] | np.ndarray] = {},
         update_hilbertspace_by_keyword: Callable | None = None,
+        evals_count: int = 4,
+        num_cpus: int = 1,
         subsys_update_info: Dict[str, Any] = {},
         default_update_info: List | None = None,
         **kwargs,
@@ -41,17 +38,18 @@ class FlexibleSweep(
             scq.HilbertSpace object
         para: Dict[str, float]
             A dictionary of default parameters when not swept over. It's not necessary 
-            neither required to include the parameters in swept_para.
-        sim_para: Dict[str, float | int]
-            Must contain key `"evals_count"` and `"num_cpus"` for scq.ParameterSweep.
-            evals_count: the number of eigenvalues to be calculated, and num_cpus: the 
-            number of cpus to be used.
+            neither required to include the parameters in swept_para. By default, it's set 
+            to {"x": 0.0}, which is a dummy parameter.
         swept_para: Dict[str, List[float] | np.ndarray]
             A dictionary of parameters to be swept. The values are lists or numpy arrays.
         update_hilbertspace_by_keyword:
             A function that takes the signature 
             function(HilbertSpace, <keyword 1>, <keyword 2>, ...) 
             It's not necessary to include all of the parameters in para and swept_para.
+        evals_count: int
+            Number of eigenvalues to be calculated.
+        num_cpus: int
+            Number of cpus to be used.
         subsys_update_info: 
             Specify whether a parameter change will update a subsystem in the HilbertSpace.
             Should be a dictionary of the form {<parameter name>: <subsys update info>}.
@@ -66,7 +64,6 @@ class FlexibleSweep(
         """
         # Parameters
         self.para = para
-        self.sim_para = sim_para
         self.swept_para = dict([(key, np.array(val)) 
             for key, val in swept_para.items()])
         
@@ -87,10 +84,10 @@ class FlexibleSweep(
             hilbertspace=hilbertspace,
             paramvals_by_name=self._complete_param_dict,
             update_hilbertspace=self._update_hilbertspace,
-            evals_count=int(sim_para["evals_count"]),
+            evals_count=evals_count,
             subsys_update_info=self._subsys_update_info,
             deepcopy=True,
-            num_cpus=int(sim_para["num_cpus"]),
+            num_cpus=num_cpus,
             override_update_func_check=True,
             autorun=True,
         )   
