@@ -13,8 +13,10 @@ class FlexibleSweep(
 
 ):
     """
-    A flexible sweep class for supporting scq.ParameterSweep. 
-    By defining fixed and swept parameters, ParameterSweep object can be autometically generated
+    FlexibleSweep is a wrapper of scq.ParameterSweep. 
+        - It allows for flexible parameter sweeping by defining fixed and swept 
+            parameters. 
+        - It will take `update_hilbertspace_by_keyword` as an input of the sweep
     """
     def __init__(
         self,
@@ -29,8 +31,10 @@ class FlexibleSweep(
         **kwargs,
     ):
         """
-        FlexibleSweep is a wrapper of scq.ParameterSweep. It allows for flexible
-        parameter sweeping by defining fixed and swept parameters. 
+        FlexibleSweep is a wrapper of scq.ParameterSweep. 
+        - It allows for flexible parameter sweeping by defining fixed and swept 
+            parameters. 
+        - It will take `update_hilbertspace_by_keyword` as an input of the sweep
 
         Parameters
         ----------
@@ -39,7 +43,8 @@ class FlexibleSweep(
         para: Dict[str, float]
             A dictionary of default parameters when not swept over. It's not necessary 
             neither required to include the parameters in swept_para. By default, it's set 
-            to {"x": 0.0}, which is a dummy parameter.
+            to {"x": 0.0}, which is a dummy parameter and allows doing single value 
+            parameter sweep with current hilberspace parameters.
         swept_para: Dict[str, List[float] | np.ndarray]
             A dictionary of parameters to be swept. The values are lists or numpy arrays.
         update_hilbertspace_by_keyword:
@@ -58,9 +63,10 @@ class FlexibleSweep(
             the subsystems to be updated.
             If a parameter name is not included in the dictionary, then it is assumed that 
             the parameter's <subsys update info> is the `subsys_update_default_info`.
-        default_update_info: List | None
+        default_update_info: str | List | None
             If a parameter is not included in the `subsys_update_info` dictionary, then
-            the parameter's <subsys update info> is the `subsys_update_default_info`.
+            the parameter's <subsys update info> is the `subsys_update_default_info`. Can 
+            also be "all", which means all subsystems will be updated.
         """
         # Parameters
         self.para = para
@@ -78,15 +84,16 @@ class FlexibleSweep(
         self._subsys_update_info = self._all_subsys_update_info(subsys_update_info, default_update_info)
 
         # ParameterSweep
+        self.hilbertspace = hilbertspace
         self._complete_param_dict = self._get_complete_param_dict()
         self._update_hilbertspace_by_keyword = update_hilbertspace_by_keyword
         self.sweep = ParameterSweep(
-            hilbertspace=hilbertspace,
+            hilbertspace=self.hilbertspace,
             paramvals_by_name=self._complete_param_dict,
             update_hilbertspace=self._update_hilbertspace,
             evals_count=evals_count,
             subsys_update_info=self._subsys_update_info,
-            deepcopy=True,
+            deepcopy=False,
             num_cpus=num_cpus,
             override_update_func_check=True,
             autorun=True,
@@ -103,6 +110,9 @@ class FlexibleSweep(
         return param_by_name
 
     def _all_subsys_update_info(self, subsys_update_info, default) -> Dict:
+        if default == "all":
+            default = self.hilbertspace.subsystem_list
+
         subsys_update_info = copy.deepcopy(subsys_update_info)
         for key in self.para.keys():
             if key not in subsys_update_info.keys():
