@@ -160,7 +160,8 @@ def sweep_purcell_factor(
         (default, 0), indicating a bare fock state. Additionally, A_state_func can
         also be set to a function with signature `osc_state_func(basis, 
         **kwargs)`. Such a fuction should check the validation of the basis, and raise a
-        RuntimeError if invalid.
+        RuntimeError if invalid. The kwargs will be filled in by the swept parameters or 
+        the kwargs of this function. 
     collapse_op_list:
         If empty, the purcell factors will be evaluated assuming the collapse operators
         are osc mode's annilation operator and qubit mode's sigma_minus operator. Otherwise,
@@ -178,6 +179,13 @@ def sweep_purcell_factor(
 
     evals = ps["evals"][paramindex_tuple]
     evecs = ps["evecs"][paramindex_tuple]
+
+    if isinstance(res_state_func, Callable):
+        kwargs = fill_in_kwargs_during_custom_sweep(
+            ps, paramindex_tuple, paramvals_tuple,
+            res_state_func, kwargs,
+            ignore_pos=[0],     # ignore the first argument, which is the basis
+        )
 
     factors = purcell_factor(
         ps.hilbertspace,
