@@ -9,9 +9,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Callable, Any
 import copy
 
-class FlexibleSweep(
-
-):
+class FlexibleSweep():   
     """
     A flexible sweep class for supporting scq.ParameterSweep. 
     By defining fixed and swept parameters, ParameterSweep object can be autometically generated
