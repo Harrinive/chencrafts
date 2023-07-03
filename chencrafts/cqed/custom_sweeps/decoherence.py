@@ -1,14 +1,12 @@
 import numpy as np
 import qutip as qt
 
-from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.param_sweep import ParameterSweep
 
-from chencrafts.cqed.mode_assignment import single_mode_dressed_esys
 from chencrafts.cqed.custom_sweeps.utils import fill_in_kwargs_during_custom_sweep
+from chencrafts.cqed.decoherence import purcell_factor
 
 from typing import List, Callable
-import inspect
 
 # ##############################################################################
 def sweep_gamma_1(
@@ -18,10 +16,18 @@ def sweep_gamma_1(
     **kwargs, 
 ) -> np.ndarray:
     """
-    Sweep the qubit t1 rates. Hilbertspace must be updated 
+    Sweep the qubit t1 rates. Hilbertspace must be updated outside this function, which means
+    user must use danyang's branch of scqubits. It calculate the relaxation rate from state
+    in i_list to state in j_list, and return a 0/1/2D array.
 
     Support channel_name in ["t1_capacitive", "t1_inductive", "t1_charge_impedance", 
     "t1_flux_bias_line", "t1_quasiparticle_tunneling"]
+
+    The arguements of the gamma_1 functions will be filled in by the following priority 
+    (from high to low):
+        - swept parameters in the ParameterSweep object
+        - parameter_sweep[<name>]
+        - kwargs[<name>] (keyword argument of this function)
 
     """
 
@@ -30,7 +36,7 @@ def sweep_gamma_1(
 
     qubit = ps.hilbertspace.subsystem_list[mode_idx]
 
-    # proecess the shape of the result
+    # process the shape of the result
     actual_shape = []
     if isinstance(i_list, List | np.ndarray | range):
         actual_shape.append(len(i_list))
@@ -57,7 +63,7 @@ def sweep_gamma_1(
             "Y_qp", "Delta"         # for t1_quasiparticle_tunneling
         ],
     )
-    
+
     # calculate    
     try: 
         for idx in np.ndindex(data_shape):
@@ -88,6 +94,13 @@ def sweep_gamma_phi(
     Sweep the qubit tphi rates. Hilbertspace must be updated 
 
     Support channel_name in ["tphi_1_over_f_flux", "tphi_1_over_f_ng", "tphi_1_over_f_cc"]
+
+    The arguements of the gamma_phi functions will be filled in by the following priority 
+    (from high to low):
+        - swept parameters in the ParameterSweep object
+        - parameter_sweep[<name>]
+        - kwargs[<name>] (keyword argument of this function)
+
     """
 
     bare_evecs = ps["bare_evecs"][mode_idx][paramindex_tuple]
@@ -124,85 +137,6 @@ def sweep_gamma_phi(
         return 0
 
 # ##############################################################################
-def purcell_factor(
-    hilbertspace: HilbertSpace,
-    res_mode_idx: int, qubit_mode_idx: int, 
-    res_state_func: Callable | int = 0, qubit_state_index: int = 0,
-    collapse_op_list: List[qt.Qobj] = [],
-    dressed_indices: np.ndarray | None = None, eigensys = None,
-    **kwargs
-) -> List[float]:
-    """
-    It returns some factors between two mode: osc and qubit, in order to 
-    calculate the decay rate of the state's occupation probability. The returned numbers, 
-    say, n_osc and n_qubit, can be used in this way:  
-     - state's decay rate = n_osc * osc_decay_rate + n_qubit * qubit_decay_rate
-
-    Parameters
-    ----------
-    osc_mode_idx, qubit_mode_idx:
-        The index of the two modes in the hilberspace's subsystem_list
-    osc_state_func, qubit_state_index:
-        The purcell decay rate of a joint system when the joint state can be described by 
-        some bare product state of osc and B. Those two arguments can be an integer
-        (default, 0), indicating a bare fock state. Additionally, A_state_func can
-        also be set to a function with signature `osc_state_func(<some basis of osc mode>, 
-        **kwargs)`. Such a fuction should check the validation of the basis, and raise a
-        RuntimeError if invalid.
-    dressed_indeces: 
-        An array mapping the FLATTENED bare state label to the eigenstate label. Usually
-        given by `ParameterSweep["dressed_indices"]`.
-    eigensys: 
-        The eigensystem for the hilbertspace.
-    collapse_op_list:
-        If empty, the purcell factors will be evaluated assuming the collapse operators
-        are osc mode's annilation operator and qubit mode's sigma_minus operator. Otherwise,
-        will calculate the factors using operators specified by the user by:
-         - factor = qutip.expect(operator, state) for all operators
-    kwargs:
-        kwyword arguments for osc_state_func
-
-    Returns
-    -------
-    Purcell factors
-    """
-
-    # obtain collapse operators
-    if collapse_op_list == []:
-        collapse_op_list = [
-            hilbertspace.annihilate(hilbertspace.subsystem_list[res_mode_idx]),
-            hilbertspace.hubbard_operator(0, 1, hilbertspace.subsystem_list[qubit_mode_idx])
-        ]
-
-    # Construct the desired state
-    state_label = np.zeros_like(hilbertspace.subsystem_dims, dtype=int)
-    state_label[qubit_mode_idx] = qubit_state_index
-
-    _, osc_evecs = single_mode_dressed_esys(
-        hilbertspace,
-        res_mode_idx,
-        tuple(state_label),
-        dressed_indices,
-        eigensys,
-    )
-    try: 
-        if callable(res_state_func):
-            state = res_state_func(osc_evecs, **kwargs)
-        else:
-            state = osc_evecs[res_state_func]
-    except (RuntimeError, IndexError):
-        # if the state is invalid
-        return [np.nan] * len(collapse_op_list)
-        
-    # calculate expectation value of collapse operators
-    factor_list = []
-    for op in collapse_op_list:
-        factor_list.append(
-            qt.expect(op.dag() * op, state)
-        )
-
-    return factor_list
-
 def sweep_purcell_factor(
     ps: ParameterSweep, paramindex_tuple, paramvals_tuple, 
     res_mode_idx: int, qubit_mode_idx: int, 
@@ -226,12 +160,15 @@ def sweep_purcell_factor(
         (default, 0), indicating a bare fock state. Additionally, A_state_func can
         also be set to a function with signature `osc_state_func(basis, 
         **kwargs)`. Such a fuction should check the validation of the basis, and raise a
-        RuntimeError if invalid.
+        RuntimeError if invalid. The kwargs will be filled in by the swept parameters or 
+        the kwargs of this function. 
     collapse_op_list:
         If empty, the purcell factors will be evaluated assuming the collapse operators
         are osc mode's annilation operator and qubit mode's sigma_minus operator. Otherwise,
         will calculate the factors using operators specified by the user by:
          - factor = qutip.expect(operator, state) for all operators
+    kwargs:
+        The keyword arguments for osc_state_func
 
     Returns
     -------
@@ -243,20 +180,19 @@ def sweep_purcell_factor(
     evals = ps["evals"][paramindex_tuple]
     evecs = ps["evecs"][paramindex_tuple]
 
-    if callable(res_state_func):
-        input_kwargs = fill_in_kwargs_during_custom_sweep(
-            ps, paramindex_tuple, paramvals_tuple, res_state_func, kwargs,
-            ignore_kwargs=["basis"]
+    if isinstance(res_state_func, Callable):
+        kwargs = fill_in_kwargs_during_custom_sweep(
+            ps, paramindex_tuple, paramvals_tuple,
+            res_state_func, kwargs,
+            ignore_pos=[0],     # ignore the first argument, which is the basis
         )
-    else:
-        input_kwargs = {}
 
     factors = purcell_factor(
         ps.hilbertspace,
         res_mode_idx, qubit_mode_idx, res_state_func, qubit_state_index,
         collapse_op_list,
         dressed_indices, (evals, evecs),
-        **input_kwargs
+        **kwargs
     )
 
     return np.array(factors)

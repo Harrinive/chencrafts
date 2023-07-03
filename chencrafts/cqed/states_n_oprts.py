@@ -28,16 +28,16 @@ def d2_coherent_coef_list(n, alpha) -> np.ndarray:
         list.append(-coef * idx**2)
     return np.array(list)
 
-def sum_of_basis(basis: List[qt.Qobj], coef_list) -> qt.Qobj:
+def sum_of_basis(basis: List[qt.Qobj], coef_list: List[complex]) -> qt.Qobj:
     dims = basis[0].dims
     N = np.prod(np.array(dims))
 
     state = qt.zero_ket(N, dims=dims)
     for idx in range(len(coef_list)):
-        state += basis[idx] * coef_list[idx]
+        state = state + basis[idx] * coef_list[idx]
     return state.unit()
 
-def coherent(basis: List[qt.Qobj], alpha: float) -> qt.Qobj:
+def coherent(basis: List[qt.Qobj], alpha: complex) -> qt.Qobj:
     # check all Nones
     available_dim = 0
     available_ket = []
@@ -80,23 +80,46 @@ def cat(phase_disp_pair: List[Tuple[complex, complex]], basis: List[qt.Qobj] | N
 
 # ##############################################################################
 def projector_w_basis(basis: List[qt.Qobj]) -> qt.Qobj:
+    """
+    Generate a projector onto the subspace spanned by the given basis.
+    """
+
     projector: qt.Qobj = basis[0] * basis[0].dag()
     for ket in basis[1:]:
         projector = projector + ket * ket.dag()
     return projector
 
-def oprt_in_basis(oprt: np.ndarray | qt.Qobj, states):
+def oprt_in_basis(
+    oprt: np.ndarray | qt.Qobj, 
+    states: List[np.ndarray] | List[qt.Qobj] | np.ndarray
+):
+    """
+    Convert an operator to a matrix representation described by a given set of basis.
+    """
     length = len(states)
 
-    if isinstance(oprt, np.ndarray):
-        oprt = qt.Qobj(oprt)
-    state_qobj = [qt.Qobj(state) for state in states if isinstance(state, np.ndarray)]
+    # go through all states and oprt, to find a dimension 
+    if isinstance(oprt, qt.Qobj):
+        dim = oprt.dims[0]
+    elif isinstance(states[0], qt.Qobj):
+        dim = states[0].dims[0]
+    else:
+        dim = [oprt.shape[0]]
 
+    # convert to qobj
+    if isinstance(oprt, np.ndarray):
+        oprt = qt.Qobj(oprt, dims=[dim, dim])
+    state_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in states]
+
+    # calculate matrix elements
     data = np.zeros((length, length), dtype=complex)
     for j in range(length):
         for k in range(j, length):
-            elem = oprt.matrix_element(state_qobj[j], state_qobj[k])
-            data[j, k] = elem
-            data[k, j] = elem.conjugate()
+            data[j, k] = oprt.matrix_element(state_qobj[j], state_qobj[k])
+            if j != k:
+                if oprt.isherm:
+                    data[k, j] = data[j, k].conjugate()
+                else:
+                    data[k, j] = oprt.matrix_element(state_qobj[k], state_qobj[j])
 
     return qt.Qobj(data)

@@ -136,10 +136,10 @@ class ResonatorTransmon(JointSystems):
 
         # subsys_update_info
         self.subsys_update_info = {
-            "E_osc_GHz": ["res"],
-            "EJ_GHz": ["qubit"],
-            "EC_GHz": ["qubit"],
-            "ng": ["qubit"],
+            "E_osc_GHz": [self.res],
+            "EJ_GHz": [self.qubit],
+            "EC_GHz": [self.qubit],
+            "ng": [self.qubit],
             "g_GHz": [],
         }
 
@@ -241,11 +241,11 @@ class ResonatorFluxonium(JointSystems):
 
         # subsys_update_info
         self.subsys_update_info = {
-            "E_osc_GHz": ["res"],
-            "EJ_GHz": ["qubit"],
-            "EC_GHz": ["qubit"],
-            "EL_GHz": ["qubit"],
-            "flux": ["qubit"],
+            "E_osc_GHz": [self.res],
+            "EJ_GHz": [self.qubit],
+            "EC_GHz": [self.qubit],
+            "EL_GHz": [self.qubit],
+            "flux": [self.qubit],
             "g_GHz": [],
         }
 
@@ -375,15 +375,15 @@ class FluxoniumResonatorFluxonium(JointSystems):
         )
 
         self.subsys_update_info = {
-            "E_osc_GHz": ["res"],
-            "EJ1_GHz": ["qubit1"],
-            "EC1_GHz": ["qubit1"],
-            "EL1_GHz": ["qubit1"],
-            "flux1": ["qubit1"],
-            "EJ2_GHz": ["qubit2"],
-            "EC2_GHz": ["qubit2"],
-            "EL2_GHz": ["qubit2"],
-            "flux2": ["qubit2"],
+            "E_osc_GHz": [self.res],
+            "EJ1_GHz": [self.qubit1],
+            "EC1_GHz": [self.qubit1],
+            "EL1_GHz": [self.qubit1],
+            "flux1": [self.qubit1],
+            "EJ2_GHz": [self.qubit2],
+            "EC2_GHz": [self.qubit2],
+            "EL2_GHz": [self.qubit2],
+            "flux2": [self.qubit2],
             "g1_GHz": [],
             "g2_GHz": [],
         }

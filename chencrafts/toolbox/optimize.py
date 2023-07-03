@@ -12,7 +12,7 @@ from scipy.optimize import (
 )
 # from robo.fmin import bayesian_optimization
 
-from typing import Callable, Dict, List, Any
+from typing import Callable, Dict, List, Any, overload
 import warnings
 
 import chencrafts.settings as settings
@@ -435,10 +435,24 @@ class MultiTraj():
                 idx += 1
             except FileNotFoundError:
                 return multi_traj
+            
+    @overload
+    def __getitem__(
+        self, 
+        idx: int,
+    ) -> OptTraj:
+        ...
 
+    @overload
     def __getitem__(
         self,
-        idx,
+        idx: slice,
+    ) -> MultiTraj:
+        ...
+    
+    def __getitem__(
+        self,
+        idx: int | slice,
     ) -> OptTraj | MultiTraj:
         if isinstance(idx, int):
             return self.traj_list[idx]

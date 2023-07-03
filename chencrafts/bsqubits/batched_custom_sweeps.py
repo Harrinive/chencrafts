@@ -66,12 +66,15 @@ def batched_sweep_bare_decoherence(
     """
     Should be called after batched_sweep_general
 
-    parameters in the external_kwargs will be given priority over the 
-    swept parameters
+    keyword arguments required for the decoherence function will be filled in automatically. 
+    Arguments will be filled in by the following priority (from high to low):
+    - swept parameters
+    - sweep[<name>]
+    - kwargs[<name>] (kwargs of this function)
     """
     # some parameters for use
     qubit_dim = sweep.hilbertspace.subsystem_dims[qubit_mode_idx]
-    params = sweep.parameters.meshgrid_by_name() | kwargs 
+    params = kwargs | sweep.parameters.meshgrid_by_name() 
 
     
     # cavity relaxation
@@ -123,21 +126,25 @@ def batched_sweep_purcell_fock(
 def batched_sweep_purcell_cats(
     sweep: ParameterSweep, res_mode_idx = 0, qubit_mode_idx = 1, **kwargs
 ):
-    # disp are in sweep.parameters (will be filled in in the sweep_purcell_factor)
-    # or can be from a external kwarg
-    def cat_x(basis, disp):
+    # disp will be filled in by the following priority (from high to low):
+    # - swept parameters
+    # - sweep[<name>]
+    # - kwargs[<name>] (kwargs of this function)
+
+    def cat_x(basis, disp, **kwargs):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
         return cat([(1, disp), (1, -disp), (1, 1j * disp), (1, -1j * disp)], basis)
-    def cat_y(basis, disp):
+    def cat_y(basis, disp, **kwargs):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
         return cat([(1, disp), (1, -disp), (1j, 1j * disp), (1j, -1j * disp)], basis)
-    def cat_z(basis, disp):
+    def cat_z(basis, disp, **kwargs):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
         return cat([(1, disp), (1, -disp)], basis)
     
+
     sweep.add_sweep(
         sweep_purcell_factor, "purcell_factor_x",
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
@@ -174,7 +181,7 @@ def batched_sweep_readout(
     """
     # some parameters for use
     qubit = sweep.hilbertspace.subsystem_list[qubit_mode_idx]
-    params = sweep.parameters.meshgrid_by_name() | kwargs 
+    params = kwargs | sweep.parameters.meshgrid_by_name()
 
     # some assupmtions should be made for a readout resonator
     detuning_ar = 2 * PI2   
@@ -323,7 +330,7 @@ def batched_sweep_cat_code(
 
     # other parameters ralated to cat code's failure rate
 
-    params = sweep.parameters.meshgrid_by_name() | kwargs 
+    params = kwargs | sweep.parameters.meshgrid_by_name() 
 
     sweep.store_data(
         n_bar_s = sweep["purcell_factor_cat"][..., 0]
