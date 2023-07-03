@@ -6,7 +6,7 @@ from scqubits.core.namedslots_array import NamedSlotsNdarray, Parameters
 
 import numpy as np
 
-from typing import Dict, List, Tuple, Callable, Any
+from typing import Dict, List, Tuple, Callable, Any, Literal
 import copy
 
 class FlexibleSweep(
@@ -27,14 +27,15 @@ class FlexibleSweep(
         evals_count: int = 4,
         num_cpus: int = 1,
         subsys_update_info: Dict[str, Any] = {},
-        default_update_info: List | None = None,
+        default_update_info: List | Literal["all"] | None = "all",
         **kwargs,
     ):
         """
         FlexibleSweep is a wrapper of scq.ParameterSweep. 
-        - It allows for flexible parameter sweeping by defining fixed and swept 
-            parameters. 
-        - It will take `update_hilbertspace_by_keyword` as an input of the sweep
+            - It allows for flexible parameter sweeping by defining fixed and swept 
+            parameters. When a parameter appears in both `para` and `swept_para`,
+            the value in `swept_para` will be given priority.
+            - It will take `update_hilbertspace_by_keyword` as an input of the sweep
 
         Parameters
         ----------
@@ -49,7 +50,7 @@ class FlexibleSweep(
             A dictionary of parameters to be swept. The values are lists or numpy arrays.
         update_hilbertspace_by_keyword:
             A function that takes the signature 
-            function(HilbertSpace, <keyword 1>, <keyword 2>, ...) 
+            function(sweep, <keyword 1>, <keyword 2>, ...) 
             It's not necessary to include all of the parameters in para and swept_para.
         evals_count: int
             Number of eigenvalues to be calculated.
@@ -81,21 +82,20 @@ class FlexibleSweep(
         _parameters = Parameters(self.swept_para)
         self._swept_para_meshgrids = _parameters.meshgrid_by_name()
         self.dims = _parameters.counts
+        self.hilbertspace = hilbertspace
         self._subsys_update_info = self._all_subsys_update_info(subsys_update_info, default_update_info)
 
         # ParameterSweep
-        self.hilbertspace = hilbertspace
         self._complete_param_dict = self._get_complete_param_dict()
         self._update_hilbertspace_by_keyword = update_hilbertspace_by_keyword
         self.sweep = ParameterSweep(
             hilbertspace=self.hilbertspace,
             paramvals_by_name=self._complete_param_dict,
-            update_hilbertspace=self._update_hilbertspace,
+            update_hilbertspace=self._build_update_hilbertspace_func(),
             evals_count=evals_count,
             subsys_update_info=self._subsys_update_info,
             deepcopy=False,
             num_cpus=num_cpus,
-            override_update_func_check=True,
             autorun=True,
         )   
 
@@ -123,19 +123,28 @@ class FlexibleSweep(
         
         return subsys_update_info
 
-    def _update_hilbertspace(self, ps: ParameterSweep, *args):
-        """
-        args are given by scqubits ordered as the keys of self._complete_param_list.
-        Should select and give the correct parameters to the update_hilbertspace_by_keyword function.
-        """
+    def _build_update_hilbertspace_func(self):
+        # Get the argument list for the function
+        arg_name_list = list(self._complete_param_dict.keys())
+        arg_name_str = ', '.join(arg_name_list)
+        func_str = f"""
+def update({arg_name_str}):
+    arg_list = [{arg_name_str}]
+    param_dict = dict(zip(arg_name_list, arg_list))
 
-        param_dict = dict(zip(self._complete_param_dict.keys(), args))
-        
-        if self._update_hilbertspace_by_keyword is None:
-            return 
+    if self._update_hilbertspace_by_keyword is None:
+        return
+    
+    return self._update_hilbertspace_by_keyword(**param_dict)"""
+        # local_vars = {
+        #     'arg_name_list': arg_name_list,
+        #     'update_by_keyword': self._update_hilbertspace_by_keyword
+        # }
+        local_vars = {}
+        exec(func_str, globals(), local_vars)
 
-        return self._update_hilbertspace_by_keyword(ps, **param_dict)
-        
+        return local_vars['update']
+
     @property
     def fixed_dim_slice(self) -> Tuple[slice]:
         slc_list = []
