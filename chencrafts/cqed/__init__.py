@@ -33,6 +33,7 @@ from chencrafts.cqed.mode_assignment import (
     label_convert,
     organize_dressed_esys,
     single_mode_dressed_esys,
+    two_mode_dressed_esys,
     dressed_state_component,
 )
 
