@@ -126,8 +126,11 @@ def batched_sweep_purcell_fock(
 def batched_sweep_purcell_cats(
     sweep: ParameterSweep, res_mode_idx = 0, qubit_mode_idx = 1, **kwargs
 ):
-    # disp are in sweep.parameters (will be filled in in the sweep_purcell_factor)
-    # or can be from a external kwarg
+    # disp will be filled in by the following priority (from high to low):
+    # - swept parameters
+    # - sweep[<name>]
+    # - kwargs[<name>] (kwargs of this function)
+
     def cat_x(basis, disp, **kwargs):
         if len(basis) < disp**2 + disp:
             raise RuntimeError("basis is too small for the displacement")
@@ -141,6 +144,7 @@ def batched_sweep_purcell_cats(
             raise RuntimeError("basis is too small for the displacement")
         return cat([(1, disp), (1, -disp)], basis)
     
+
     sweep.add_sweep(
         sweep_purcell_factor, "purcell_factor_x",
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
