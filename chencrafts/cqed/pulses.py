@@ -94,8 +94,11 @@ class PulseBase:
         phase = self.drive_freq * t_bias + self.init_phase
         return phase
         
-    def __call__(self, t) -> float:
-        """Only support scalar t"""
+    def __call__(self, t, *args) -> float:
+        """
+        Only support scalar t
+        args are here for qutip solver
+        """
         self._check_input_t(t)
 
         env_I = self.envelope_I(t)
