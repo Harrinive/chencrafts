@@ -97,6 +97,11 @@ class FlexibleSweep():
             autorun=True,
         )   
 
+    def _all_param_names(self) -> List[str]:
+        key_set = set(self.para.keys())
+        key_set.update(self.swept_para.keys())
+        return list(key_set)
+
     def _get_complete_param_dict(self) -> Dict[str, np.ndarray]:
         param_by_name = {}
         for key, value in self.para.items():
@@ -111,35 +116,37 @@ class FlexibleSweep():
         if default == "all":
             default = self.hilbertspace.subsystem_list
 
-        subsys_update_info = copy.deepcopy(subsys_update_info)
-        for key in self.para.keys():
-            if key not in subsys_update_info.keys():
-                subsys_update_info[key] = default
-        for key in self.swept_para.keys():
-            if key not in subsys_update_info.keys():
-                subsys_update_info[key] = default
+        # make a shallow copy of the update info
+        subsys_update_info_copy = {}
+        for key, val in subsys_update_info.items():
+            subsys_update_info_copy[key] = val
+
+        # fill in the default update info
+        for key in self._all_param_names():
+            if key not in subsys_update_info_copy.keys():
+                subsys_update_info_copy[key] = default
         
-        return subsys_update_info
+        return subsys_update_info_copy
 
     def _build_update_hilbertspace_func(self):
         # Get the argument list for the function
         arg_name_list = list(self._complete_param_dict.keys())
         arg_name_str = ', '.join(arg_name_list)
         func_str = f"""
-def update({arg_name_str}):
+def update(ps, {arg_name_str}):
     arg_list = [{arg_name_str}]
     param_dict = dict(zip(arg_name_list, arg_list))
 
-    if self._update_hilbertspace_by_keyword is None:
+    if update_by_keyword is None:
         return
     
-    return self._update_hilbertspace_by_keyword(**param_dict)"""
-        # local_vars = {
-        #     'arg_name_list': arg_name_list,
-        #     'update_by_keyword': self._update_hilbertspace_by_keyword
-        # }
-        local_vars = {}
-        exec(func_str, globals(), local_vars)
+    return update_by_keyword(ps, **param_dict)"""
+        local_vars = {
+            'arg_name_list': arg_name_list,
+            'update_by_keyword': self._update_hilbertspace_by_keyword,
+        }
+        # local_vars = {}
+        exec(func_str, local_vars)
 
         return local_vars['update']
 
@@ -182,8 +189,7 @@ def update({arg_name_str}):
             raise KeyError(f"Key {key} is not found in the sweep.")
 
     def keys(self, sort: bool = True) -> List[str]:
-        key_set = set(self.para.keys())
-        key_set.update(self.swept_para.keys())
+        key_set = set(self._all_param_names())
         key_set.update(self.sweep.keys())
 
         if sort:
