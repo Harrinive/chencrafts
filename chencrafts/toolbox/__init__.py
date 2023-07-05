@@ -22,6 +22,13 @@ from chencrafts.toolbox.save import (
     dill_load,
 )
 from chencrafts.toolbox.plot import (
+    PGL_cycler,
+    green_to_red_cycler,
+    sunset_cycler,
+    hotel_70s_cycler,
+    red_green_blue_purple_cycler,
+    blue_to_red_cycler,
+
     remove_repeated_legend,
     filter,
     Cmap,
