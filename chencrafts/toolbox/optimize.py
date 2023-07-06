@@ -891,6 +891,60 @@ class Optimization():
             if count >= max_trial:
                 raise ValueError(f"Cannot find a legal initialization in {count} trials.")
 
+
+    def _evaluate_record(self, x):
+        """
+        evaluate the target function and constraint function, in order for the
+        record to be saved in the OptTraj object
+        """
+        x_dict = self._x_arr_2_dict(x)
+        denorm_x = self._denormalize_input(x_dict)
+
+        target = self.target_func(
+            self.fixed_variables | denorm_x, **self.target_kwargs)
+        constr = 0
+
+        return denorm_x, target, constr
+            
+    @staticmethod
+    def _running_filename(file_name: str) -> str:
+        suffix = file_name.split(".")[-1]
+        return f"{file_name[:-len(suffix)]}_RUNNING.{suffix}"
+    
+    def _construct_call_back(
+        self,
+        user_call_back: Callable | None,
+        result: OptTraj,
+        file_name: str | None,
+        fixed_para_file_name: str | None,
+    ) -> Callable:
+        """
+        Construct the callback function for the optimizer. The callback function will
+        record the result, save the result, and call the user specified callback function.
+        """
+        def opt_call_back(x, convergence=None):
+            # record the result
+            denorm_x, target, constr = self._evaluate_record(x)
+            result.append(
+                denorm_x,
+                target,
+                constr
+            )
+
+            # save the result on the fly
+            if file_name is not None:
+                result.save(self._running_filename(file_name), fixed_para_file_name)
+
+            # call the user specified callback function
+            if user_call_back is not None:
+                user_call_back(
+                    denorm_x.copy(),
+                    target=target,
+                    constr=target,
+                )
+
+        return opt_call_back
+
     def run(
         self,
         init_x: dict = {},
@@ -939,19 +993,7 @@ class Optimization():
         
         init_x_arr = self._x_dict_2_arr(self._normalize_input(init_x_combined))
 
-        # evaluate the target function and constraint function, in order for the
-        # record to be saved in the OptTraj object
-        def evaluate_record(x):
-            x_dict = self._x_arr_2_dict(x)
-            denorm_x = self._denormalize_input(x_dict)
-
-            target = self.target_func(
-                self.fixed_variables | denorm_x, **self.target_kwargs)
-            constr = 0
-
-            return denorm_x, target, constr
-
-        init_denorm_x, init_target, init_constr = evaluate_record(init_x_arr)
+        init_denorm_x, init_target, init_constr = self._evaluate_record(init_x_arr)
         result = OptTraj(
             self.free_name_list,
             np.array([self._x_dict_2_arr(init_denorm_x)]),
@@ -960,28 +1002,10 @@ class Optimization():
             fixed_para = self.fixed_variables
         )
 
-        # the callback function for the scipy optimizer
-        def opt_call_back(x, convergence=None):
-            # record the result
-            denorm_x, target, constr = evaluate_record(x)
-            result.append(
-                denorm_x,
-                target,
-                constr
-            )
-
-            # save the result on the fly
-            if file_name is not None:
-                suffix = "_Running_DO_NOT_OPEN"
-                result.save(file_name + suffix, fixed_para_file_name)
-
-            # call the user specified callback function
-            if call_back is not None:
-                call_back(
-                    denorm_x.copy(),
-                    target=target,
-                    constr=target,
-                )
+        opt_call_back = self._construct_call_back(
+            call_back, result, 
+            file_name, fixed_para_file_name
+        )
 
         # run the scipy optimizer
         opt_bounds = [[0.0, 1.0]] * len(self.free_name_list)
@@ -999,12 +1023,14 @@ class Optimization():
                 self._opt_func,
                 bounds=opt_bounds,
                 callback=opt_call_back,
+                **self.opt_options,
             )
         elif self.optimizer == "differential evolution":
             scipy_res = differential_evolution(
                 self._opt_func,
                 bounds=opt_bounds,
                 callback=opt_call_back,
+                **self.opt_options,
             )
         # elif self.optimizer == "bayesian optimization":
         #     bo_res = bayesian_optimization(
@@ -1025,9 +1051,8 @@ class Optimization():
         
         # save the result: delete the file with suffix
         if file_name is not None:
-            suffix = "_Running_DO_NOT_OPEN"
             try:
-                os.remove(file_name + suffix)
+                os.remove(self._running_filename(file_name))
             except FileNotFoundError:
                 pass
             result.save(file_name, fixed_para_file_name)
@@ -1094,13 +1119,13 @@ class MultiOpt():
             save_path = os.path.normpath(save_path)
 
         multi_result = MultiTraj()
-        for _ in tqdm(range(run_num), disable=settings.PROGRESSBAR_DISABLED):
+        for idx in range(run_num):
             # run the optimization with random initialization
             try: 
                 if save_path is not None:
                     # pass the save path to the optimization object
                     save_kwargs = dict(
-                        file_name=f"{save_path}/{multi_result.length}.csv",
+                        file_name=f"{save_path}/{idx}.csv",
                         fixed_para_file_name=f"{save_path}/fixed.csv",
                     )
                 else:
@@ -1115,6 +1140,12 @@ class MultiOpt():
             except ValueError as e:
                 # when a value error is captured, we just skip this iteration
                 print(f"Capture a ValueError from optimization: {e}")
+                if save_path is not None:
+                    # if the optimization fails, delete the temorary file
+                    try:
+                        os.remove(self.optimize._running_filename(f"{save_path}/{idx}.csv"))
+                    except FileNotFoundError:
+                        pass
                 continue
 
             # append the result to the multi_result, which will be returned
@@ -1127,3 +1158,5 @@ class MultiOpt():
                     break
 
         return multi_result
+
+
