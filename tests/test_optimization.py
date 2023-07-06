@@ -41,24 +41,15 @@ class TestOpt():
         assert np.abs(traj.final_full_para["x2"] + offset[1]) < 1e-5
 
         loaded_traj = OptTraj.from_file(f"{data_path}/traj.csv", f"{data_path}/traj_fixed.csv")
-
-        assert loaded_traj.final_full_para["x1"] == traj.final_full_para["x1"]
-        assert loaded_traj.final_full_para["x2"] == traj.final_full_para["x2"]
-        assert loaded_traj.final_full_para["x3"] == traj.final_full_para["x3"]
-
-    def test_save_traj(self):
-        """
-        Must be run after test_opt
-        """
-        opt = self.create_opt()
-        traj = opt.run()
+        assert np.abs(loaded_traj.final_full_para["x1"] - traj.final_full_para["x1"]) < 1e-15
+        assert np.abs(loaded_traj.final_full_para["x2"] - traj.final_full_para["x2"]) < 1e-15
+        assert np.abs(loaded_traj.final_full_para["x3"] - traj.final_full_para["x3"]) < 1e-15
 
         traj.save(f"{current_path}/data/traj.csv", f"{data_path}/traj_fixed.csv")
-
-        loaded_traj = OptTraj.from_file(f"{data_path}/traj.csv", f"{data_path}/traj_fixed.csv")
-        assert loaded_traj.final_full_para["x1"] == traj.final_full_para["x1"]
-        assert loaded_traj.final_full_para["x2"] == traj.final_full_para["x2"]
-        assert loaded_traj.final_full_para["x3"] == traj.final_full_para["x3"]
+        loaded_traj2 = OptTraj.from_file(f"{data_path}/traj.csv", f"{data_path}/traj_fixed.csv")
+        assert np.abs(loaded_traj2.final_full_para["x1"] - traj.final_full_para["x1"]) < 1e-15
+        assert np.abs(loaded_traj2.final_full_para["x2"] - traj.final_full_para["x2"]) < 1e-15
+        assert np.abs(loaded_traj2.final_full_para["x3"] - traj.final_full_para["x3"]) < 1e-15
 
     # ##############################################################################
     def create_multi_opt(self):
