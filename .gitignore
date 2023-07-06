@@ -7,3 +7,5 @@ chencrafts/version.py
 *.ipynb
 *.pyc
 *.json
+
+/tests/data/
