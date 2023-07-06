@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import (
@@ -14,11 +15,10 @@ from scipy.optimize import (
 
 from typing import Callable, Dict, List, Any, overload
 import warnings
+import os
+import copy 
 
 import chencrafts.settings as settings
-import os
-import copy
-
 if settings.IN_IPYTHON:
     from tqdm.notebook import tqdm
 else:
@@ -33,13 +33,6 @@ from chencrafts.toolbox.save import (
 )
 from chencrafts.toolbox.plot import Cmap, filter
 
-
-# ##############################################################################
-def sample_from_range(range_dict: Dict[Any, List[float, float]]) -> Dict[Any, float]:
-    new_dict = {}
-    for key, (low, high) in range_dict.items():
-        new_dict[key] = np.random.uniform(low, high)
-    return new_dict
 
 # ##############################################################################
 TARGET_NORMALIZE = 1
@@ -1077,14 +1070,43 @@ class MultiOpt():
         """
         self.optimize = optimize
 
+    def _worker(self, idx, call_back, check_func, check_kwargs, save_path):
+        if save_path is not None:
+            save_kwargs = dict(
+                file_name=f"{save_path}/{idx}.csv",
+                fixed_para_file_name=f"{save_path}/fixed.csv",
+            )
+        else:
+            save_kwargs = {}
+
+        try: 
+            result = self.optimize.run(
+                init_x={},  
+                call_back=call_back,
+                check_func=check_func,
+                check_kwargs=check_kwargs,
+                **save_kwargs,
+            )
+
+        except ValueError as e:
+            print(f"Capture a ValueError from optimization: {e}")
+            if save_path is not None:
+                try:
+                    os.remove(self.optimize._running_filename(f"{save_path}/{idx}.csv"))
+                except FileNotFoundError:
+                    pass
+            return None
+
+        return result
+
     def run(
         self,
         run_num: int,
-        target_threshold: float | None = None,
         call_back: Callable | None = None,
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
         save_path: str | None = None,
+        cpu_num: int = 1,
     ):
         """
         Run the optimization multiple times.
@@ -1093,16 +1115,13 @@ class MultiOpt():
         ----------
         run_num : int
             The number of times to run the optimization.
-        target_threshold : float, optional
-            The threshold of the target function value. If the target function value is
-            found smaller than the threshold, the optimization will stop, by default None.
         call_back : Callable, optional
             The function to be called after each iteration, by default None. The function
             should take the following arguments:
             - free_var: the free variables of the current iteration, in the form of a
                 dictionary.
             - target: the target function value of the current iteration.
-            - constr: the constraint function value of the current iteration. \n
+            - constr: the constraint function value of the current iteration.
         check_func : Callable, optional
             The function to check whether the initialization is legal, by default
             is (lambda *args, **kwargs: True). The function should take a dictionary as
@@ -1113,50 +1132,31 @@ class MultiOpt():
             A dictionary of the key word argument, will be passed to the check function.
         save_path : str, optional
             The path to save the MultiTraj object, by default None. If not None, the
-            result will be saved as the optimization goes.                
+            result will be saved as the optimization goes.
+        cpu_num : int, optional
+            The number of CPUs to use for the optimization, by default 1.
         """
         if save_path is not None:
             save_path = os.path.normpath(save_path)
 
         multi_result = MultiTraj()
-        for idx in range(run_num):
-            # run the optimization with random initialization
-            try: 
-                if save_path is not None:
-                    # pass the save path to the optimization object
-                    save_kwargs = dict(
-                        file_name=f"{save_path}/{idx}.csv",
-                        fixed_para_file_name=f"{save_path}/fixed.csv",
-                    )
-                else:
-                    save_kwargs = {}
-                result = self.optimize.run(
-                    init_x={},      # random initialization
-                    call_back=call_back,
-                    check_func=check_func,
-                    check_kwargs=check_kwargs,
-                    **save_kwargs,
-                )
-            except ValueError as e:
-                # when a value error is captured, we just skip this iteration
-                print(f"Capture a ValueError from optimization: {e}")
-                if save_path is not None:
-                    # if the optimization fails, delete the temorary file
-                    try:
-                        os.remove(self.optimize._running_filename(f"{save_path}/{idx}.csv"))
-                    except FileNotFoundError:
-                        pass
-                continue
 
-            # append the result to the multi_result, which will be returned
-            multi_result.append(result)
+        # Use multiprocessing to execute the worker function in parallel
+        if cpu_num == 1:
+            results = []
+            for idx in range(run_num):
+                results.append(self._worker(
+                    idx, call_back, check_func, check_kwargs, save_path
+                ))
+        else:
+            with Pool(cpu_num) as p:
+                results = p.starmap(self._worker, 
+                    [(idx, call_back, check_func, check_kwargs, save_path) for idx in range(run_num)])
 
-            # if the target function value is smaller than the threshold, stop the loop
-            # for searching for a better result
-            if target_threshold is not None:
-                if result.final_target < target_threshold:
-                    break
+        # Filter out None results and append valid ones to multi_result
+        for result in results:
+            if result is not None:
+                multi_result.append(result)
 
         return multi_result
-
 
