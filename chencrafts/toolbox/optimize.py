@@ -33,6 +33,8 @@ from chencrafts.toolbox.save import (
 )
 from chencrafts.toolbox.plot import Cmap, filter
 
+from scqubits.utils.cpu_switch import get_map_method
+
 
 # ##############################################################################
 TARGET_NORMALIZE = 1
@@ -402,7 +404,8 @@ class MultiTraj():
         """
         Load a MultiTraj object from a folder. The folder should contain a list of csv files,
         each of which is an OptTraj object. The file name should be in the form of "0.csv",
-        "1.csv", "2.csv", etc. 
+        "1.csv", "2.csv", etc. It's acceptable if there are some missing files with certain
+        index.
 
         If with_fixed is True, the folder should also contain a file named "fixed.csv", which
         contains the fixed_para dictionary of the OptTraj objects.
@@ -419,6 +422,7 @@ class MultiTraj():
             fixed_path = None
 
         idx = 0
+        missing_in_a_row = 0        # count the number of missing files in a row
         while True:
             try:
                 traj_path = f"{path}/{idx}.csv"
@@ -427,7 +431,12 @@ class MultiTraj():
                 multi_traj.append(traj)
                 idx += 1
             except FileNotFoundError:
-                return multi_traj
+                missing_in_a_row += 1
+                idx += 1
+                if missing_in_a_row > 20:
+                    break
+
+        return multi_traj
             
     @overload
     def __getitem__(
@@ -1070,7 +1079,9 @@ class MultiOpt():
         """
         self.optimize = optimize
 
-    def _worker(self, idx, call_back, check_func, check_kwargs, save_path):
+    def _worker(self, args) -> OptTraj:
+        idx, call_back, check_func, check_kwargs, save_path, init_x = args
+
         if save_path is not None:
             save_kwargs = dict(
                 file_name=f"{save_path}/{idx}.csv",
@@ -1081,7 +1092,7 @@ class MultiOpt():
 
         try: 
             result = self.optimize.run(
-                init_x={},  
+                init_x=init_x,  
                 call_back=call_back,
                 check_func=check_func,
                 check_kwargs=check_kwargs,
@@ -1107,7 +1118,7 @@ class MultiOpt():
         check_kwargs: dict = {},
         save_path: str | None = None,
         cpu_num: int = 1,
-    ):
+    ) -> MultiTraj:
         """
         Run the optimization multiple times.
 
@@ -1139,21 +1150,16 @@ class MultiOpt():
         if save_path is not None:
             save_path = os.path.normpath(save_path)
 
-        multi_result = MultiTraj()
+        # help to create initial guess externally
+        init_x_list = [self.optimize.opt_init({}) for _ in range(run_num)]
 
         # Use multiprocessing to execute the worker function in parallel
-        if cpu_num == 1:
-            results = []
-            for idx in range(run_num):
-                results.append(self._worker(
-                    idx, call_back, check_func, check_kwargs, save_path
-                ))
-        else:
-            with Pool(cpu_num) as p:
-                results = p.starmap(self._worker, 
-                    [(idx, call_back, check_func, check_kwargs, save_path) for idx in range(run_num)])
+        map_method = get_map_method(cpu_num)
+        results = map_method(self._worker, 
+            [(idx, call_back, check_func, check_kwargs, save_path, init_x_list[idx]) for idx in range(run_num)])
 
         # Filter out None results and append valid ones to multi_result
+        multi_result = MultiTraj()
         for result in results:
             if result is not None:
                 multi_result.append(result)
