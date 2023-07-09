@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple, Callable, Any, Literal
 import warnings
 
 # ##############################################################################
-def collapse_operators_by_rate(
+def _collapse_operators_by_rate(
     hilbertspace: HilbertSpace,
     mode_idx: int, 
     collapse_parameters: Dict[str, Any] = {},
@@ -172,10 +172,9 @@ def cavity_ancilla_me_ingredients(
     if len(dims) > 2:
         warnings.warn("More than 2 subsystems detected. The 'smart truncation' is not "
                       "smart for more than 2 subsystems. It can't determine when to "
-                      "truncate for other subsystems. It's also not tested."
+                      "truncate for other subsystems and keep the ground state for the mode "
+                      "only. It's also not tested."
                       "Please specify the truncation when initialize the HilbertSpace obj.")
-    res = hilbertspace.subsystem_list[res_mode_idx]
-    qubit = hilbertspace.subsystem_list[qubit_mode_idx]
 
     # truncate the basis
     # 1. for qubit mode, keep up to the next excited state of the qubit initial state
@@ -212,14 +211,14 @@ def cavity_ancilla_me_ingredients(
         key: collapse_parameters[key] for key in collapse_parameters.keys()
         if key.startswith("res")
     }
-    res_collapse_operators = collapse_operators_by_rate(
+    res_collapse_operators = _collapse_operators_by_rate(
         hilbertspace, res_mode_idx, res_collapse_parameters, basis=truncated_evecs.ravel()
     )
     qubit_collapse_parameters = {
         key: collapse_parameters[key] for key in collapse_parameters.keys()
         if key.startswith("qubit")
     }
-    qubit_collapse_operators = collapse_operators_by_rate(
+    qubit_collapse_operators = _collapse_operators_by_rate(
         hilbertspace, qubit_mode_idx, qubit_collapse_parameters, basis=truncated_evecs.ravel()
     )
     c_ops = [
