@@ -10,26 +10,31 @@ from typing import Dict, List, Tuple
 
 from chencrafts.toolbox.data_processing import nd_interpolation
 
-# color cycle
-PGL_cycler = cycler(color = [
-    "#0c2e6d", "#b63566", "#91adc2", "#e9c2c3", "#AEB358"
-])
-green_to_red_cycler = cycler(color = [
-    "#001219", "#005f73", "#0a9396", "#94d2bd", "#e9d8a6", 
-    "#ee9b00", "#ca6702", "#bb3e03", "#9b2226"
-])
-sunset_cycler = cycler(color = [
-    "#F8B195", "#F67280", "#C06C84", "#6C5B7B", "#355C7D"
-])
-hotel_70s_cycler = cycler(color = [
-    "#448a9a", "#fb9ab6", "#e1cdd1", "#e1b10f", "#705b4c"
-])
-red_green_blue_purple_cycler = cycler(color = [
-    "#e63946", "#a8dadc", "#457b9d", "#a7bb40", "#3d1645"
-])
-blue_to_red_cycler = cycler(color = [
-    "#3d5a80", "#98C1D9", "#E0FBFC", "#E7B4A5", "#EE6C4D", "#623345"
-])
+# color cyclers
+color_palettes = dict(
+    PGL = [
+        "#0c2e6d", "#b63566", "#91adc2", "#e9c2c3", "#AEB358"],
+    green_to_red = [
+        "#001219", "#005f73", "#0a9396", "#94d2bd", "#e9d8a6", 
+        "#ee9b00", "#ca6702", "#bb3e03", "#9b2226"],
+    sunset = [
+        "#F8B195", "#F67280", "#C06C84", "#6C5B7B", "#355C7D"],
+    hotel_70s = [
+        "#448a9a", "#fb9ab6", "#e1cdd1", "#e1b10f", "#705b4c"],
+    blue_to_red = [
+        "#e63946", "#a8dadc", "#457b9d", "#a7bb40", "#3d1645"],
+    colorblind_1 = [    # from https://arxiv.org/abs/2107.02270
+        "#3f90da", "#ffa90e", "#bd1f01", "#832db6", "#94a4a2", "#a96b59", 
+        "#e76300", "#b9ac70", "#717581", "#92dadd",]
+)
+color_cyclers = dict(
+    PGL = cycler(color = color_palettes["PGL"]),
+    green_to_red = cycler(color = color_palettes["green_to_red"]),
+    sunset = cycler(color = color_palettes["sunset"]),
+    hotel_70s = cycler(color = color_palettes["hotel_70s"]),
+    red_green_blue_purple = cycler(color = color_palettes["red_green_blue_purple"]),
+    colorblind_1 = cycler(color = color_palettes["colorblind_1"]),
+)
 
 def remove_repeated_legend(ax=None):
     """remove repeated legend"""

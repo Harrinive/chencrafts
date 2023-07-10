@@ -8,14 +8,14 @@ import matplotlib_inline.backend_inline
 
 import scqubits as scq
 
-from chencrafts.toolbox.plot import PGL_cycler
+from chencrafts.toolbox.plot import color_cyclers
 
 # set matplotlib 
 mpl.rcParams = mpl.rcParamsDefault.copy()
 # figure format
 matplotlib_inline.backend_inline.set_matplotlib_formats("png")
 # color cycle
-mpl.rcParams["axes.prop_cycle"] = PGL_cycler
+mpl.rcParams["axes.prop_cycle"] = color_cyclers["PGL"]
 mpl.rcParams['text.usetex'] = False
 # disable font warning message
 font_selected = None
