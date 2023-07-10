@@ -190,7 +190,7 @@ def batched_sweep_readout(
 
 
     sweep.store_data(
-        chi_ar = params["chi_ar/kappa_r"] * params["kappa_r"] * np.ones_like(sweep["omega_a_GHz"]),
+        chi_ar = params["chi_ar_by_kappa_r"] * params["kappa_r"] * np.ones_like(sweep["omega_a_GHz"]),
     )
 
     # critical photon number
@@ -210,7 +210,7 @@ def batched_sweep_readout(
         n_crit = 1 / 4 / lambda_2,
     )
     sweep.store_data(
-        n_ro = params["n_ro/n_crit"] * sweep["n_crit"]
+        n_ro = params["n_ro_by_n_crit"] * sweep["n_crit"]
     )
 
     # readout infidelity
@@ -304,14 +304,14 @@ def batched_sweep_pulse(
     params = sweep.parameters.meshgrid_by_name() | kwargs
 
     min_sigma = 1
-    sigma = np.abs(params["sigma*2*K_a"] / sweep["non_lin"])
+    sigma = np.abs(params["sigma_2_K_a"] / sweep["non_lin"])
     sigma[sigma < min_sigma] = min_sigma
     sweep.store_data(
         sigma = sigma,
     )
     sweep.store_data(
-        tau_p = sweep["sigma"] * np.abs(params["tau_p/sigma"]),
-        tau_p_eff = sweep["sigma"] * np.abs(params["tau_p_eff/sigma"])
+        tau_p = sweep["sigma"] * np.abs(params["tau_p_by_sigma"]),
+        tau_p_eff = sweep["sigma"] * np.abs(params["tau_p_eff_by_sigma"])
     )
 
 def batched_sweep_cat_code(

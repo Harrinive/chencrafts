@@ -71,6 +71,7 @@ class FlexibleSweep():
         self.para = para
         self.swept_para = dict([(key, np.array(val)) 
             for key, val in swept_para.items()])
+        self._check_valid_var_name()
         
         # Meshgrids and shape of the sweep
         if swept_para == {}:
@@ -96,6 +97,11 @@ class FlexibleSweep():
             num_cpus=num_cpus,
             autorun=True,
         )   
+
+    def _check_valid_var_name(self):
+        for key in self._all_param_names():
+            if not key.isidentifier():
+                raise ValueError(f"Invalid variable name: {key}")
 
     def _all_param_names(self) -> List[str]:
         key_set = set(self.para.keys())
