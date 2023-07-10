@@ -108,7 +108,6 @@ def cavity_ancilla_me_ingredients(
     dressed_indices: np.ndarray | None = None, eigensys = None,
     collapse_parameters: Dict[str, float] = {},
     in_rot_frame: bool = True,
-    **kwargs
 ):
     """
     Generate hamiltonian and collapse operators for a cavity-ancilla system. The operators
@@ -164,8 +163,8 @@ def cavity_ancilla_me_ingredients(
 
     Returns
     -------
-    final_state: qt.Qobj
-        A state after the waiting period. 
+    hamiltonian, c_ops: qt.Qobj, List[qt.Qobj]
+        The hamiltonian and collapse operators in the truncated basis. They have dims=[[res_dim, qubit_dim], [res_dim, qubit_dim]].
     """
     # prepare
     dims = hilbertspace.subsystem_dims
