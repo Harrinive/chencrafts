@@ -32,7 +32,7 @@ color_cyclers = dict(
     green_to_red = cycler(color = color_palettes["green_to_red"]),
     sunset = cycler(color = color_palettes["sunset"]),
     hotel_70s = cycler(color = color_palettes["hotel_70s"]),
-    red_green_blue_purple = cycler(color = color_palettes["red_green_blue_purple"]),
+    blue_to_red = cycler(color = color_palettes["blue_to_red"]),
     colorblind_1 = cycler(color = color_palettes["colorblind_1"]),
 )
 
