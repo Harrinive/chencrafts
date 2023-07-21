@@ -9,6 +9,16 @@ from chencrafts.cqed.scq_helper import (
     wavefunc_FT,
 )
 
+from chencrafts.cqed.qt_helper import (
+    projector_w_basis,
+    oprt_in_basis,
+    superop_in_basis,
+    basis_of_projector,
+    superop_evolve,
+    projected_superop,
+    process_fidelity,
+)
+
 from chencrafts.cqed.custom_sweeps import (
     n_crit_by_diag,
     sweep_n_crit_by_diag,
@@ -37,11 +47,9 @@ from chencrafts.cqed.mode_assignment import (
     dressed_state_component,
 )
 
-from chencrafts.cqed.states_n_oprts import (
+from chencrafts.cqed.special_states import (
     coherent,
     cat,
-    projector_w_basis,
-    oprt_in_basis,
 )
 
 from chencrafts.cqed.flexible_sweep import (

@@ -24,7 +24,13 @@ from chencrafts.bsqubits.batched_custom_sweeps import (
     batched_sweep_cat_code,
 )
 
-# set scqubits
+from chencrafts.bsqubits.sims_n_sweeps import (
+    cavity_ancilla_me_ingredients,
+    idling_propagator,
+)
+import chencrafts.bsqubits.ideal_qec as ideal_qec
+
+# scqubits settings
 scq.set_units('GHz')
 scq.settings.T1_DEFAULT_WARNING = False
 scq.settings.PROGRESSBAR_DISABLED = True

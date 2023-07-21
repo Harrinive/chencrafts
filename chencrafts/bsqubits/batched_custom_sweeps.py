@@ -18,7 +18,7 @@ from chencrafts.cqed.decoherence import (
     qubit_shot_noise_dephasing_w_res,
 )
 
-from chencrafts.cqed.states_n_oprts import (
+from chencrafts.cqed.special_states import (
     cat
 )
 
