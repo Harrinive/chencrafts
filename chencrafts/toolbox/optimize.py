@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import (
@@ -449,13 +447,13 @@ class MultiTraj():
     def __getitem__(
         self,
         idx: slice,
-    ) -> MultiTraj:
+    ) -> "MultiTraj":
         ...
     
     def __getitem__(
         self,
         idx: int | slice,
-    ) -> OptTraj | MultiTraj:
+    ) -> "OptTraj | MultiTraj":
         if isinstance(idx, int):
             return self.traj_list[idx]
         elif isinstance(idx, slice):
@@ -501,7 +499,7 @@ class MultiTraj():
                 fixed_para_file_name=f"{path}/fixed.csv"
             )
 
-    def sort_traj(self, select_num=1) -> MultiTraj:
+    def sort_traj(self, select_num=1) -> "MultiTraj":
         """
         Sort the trajectories by the final target function value, from small to large,
         and return the top select_num trajectories as a new instance of MultiTraj.

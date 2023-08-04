@@ -7,7 +7,7 @@ from scqubits.core.param_sweep import ParameterSweep
 from scqubits.core.namedslots_array import NamedSlotsNdarray
 
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
-from chencrafts.cqed.states_n_oprts import oprt_in_basis
+from chencrafts.cqed.qt_helper import oprt_in_basis
 
 from typing import Dict, List, Tuple, Callable, Any, Literal
 import warnings
@@ -108,7 +108,7 @@ def cavity_ancilla_me_ingredients(
     dressed_indices: np.ndarray | None = None, eigensys = None,
     collapse_parameters: Dict[str, float] = {},
     in_rot_frame: bool = True,
-):
+) -> Tuple[qt.Qobj, List[qt.Qobj]]:
     """
     Generate hamiltonian and collapse operators for a cavity-ancilla system. The operators
     will be truncated to two modes only with the specified dimension.
@@ -227,12 +227,11 @@ def cavity_ancilla_me_ingredients(
     
     return hamiltonian, c_ops
 
-def idling(
+def idling_propagator(
     hamiltonian: qt.Qobj, 
     c_ops: List[qt.Qobj],
-    init_state: qt.Qobj,
-    tlist: List[float] | np.ndarray,
-):
+    time: float,
+) -> qt.Qobj:
     """
     Run the idling process for a given time.
 
@@ -242,8 +241,6 @@ def idling(
         The hamiltonian of the system.
     c_ops: List[qt.Qobj]
         The collapse operators of the system.
-    init_state: qt.Qobj
-        The initial state of the system.
     idling_time: float | List[float] | np.ndarray
         The idling time. If a list or array is given, will return a list of final states.
 
@@ -251,7 +248,7 @@ def idling(
     -------
     final_states: List[qt.Qobj]
     """
-    return qt.mesolve(
-        hamiltonian, init_state, tlist, c_ops, options=qt.Options(nsteps=100000)
-    ).states
+    liouv = qt.liouvillian(hamiltonian, c_ops)
+
+    return (liouv * time).expm()
 
