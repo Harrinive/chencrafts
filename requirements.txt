@@ -4,3 +4,4 @@ scipy
 tqdm
 pandas
 dill
+scqubits
