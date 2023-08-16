@@ -144,7 +144,6 @@ def batched_sweep_purcell_cats(
             raise RuntimeError("basis is too small for the displacement")
         return cat([(1, disp), (1, -disp)], basis)
     
-
     sweep.add_sweep(
         sweep_purcell_factor, "purcell_factor_x",
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
