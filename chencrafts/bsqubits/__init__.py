@@ -30,6 +30,32 @@ from chencrafts.bsqubits.sims_n_sweeps import (
 )
 import chencrafts.bsqubits.ideal_qec as ideal_qec
 
+# specify private/public modules
+__all__ = [
+    'ErrorChannel', 
+    'ErrorRate', 
+    'basic_channels',
+    'flxn_hf_flx_channels',
+
+    'ResonatorTransmon',
+    'ResonatorFluxonium',
+    'FluxoniumResonatorFluxonium',
+
+    'batched_sweep_general',
+    'batched_sweep_bare_decoherence',
+    'batched_sweep_purcell_cats',
+    'batched_sweep_purcell_fock',
+    'batched_sweep_readout',
+    'batched_sweep_total_decoherence',
+    'batched_sweep_pulse',
+    'batched_sweep_cat_code',
+
+    'cavity_ancilla_me_ingredients',
+    'idling_propagator',
+
+    'ideal_qec',
+]
+
 # scqubits settings
 scq.set_units('GHz')
 scq.settings.T1_DEFAULT_WARNING = False

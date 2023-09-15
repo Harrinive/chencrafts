@@ -3,6 +3,7 @@ from scipy.integrate import odeint
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
+from warnings import warn
 from typing import Tuple, List
 
 # ##############################################################################
@@ -50,6 +51,8 @@ class PulseBase:
 
         self.init_phase = init_phase
 
+        self._exp_only = False
+
     @property
     def drive_amp(self):
         return self._drive_amp
@@ -93,7 +96,17 @@ class PulseBase:
         t_bias = t - self.init_time
         phase = self.drive_freq * t_bias + self.init_phase
         return phase
-        
+    
+    @property
+    def exp_only(self):
+        return self._exp_only
+    
+    @exp_only.setter
+    def exp_only(self, value: bool):
+        warn("When called, this pulse object will return a complex exponential function."
+              "pulse(t) + pulse(t).conj() will give the full pulse.")
+        self._exp_only = value
+
     def __call__(self, t, *args) -> float:
         """
         Only support scalar t
@@ -105,6 +118,8 @@ class PulseBase:
         env_Q = self.envelope_Q(t)
         phase = self.phase(t)
 
+        if self.exp_only:
+            return env_I * np.exp(1j * phase) / 2 + env_Q * np.exp(1j * phase) / 2j
         return env_I * np.cos(phase) + env_Q * np.sin(phase)
 
     def _check_input_t(self, t):
@@ -577,7 +592,6 @@ class DRAGGaussian(PulseBase):
 
         self.sigma = sigma
         self.non_lin = non_lin
-        self.leaking_mat_elem = leaking_mat_elem
         self.leaking_elem_ratio = np.abs(leaking_mat_elem / tgt_mat_elem)
         self.t_mid = self.init_time + self.duration / 2
 

@@ -31,3 +31,35 @@ from chencrafts.toolbox.plot import (
     bar_plot_compare,
     plot_dictionary_2d
 )
+
+# specify private/public modules
+__all__ = [
+    'DimensionModify',
+    'NSArray',
+    'nd_interpolation',
+    'scatter_to_mesh',
+
+    'nan_2_flat_val',
+    # 'nan_2_constr',
+    'OptTraj',
+    'MultiTraj',
+    'Optimization',
+    'MultiOpt',
+
+    'datetime_dir',
+    'save_variable_list_dict',
+    'load_variable_list_dict',
+    'save_variable_dict',
+    'load_variable_dict',
+    'dill_dump',
+    'dill_load',
+
+    'color_palettes',
+    'color_cyclers',
+
+    'remove_repeated_legend',
+    'filter',
+    'Cmap',
+    'bar_plot_compare',
+    'plot_dictionary_2d',
+]
