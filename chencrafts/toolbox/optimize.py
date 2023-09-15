@@ -627,7 +627,7 @@ class Optimization():
             The optimizer to be used, by default "L-BFGS-B". Supported optimizers:
             "L-BFGS-B", "Nelder-Mead", "Powell", "shgo", "differential evolution",
         opt_options : dict, optional
-            The options to be passed to the optimizer, by default {}.
+            The options to be passed to the optimizer, by default {}. Specify "tol" will give optimizers a tolerance.
         """
         
         self.fixed_variables = copy.deepcopy(fixed_variables)
@@ -1007,30 +1007,34 @@ class Optimization():
             file_name, fixed_para_file_name
         )
 
+        opt_kwargs = {
+            "func": self._opt_func,
+            "bounds": [[0.0, 1.0]] * len(self.free_name_list),
+            "callback": opt_call_back,
+        }
+        tol = self.opt_options.get("tol", 1e-10)
+
         # run the scipy optimizer
-        opt_bounds = [[0.0, 1.0]] * len(self.free_name_list)
         if self.optimizer in ("L-BFGS-B", "Nelder-Mead", "Powell", "TNC", "SLSQP"):
             scipy_res = minimize(
-                self._opt_func,
+                **opt_kwargs,
                 x0=init_x_arr,
-                bounds=opt_bounds,
-                callback=opt_call_back,
                 method=self.optimizer,
                 options=self.opt_options,
             )
         elif self.optimizer == "shgo":
+            opt_options = self.opt_options.copy()
+            opt_options.update({"ftol": tol})
             scipy_res = shgo(
-                self._opt_func,
-                bounds=opt_bounds,
-                callback=opt_call_back,
-                **self.opt_options,
+                **opt_kwargs,
+                **opt_options,
             )
         elif self.optimizer == "differential evolution":
+            opt_options = self.opt_options.copy()
+            opt_options.update({"tol": tol})
             scipy_res = differential_evolution(
-                self._opt_func,
-                bounds=opt_bounds,
-                callback=opt_call_back,
-                **self.opt_options,
+                **opt_kwargs,
+                **opt_options,
             )
         # elif self.optimizer == "bayesian optimization":
         #     bo_res = bayesian_optimization(
