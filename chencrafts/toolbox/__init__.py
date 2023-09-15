@@ -24,10 +24,9 @@ from chencrafts.toolbox.save import (
 from chencrafts.toolbox.plot import (
     color_palettes,
     color_cyclers,
-
+    PiecewiseLinearNorm,
     remove_repeated_legend,
     filter,
-    Cmap,
     bar_plot_compare,
     plot_dictionary_2d
 )
@@ -40,7 +39,7 @@ __all__ = [
     'scatter_to_mesh',
 
     'nan_2_flat_val',
-    # 'nan_2_constr',
+    # 'nan_2_constr', 
     'OptTraj',
     'MultiTraj',
     'Optimization',
@@ -56,10 +55,9 @@ __all__ = [
 
     'color_palettes',
     'color_cyclers',
-
+    'PiecewiseLinearNorm',
     'remove_repeated_legend',
     'filter',
-    'Cmap',
     'bar_plot_compare',
     'plot_dictionary_2d',
 ]

@@ -29,7 +29,8 @@ from chencrafts.toolbox.save import (
     save_variable_dict,
     load_variable_dict,
 )
-from chencrafts.toolbox.plot import Cmap, filter
+from chencrafts.toolbox.plot import filter
+from matplotlib.cm import get_cmap
 
 from scqubits.utils.cpu_switch import get_map_method
 
@@ -532,7 +533,8 @@ class MultiTraj():
             need_show = True
 
         best = self.sort_traj()
-        cmap = Cmap(self.length)
+        mpl_cmap = get_cmap("viridis")
+        cmap = lambda x: mpl_cmap(x / self.length)
         for idx, traj in enumerate(self.traj_list):
             if traj == best:
                 filter_name = "emph"

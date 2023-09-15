@@ -1,5 +1,5 @@
 from matplotlib import pyplot as plt
-from matplotlib import colormaps
+from matplotlib import colors
 from matplotlib.axes import Axes
 from matplotlib import rcParams
 from cycler import cycler
@@ -53,24 +53,54 @@ def filter(c, filter_name):
         factor = 3
         return [r ** factor, g ** factor, b ** factor, a]
 
-class Cmap():
+# class Cmap():
+#     def __init__(
+#         self, 
+#         upper: float, 
+#         lower: float = 0, 
+#         cmap_name="rainbow"
+#     ):
+#         self.upper = upper
+#         self.lower = lower
+#         self.cmap_name = cmap_name
+
+#         self.cmap = colormaps[self.cmap_name]
+#         self.norm = plt.Normalize(self.lower, self.upper)
+#         self.mappable = plt.cm.ScalarMappable(norm=self.norm, cmap=self.cmap)
+    
+#     def __call__(self, val):
+#         # return self.mappable.cmap(val)
+#         return self.cmap(self.norm(val))
+# useless now, can be simply replaced by plt.cm.get_cmap(cmap_name)
+
+
+class PiecewiseLinearNorm:
     def __init__(
         self, 
-        upper: float, 
-        lower: float = 0, 
-        cmap_name="rainbow"
+        value_list: List[float] | np.ndarray,
+        color_list: List[float] | np.ndarray,
+        clip: bool = False, 
     ):
-        self.upper = upper
-        self.lower = lower
-        self.cmap_name = cmap_name
+        assert len(value_list) == len(color_list), "value_list and color_list must have the same length."
+        
+        # Sorting the lists based on the value_list
+        sorted_indices = np.argsort(value_list)
+        self.value_list = np.array(value_list)[sorted_indices]
+        self.color_list = np.array(color_list)[sorted_indices]
+        self.clip = clip
 
-        self.cmap = colormaps[self.cmap_name]
-        self.norm = plt.Normalize(self.lower, self.upper)
-        self.mappable = plt.cm.ScalarMappable(norm=self.norm, cmap=self.cmap)
-    
-    def __call__(self, val):
-        # return self.mappable.cmap(val)
-        return self.cmap(self.norm(val))
+    def __call__(self, value: float) -> float:
+        if self.clip:
+            if value < self.value_list[0]:
+                return self.color_list[0]
+            elif value > self.value_list[-1]:
+                return self.color_list[-1]
+        
+        return np.interp(value, self.value_list, self.color_list)
+
+    def inverse(self, color: float) -> float:
+        return np.interp(color, self.color_list, self.value_list)
+
 
 def bar_plot_compare(
     var_list_dict: Dict[str, np.ndarray],
