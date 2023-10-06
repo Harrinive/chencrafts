@@ -5,10 +5,11 @@ from scqubits.core.param_sweep import ParameterSweep
 
 import numpy as np
 
+from abc import ABC, abstractproperty
 from typing import Dict, List, Tuple, Union, Any, Callable
 import copy
 
-class JointSystems:
+class JointSystems(ABC):
     def __init__(
         self, 
         sim_para: Dict[str, Any],
@@ -57,8 +58,6 @@ class JointSystems:
             else:
                 break
 
-    dict: Dict[str, Any]
-
     def keys(self):
         return self.dict.keys()
 
@@ -73,7 +72,10 @@ class JointSystems:
     
     def __iter__(self):
         return self.dict.__iter__()
-    
+
+    @abstractproperty
+    def dict(self) -> Dict[str, Any]:
+        ...
 
 
 # ##############################################################################
@@ -173,6 +175,7 @@ class ResonatorTransmon(JointSystems):
             g_GHz = kwargs.pop("g_GHz", ps.hilbertspace.interaction_list[0].g_strength),
         )
 
+    @property
     def dict(self) -> Dict[str, Any]:
         return {
             "sim_para": self.sim_para,
@@ -281,6 +284,7 @@ class ResonatorFluxonium(JointSystems):
             g_GHz = kwargs.pop("g_GHz", self.hilbertspace.interaction_list[0].g_strength),
         )
 
+    @property
     def dict(self) -> Dict[str, Any]:
         return {
             "sim_para": self.sim_para,
@@ -440,6 +444,7 @@ class FluxoniumResonatorFluxonium(JointSystems):
         )
 
 
+    @property
     def dict(self) -> Dict[str, Any]:
         return {
             "sim_para": self.sim_para,
