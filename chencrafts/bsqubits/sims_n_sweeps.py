@@ -1,6 +1,8 @@
 import numpy as np
 import qutip as qt
 
+import copy
+
 import scqubits as scq
 from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.param_sweep import ParameterSweep
@@ -45,6 +47,7 @@ def _collapse_operators_by_rate(
         done.
     """
 
+    hilbertspace = copy.deepcopy(hilbertspace)
     mode = hilbertspace.subsystem_list[mode_idx]
     dim = hilbertspace.subsystem_dims[mode_idx]
 
@@ -106,7 +109,7 @@ def cavity_ancilla_me_ingredients(
     res_mode_idx: int, qubit_mode_idx: int, 
     res_truncated_dim: int | None = None, qubit_truncated_dim: int = 2, 
     dressed_indices: np.ndarray | None = None, eigensys = None,
-    collapse_parameters: Dict[str, float] = {},
+    collapse_parameters: Dict[str, Any] = {},
     in_rot_frame: bool = True,
 ) -> Tuple[qt.Qobj, List[qt.Qobj]]:
     """
@@ -167,6 +170,7 @@ def cavity_ancilla_me_ingredients(
         The hamiltonian and collapse operators in the truncated basis. They have dims=[[res_dim, qubit_dim], [res_dim, qubit_dim]].
     """
     # prepare
+    hilbertspace = copy.deepcopy(hilbertspace)
     dims = hilbertspace.subsystem_dims
     if len(dims) > 2:
         warnings.warn("More than 2 subsystems detected. The 'smart truncation' is not "
