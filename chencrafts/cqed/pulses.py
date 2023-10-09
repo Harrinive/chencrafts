@@ -356,6 +356,7 @@ class Gaussian(PulseBase):
             - `pulse.discretized_IQ()` to get the discretized I and Q values, which is useful for
             feeding into the AWG.
         
+        Parameters
         ----------
         base_angular_freq : float
             The angular frequency of the desired transitions of the undriven Hamiltonian.

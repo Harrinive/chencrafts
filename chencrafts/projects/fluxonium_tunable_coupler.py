@@ -799,7 +799,7 @@ class FluxoniumTunableCouplerFloating(base.QubitBaseClass, serializers.Serializa
     ):
         hilbert_space = self.hilbert_space_at_sweetspot(flux_shift_a, flux_shift_b)
         hilbert_space.generate_lookup()
-        evals_qobj = hilbert_space["evals"][0:num_states]
+        evals_qobj = hilbert_space["evals"][0, 0:num_states]
         evecs_qobj = list(hilbert_space["evecs"][0][0:num_states])
         evals_zeroed = evals_qobj - evals_qobj[0]
         H_0 = Qobj(2.0 * np.pi * np.diag(evals_zeroed[0:num_states]))
