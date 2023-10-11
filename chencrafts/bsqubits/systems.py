@@ -18,13 +18,30 @@ class JointSystems(ABC):
         self.sim_para = sim_para
         self.para = para
 
-    def check_conv(
+    def qubit_init_w_conv_check(
         self, 
         qubit_init_ret_evecs: Callable,
         init_cut: int,
         convergence_range: Tuple[float, float] | None = (1e-10, 1e-6), 
         update: bool = True,
     ) -> None:
+        """
+        Check the convergence of the eigensolver for the qubit subsystem.
+        
+        Parameters
+        ----------
+        qubit_init_ret_evecs : Callable
+            A function that initializes the qubit subsystem and returns 
+            the bare eigenvectors.
+        init_cut : int
+            The initial cutoff dimension of the qubit Hilbert space.
+        convergence_range : Tuple[float, float] | None, optional
+            The convergence range for the eigensolver. The default is (1e-10, 1e-6).
+        update : bool, optional
+            Whether to update the cutoff dimension of the qubit Hilbert space. 
+            The default is True.
+
+        """
     
         last_operation = 0
         current_cut = init_cut
@@ -111,6 +128,34 @@ class ResonatorTransmon(JointSystems):
 
         Parameters are set randomly and should be determined in the FlexibleSweep.para and 
         FlexibleSweep.swept_para.
+
+        Parameters
+        ----------
+        sim_para : Dict[str, Any]
+            A dictionary containing simulation parameters.
+            sim_para should contain the following keys:
+                "res_dim": int
+                    The dimension of the resonator Hilbert space.
+                "qubit_dim": int
+                    The dimension of the qubit Hilbert space.
+                "qubit_ncut": int
+                    The cutoff dimension of the qubit Hilbert space.
+        para : Dict[str, Any], optional
+            A dictionary containing system parameters. The default is {}.
+            para should contain the following keys:
+                "E_osc_GHz": float
+                    The frequency of the resonator in GHz.
+                "EJ_GHz": float
+                    The Josephson energy of the fluxonium qubit in GHz.
+                "EC_GHz": float
+                    The charging energy of the fluxonium qubit in GHz.
+                "ng": float
+                    The offset charge of the fluxonium qubit.
+                "g_GHz": float
+                    The coupling strength between the resonator and the qubit in GHz.
+        convergence_range : Tuple[float, float] | None, optional
+            The convergence range for the eigensolver. The default is (1e-10, 1e-6).
+        
         """
         super().__init__(sim_para, para)
 
@@ -122,7 +167,12 @@ class ResonatorTransmon(JointSystems):
             l_osc = 1
         )
 
-        self.check_conv(self._qubit_init, sim_para["qubit_ncut"], convergence_range, update_ncut)
+        self.qubit_init_w_conv_check(
+            self._qubit_init, 
+            sim_para["qubit_ncut"], 
+            convergence_range, 
+            update_ncut
+        )
         if update_ncut:
             sim_para["qubit_ncut"] = self.qubit.ncut
 
@@ -177,6 +227,29 @@ class ResonatorTransmon(JointSystems):
 
     @property
     def dict(self) -> Dict[str, Any]:
+        """
+        Return a dictionary containing the system information.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dict[str, Any]
+            A dictionary containing the following keys:
+                "sim_para": Dict[str, Any]
+                    A dictionary containing simulation parameters.
+                "hilbertspace": HilbertSpace
+                    The Hilbert space of the system.
+                "qubit": scq.Transmon
+                    The transmon qubit subsystem.
+                "res": scq.Oscillator
+                    The resonator subsystem.
+                "update_hilbertspace": Callable
+                    A function for updating the Hilbert space of the system.
+                "update_hilbertspace_by_keyword": Callable
+                    A function for updating the Hilbert space of the system using keyword arguments.
+                "subsys_update_info": Dict[str, List[Subsystem]]
+                    A dictionary containing information about the subsystems that can be updated.               
+        """
         return {
             "sim_para": self.sim_para,
             "hilbertspace": self.hilbertspace,
@@ -189,6 +262,19 @@ class ResonatorTransmon(JointSystems):
 
 class ResonatorFluxonium(JointSystems):
     def _qubit_init(self, cut):
+        """
+        Initialize the fluxonium qubit subsystem.
+
+        Parameters
+        ----------
+        cut : int
+            The cutoff dimension of the qubit Hilbert space.
+
+        Returns
+        -------
+        np.ndarray
+            The bare eigenvectors of the qubit subsystem.
+        """
         self.qubit = scq.Fluxonium(
             EJ = self.para.get("EJ_GHz", 5),
             EC = self.para.get("EC_GHz", 0.2),
@@ -215,8 +301,36 @@ class ResonatorFluxonium(JointSystems):
         set update_hilbertspace_by_keyword, then return all of them as keyword arguments 
         (a dictionary) in order to be passed to FlexibleSweep. 
 
-        Parameters are set randomly and should be determined in the FlexibleSweep.para and 
-        FlexibleSweep.swept_para.
+        Parameters
+        ----------
+        sim_para : Dict[str, Any]
+            A dictionary containing simulation parameters.
+            sim_para should contain the following keys:
+                "res_dim": int
+                    The dimension of the resonator Hilbert space.
+                "qubit_dim": int
+                    The dimension of the qubit Hilbert space.
+                "qubit_cutoff": int
+                    The cutoff dimension of the qubit Hilbert space.
+        para : Dict[str, Any], optional
+            A dictionary containing system parameters. The default is {}.
+            para should contain the following keys:
+                "E_osc_GHz": float
+                    The frequency of the resonator in GHz.
+                "EJ_GHz": float
+                    The Josephson energy of the fluxonium qubit in GHz.
+                "EC_GHz": float
+                    The charging energy of the fluxonium qubit in GHz.
+                "EL_GHz": float
+                    The inductive energy of the fluxonium qubit in GHz.
+                "flux": float
+                    The flux bias of the fluxonium qubit.
+                "g_GHz": float
+                    The coupling strength between the resonator and the qubit in GHz.
+        convergence_range : Tuple[float, float] | None, optional
+            The convergence range for the eigensolver. The default is (1e-10, 1e-6).
+        update_cutoff : bool, optional
+            Whether to update the qubit cutoff dimension in sim_para. The default is True.
         """
         super().__init__(sim_para, para)
         
@@ -228,7 +342,12 @@ class ResonatorFluxonium(JointSystems):
             l_osc = 1
         )
 
-        self._qubit_init(sim_para["qubit_cutoff"])
+        self.qubit_init_w_conv_check(
+            self._qubit_init, 
+            sim_para["qubit_cutoff"], 
+            convergence_range, 
+            update_cutoff
+        )
         if update_cutoff:
             sim_para["qubit_cutoff"] = self.qubit.cutoff
 
@@ -258,6 +377,26 @@ class ResonatorFluxonium(JointSystems):
         E_osc_GHz: float, EJ_GHz: float, EC_GHz: float, EL_GHz: float, flux: float,
         g_GHz: float,
     ):
+        """
+        Update the Hilbert space of the system.
+
+        Parameters
+        ----------
+        hilbertspace : HilbertSpace
+            The Hilbert space of the system.
+        E_osc_GHz : float
+            The frequency of the resonator in GHz.
+        EJ_GHz : float
+            The Josephson energy of the fluxonium qubit in GHz.
+        EC_GHz : float
+            The charging energy of the fluxonium qubit in GHz.
+        EL_GHz : float
+            The inductive energy of the fluxonium qubit in GHz.
+        flux : float
+            The flux bias of the fluxonium qubit.
+        g_GHz : float
+            The coupling strength between the resonator and the qubit in GHz.
+        """
         res: scq.Oscillator = hilbertspace.subsys_by_id_str("res")
         qubit: scq.Fluxonium = hilbertspace.subsys_by_id_str("qubit")
         interaction = hilbertspace.interaction_list[0]
@@ -273,6 +412,29 @@ class ResonatorFluxonium(JointSystems):
         ps: ParameterSweep,
         **kwargs,
     ):
+        """
+        Update the Hilbert space of the system using keyword arguments.
+
+        Parameters
+        ----------
+        ps : ParameterSweep
+            The parameter sweep object.
+        **kwargs : Dict[str, Any]
+            Keyword arguments for updating the Hilbert space.
+            The following keys are supported:  
+                "E_osc_GHz": float
+                    The frequency of the resonator in GHz.
+                "EJ_GHz": float
+                    The Josephson energy of the fluxonium qubit in GHz.
+                "EC_GHz": float
+                    The charging energy of the fluxonium qubit in GHz.
+                "EL_GHz": float
+                    The inductive energy of the fluxonium qubit in GHz.
+                "flux": float
+                    The flux bias of the fluxonium qubit.
+                "g_GHz": float
+                    The coupling strength between the resonator and the qubit in GHz.
+        """
         kwargs = copy.deepcopy(kwargs)
         self.update_hilbertspace(
             ps.hilbertspace, 
@@ -286,6 +448,28 @@ class ResonatorFluxonium(JointSystems):
 
     @property
     def dict(self) -> Dict[str, Any]:
+        """
+        Return a dictionary containing the system information.
+
+        Returns
+        -------
+        Dict[str, Any]
+            A dictionary containing the following keys:
+                "sim_para": Dict[str, Any]
+                    A dictionary containing simulation parameters.
+                "hilbertspace": HilbertSpace
+                    The Hilbert space of the system.
+                "qubit": scq.Fluxonium
+                    The fluxonium qubit subsystem.
+                "res": scq.Oscillator
+                    The resonator subsystem.
+                "update_hilbertspace": Callable
+                    A function for updating the Hilbert space of the system.
+                "update_hilbertspace_by_keyword": Callable
+                    A function for updating the Hilbert space of the system using keyword arguments.
+                "subsys_update_info": Dict[str, List[Subsystem]]
+                    A dictionary containing information about the subsystems that can be updated.
+        """
         return {
             "sim_para": self.sim_para,
             "hilbertspace": self.hilbertspace,
@@ -341,6 +525,51 @@ class FluxoniumResonatorFluxonium(JointSystems):
 
         Parameters are set randomly and should be determined in the FlexibleSweep.para and 
         FlexibleSweep.swept_para.
+
+        Parameters
+        ----------
+        sim_para : Dict[str, Any]
+            A dictionary containing simulation parameters.
+            sim_para should contain the following keys:
+                "res_dim": int
+                    The dimension of the resonator Hilbert space.
+                "qubit_dim1": int
+                    The dimension of the qubit1 Hilbert space.
+                "qubit_dim2": int
+                    The dimension of the qubit2 Hilbert space.
+                "qubit_cutoff1": int
+                    The cutoff dimension of the qubit1 Hilbert space.
+                "qubit_cutoff2": int
+                    The cutoff dimension of the qubit2 Hilbert space.
+        para : Dict[str, Any], optional
+            A dictionary containing system parameters. The default is {}.
+            para should contain the following keys:
+                "E_osc_GHz": float
+                    The frequency of the resonator in GHz.
+                "EJ1_GHz": float
+                    The Josephson energy of the fluxonium qubit1 in GHz.
+                "EC1_GHz": float
+                    The charging energy of the fluxonium qubit1 in GHz.
+                "EL1_GHz": float
+                    The inductive energy of the fluxonium qubit1 in GHz.
+                "flux1": float
+                    The flux bias of the fluxonium qubit1.
+                "EJ2_GHz": float
+                    The Josephson energy of the fluxonium qubit2 in GHz.
+                "EC2_GHz": float
+                    The charging energy of the fluxonium qubit2 in GHz.
+                "EL2_GHz": float
+                    The inductive energy of the fluxonium qubit2 in GHz.
+                "flux2": float
+                    The flux bias of the fluxonium qubit2.
+                "g1_GHz": float
+                    The coupling strength between the resonator and the qubit1 in GHz.
+                "g2_GHz": float
+                    The coupling strength between the resonator and the qubit2 in GHz.
+        convergence_range : Tuple[float, float] | None, optional
+            The convergence range for the eigensolver. The default is (1e-10, 1e-6).
+        update_cutoff : bool, optional
+            Whether to update the qubit cutoff dimension in sim_para. The default is True.
         """
         super().__init__(sim_para, para)
 
@@ -352,11 +581,21 @@ class FluxoniumResonatorFluxonium(JointSystems):
             l_osc = 1
         )
 
-        self._qubit1_init(sim_para["qubit_cutoff1"])
+        self.qubit_init_w_conv_check(
+            self._qubit1_init, 
+            sim_para["qubit_cutoff1"], 
+            convergence_range, 
+            update_cutoff
+        )
         if update_cutoff:
             sim_para["qubit_cutoff1"] = self.qubit1.cutoff
 
-        self._qubit2_init(sim_para["qubit_cutoff2"])
+        self.qubit_init_w_conv_check(
+            self._qubit2_init, 
+            sim_para["qubit_cutoff2"], 
+            convergence_range, 
+            update_cutoff
+        )
         if update_cutoff:
             sim_para["qubit_cutoff2"] = self.qubit2.cutoff
 
@@ -446,6 +685,30 @@ class FluxoniumResonatorFluxonium(JointSystems):
 
     @property
     def dict(self) -> Dict[str, Any]:
+        """
+        Return a dictionary containing the system information.
+
+        Returns
+        -------
+        Dict[str, Any]
+            A dictionary containing the following keys:
+                "sim_para": Dict[str, Any]
+                    A dictionary containing simulation parameters.
+                "hilbertspace": HilbertSpace
+                    The Hilbert space of the system.
+                "qubit1": scq.Fluxonium
+                    The fluxonium qubit1 subsystem.
+                "res": scq.Oscillator
+                    The resonator subsystem.
+                "qubit2": scq.Fluxonium
+                    The fluxonium qubit2 subsystem.
+                "update_hilbertspace": Callable
+                    A function for updating the Hilbert space of the system.
+                "update_hilbertspace_by_keyword": Callable
+                    A function for updating the Hilbert space of the system using keyword arguments.
+                "subsys_update_info": Dict[str, List[Subsystem]]
+                    A dictionary containing information about the subsystems that can be updated.
+        """
         return {
             "sim_para": self.sim_para,
             "hilbertspace": self.hilbertspace,

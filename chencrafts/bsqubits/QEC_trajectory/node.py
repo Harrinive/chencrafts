@@ -7,13 +7,15 @@ from typing import List, Tuple, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from chencrafts.bsqubits.QEC_trajectory.edge import Edge
 
+MeasurementRecord = List[Tuple[int, ...]]
+
 class StateNode:
 
-    meas_record: List[Tuple[int, ...]]
+    meas_record: MeasurementRecord
 
-    state: qt.Qobj | None
-    ideal_state: qt.Qobj | None
-    fidelity: float | None
+    state: qt.Qobj
+    ideal_projector: qt.Qobj
+    fidelity: float
 
     index: int
 
@@ -35,15 +37,15 @@ class StateNode:
 
     def accept(
         self, 
-        meas_record: List[Tuple[int, ...]],
+        meas_record: MeasurementRecord,
         state: qt.Qobj,
-        ideal_state: qt.Qobj,
+        ideal_projector: qt.Qobj,
     ):
         self.meas_record = meas_record
         
         self.state = state
-        self.ideal_state = ideal_state
-        self.fidelity = state.overlap(ideal_state)
+        self.ideal_projector = ideal_projector
+        self.fidelity = (state * ideal_projector).tr()
 
     def deepcopy(self):
         """
@@ -54,7 +56,7 @@ class StateNode:
         copied_node = StateNode()
         copied_node.meas_record = deepcopy(self.meas_record)
         copied_node.state = deepcopy(self.state)
-        copied_node.ideal_state = deepcopy(self.ideal_state)
+        copied_node.ideal_projector = deepcopy(self.ideal_projector)
         copied_node.fidelity = deepcopy(self.fidelity)
 
         return copied_node

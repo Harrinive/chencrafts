@@ -99,6 +99,10 @@ class FlexibleSweep():
         )   
 
     def _check_valid_var_name(self):
+        """
+        Later, the parameters will be used as variable names in the update function.
+        Therefore, the parameter names should be a valid variable names.
+        """
         for key in self._all_param_names():
             if not key.isidentifier():
                 raise ValueError(f"Invalid variable name: {key}")

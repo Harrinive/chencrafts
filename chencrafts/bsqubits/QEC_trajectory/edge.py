@@ -2,10 +2,13 @@ import qutip as qt
 
 from chencrafts.cqed import superop_evolve
 
-from typing import List, Tuple, Any, TYPE_CHECKING
+from typing import List, Tuple, Any, TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from chencrafts.bsqubits.QEC_trajectory.node import StateNode
+    from chencrafts.bsqubits.QEC_trajectory.node import (
+        StateNode, 
+        MeasurementRecord,
+    )
 
 class EdgeBase:
     init_state: StateNode
@@ -15,8 +18,8 @@ class EdgeBase:
 
     def __init__(
         self, 
-        map: qt.Qobj,
-        ideal_map: qt.Qobj,
+        map: qt.Qobj | Callable[[MeasurementRecord], qt.Qobj],
+        ideal_map: qt.Qobj | Callable[[MeasurementRecord], qt.Qobj],
     ):
         """
         Edge that connects two StateNodes.
@@ -29,10 +32,13 @@ class EdgeBase:
             The final state node
         map : qt.Qobj
             The actual map that evolves the initial state to the final state.
-            Should be a superoperator.
+            Should be a superoperator or a function that takes the measurement
+            record as the input and returns a superoperator.
         ideal_map : qt.Qobj
-            The ideal map that evolves the initial state to the final state.
-            Should be a regular operator.
+            The ideal map that evolves the initial ideal projector to 
+            the final ideal projector.
+            Should be a superoperator or a function that takes the measurement
+            record as the input and returns a superoperator.
         """
         self.map = map
         self.ideal_map = ideal_map
@@ -53,10 +59,24 @@ class EdgeBase:
             self.final_state
         except AttributeError:
             raise AttributeError("The initial state and the final state not connected.")
+        
+        if callable(self.map):
+            map_superop = self.map(self.init_state.meas_record)
+        else:
+            map_superop = self.map
+        if callable(self.ideal_map):
+            ideal_map_superop = self.ideal_map(self.init_state.meas_record)
+        else:
+            ideal_map_superop = self.ideal_map
 
         try:
-            final_state = superop_evolve(self.map, self.init_state.state)
-            ideal_final_state = self.ideal_map * self.init_state.ideal_state
+            final_state = superop_evolve(
+                map_superop, self.init_state.state
+            )
+            ideal_final_state = superop_evolve(
+                ideal_map_superop, self.init_state.ideal_projector
+            )
+
         except AttributeError:
             raise AttributeError("The initial state not evolved.")
         
