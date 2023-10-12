@@ -24,11 +24,8 @@ from chencrafts.bsqubits.batched_custom_sweeps import (
     batched_sweep_cat_code,
 )
 
-from chencrafts.bsqubits.sims_n_sweeps import (
-    cavity_ancilla_me_ingredients,
-    idling_propagator,
-)
-import chencrafts.bsqubits.ideal_qec as ideal_qec
+import chencrafts.bsqubits.real_cat as real_cat
+import chencrafts.bsqubits.ideal_cat as ideal_cat
 
 # specify private/public modules
 __all__ = [
@@ -50,10 +47,8 @@ __all__ = [
     'batched_sweep_pulse',
     'batched_sweep_cat_code',
 
-    'cavity_ancilla_me_ingredients',
-    'idling_propagator',
-
-    'ideal_qec',
+    'real_cat'
+    'ideal_cat',
 ]
 
 # scqubits settings

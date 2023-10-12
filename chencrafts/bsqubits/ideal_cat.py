@@ -74,27 +74,12 @@ def _qubit_proj(
     return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
 
 # #############################################################################
-def idling_propagator(
+def idling_proj_map(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0, 
     superop: bool = False,
 ) -> qt.Qobj:
-    """
-    The ideal idling propagator (identity gate)
-
-    Parameters
-    ----------
-    res_dim, qubit_dim: int
-        The dimension of the resonator and qubit.
-    res_mode_idx: Literal[0, 1]
-        The index of the resonator mode in the tensor product basis. 
-    """
-    unitary = _eye(res_dim, qubit_dim, res_mode_idx)
-
-    if superop:
-        return qt.to_super(unitary)
-    else: 
-        return unitary
+    
 
 @overload
 def idling_w_decay_propagator(
