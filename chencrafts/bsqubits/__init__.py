@@ -24,8 +24,9 @@ from chencrafts.bsqubits.batched_custom_sweeps import (
     batched_sweep_cat_code,
 )
 
-import chencrafts.bsqubits.real_cat as real_cat
-import chencrafts.bsqubits.ideal_cat as ideal_cat
+import chencrafts.bsqubits.cat_real as cat_real
+import chencrafts.bsqubits.cat_ideal as cat_ideal
+import chencrafts.bsqubits.QEC_graph as QEC_graph
 
 # specify private/public modules
 __all__ = [
@@ -47,8 +48,10 @@ __all__ = [
     'batched_sweep_pulse',
     'batched_sweep_cat_code',
 
-    'real_cat'
-    'ideal_cat',
+    'cat_real',
+    'cat_ideal',
+    
+    'QEC_graph',
 ]
 
 # scqubits settings

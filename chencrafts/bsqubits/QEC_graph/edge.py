@@ -2,48 +2,46 @@ import qutip as qt
 
 from chencrafts.cqed import superop_evolve
 
-from typing import List, Tuple, Any, TYPE_CHECKING, Callable
+from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict
 
 if TYPE_CHECKING:
-    from chencrafts.bsqubits.QEC_trajectory.node import (
+    from chencrafts.bsqubits.QEC_graph.node import (
         StateNode, 
         MeasurementRecord,
     )
 
 class EdgeBase:
-    init_state: StateNode
-    final_state: StateNode
+    init_state: "StateNode"
+    final_state: "StateNode"
 
     index: int
 
     def __init__(
         self, 
-        map: qt.Qobj | Callable[[MeasurementRecord], qt.Qobj],
-        ideal_map: qt.Qobj | Callable[[MeasurementRecord], qt.Qobj],
+        name: str,
+        real_map: qt.Qobj | Callable[["MeasurementRecord"], qt.Qobj],
+        ideal_map: Callable[[qt.Qobj, "MeasurementRecord"], qt.Qobj],
     ):
         """
         Edge that connects two StateNodes.
 
         Parameters
         ----------
-        init_state : StateNode
-            The initial state node
-        final_state : StateNode
-            The final state node
-        map : qt.Qobj
+        name : str
+            Name of the edge
+        map : qt.Qobj | Callable[[MeasurementRecord], qt.Qobj]
             The actual map that evolves the initial state to the final state.
             Should be a superoperator or a function that takes the measurement
             record as the input and returns a superoperator.
-        ideal_map : qt.Qobj
+        ideal_map : Callable[[qt.Qobj, MeasurementRecord], qt.Qobj]
             The ideal map that evolves the initial ideal projector to 
-            the final ideal projector.
-            Should be a superoperator or a function that takes the measurement
-            record as the input and returns a superoperator.
+            the final ideal projector. Measurement record is also needed.
         """
-        self.map = map
+        self.name = name
+        self.real_map = real_map
         self.ideal_map = ideal_map
 
-    def connect(self, init_state: StateNode, final_state: StateNode):
+    def connect(self, init_state: "StateNode", final_state: "StateNode"):
         """
         Connect the edge to the initial state and the final state
         """
@@ -58,37 +56,47 @@ class EdgeBase:
             self.init_state
             self.final_state
         except AttributeError:
-            raise AttributeError("The initial state and the final state not connected.")
+            raise AttributeError("The initial state and the final state are not connected.")
         
-        if callable(self.map):
-            map_superop = self.map(self.init_state.meas_record)
-        else:
-            map_superop = self.map
-        if callable(self.ideal_map):
-            ideal_map_superop = self.ideal_map(self.init_state.meas_record)
-        else:
-            ideal_map_superop = self.ideal_map
-
         try:
+            # real map
+            if isinstance(self.real_map, qt.Qobj):
+                map_superop = self.real_map
+            else:
+                map_superop = self.real_map(self.init_state.meas_record) 
             final_state = superop_evolve(
                 map_superop, self.init_state.state
             )
-            ideal_final_state = superop_evolve(
-                ideal_map_superop, self.init_state.ideal_projector
+            # ideal map
+            ideal_final_projector = self.ideal_map(
+                self.init_state.ideal_projector,
+                self.init_state.meas_record
             )
-
         except AttributeError:
-            raise AttributeError("The initial state not evolved.")
+            raise AttributeError("The initial state are not evolved.")
         
         self.final_state.accept(
             self.init_state.meas_record, 
             final_state, 
-            ideal_final_state,
+            ideal_final_projector,
         )
 
     def assign_index(self, index: int):
         self.index = index
-       
+
+    def to_nx(self) -> Tuple[int, int, Dict[str, Any]]:
+        """
+        Convert to a networkx edge
+        """
+        return (
+            self.init_state.index,
+            self.final_state.index,
+            {
+                "name": self.name,
+                "type": "propagator" if isinstance(self, PropagatorEdge) else "measurement",
+                "process": self,
+            }
+        )       
 
 class PropagatorEdge(EdgeBase):
     pass
@@ -97,14 +105,15 @@ class PropagatorEdge(EdgeBase):
 class MeasurementEdge(EdgeBase):
     def __init__(
         self, 
+        name: str,
         outcome: float,
-        map: qt.Qobj,
+        real_map: qt.Qobj,
         ideal_map: qt.Qobj,
     ):
         """
         One of the measurement outcomes and projections
         """
-        super().__init__(map, ideal_map)
+        super().__init__(name, real_map, ideal_map)
 
         self.outcome = outcome
 

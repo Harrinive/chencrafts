@@ -60,7 +60,7 @@ def cat(phase_disp_pair: List[Tuple[complex, complex]], basis: List[qt.Qobj] | N
         for a two-legged cat: [(1, alpha), (1, -alpha)]
 
     basis
-        [ket0, ket1, ket2, ...]. If None, use Fock basis.
+        [ket0, ket1, ket2, ...]. If None, use Fock basis with auto-generated dimension.
     """
     if basis is None:
         disp_list = [disp for phase, disp in phase_disp_pair]
