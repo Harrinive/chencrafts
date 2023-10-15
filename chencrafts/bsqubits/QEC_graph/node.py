@@ -2,6 +2,7 @@ import qutip as qt
 import numpy as np
 import networkx as nx
 from copy import deepcopy
+from warnings import warn
 
 from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable
 
@@ -14,8 +15,19 @@ class StateNode:
 
     meas_record: MeasurementRecord
 
+    # current state as a density matrix
     state: qt.Qobj
+
+    # projector that is evolved using the ideal propagator, projecting 
+    # the state to the ideal states, 
+    # can be rank-n, but usually rank-1 - a density matrix describing the
+    # pure ideal state
     ideal_projector: qt.Qobj
+
+    # # a list of projectors that are evolved using the ideal propagator, 
+    # # may be used in getting the fidelity.
+    # reference_projectors: List[qt.Qobj]
+    
     fidelity: float
 
     index: int
@@ -81,6 +93,35 @@ class StateNode:
             }
         )
 
+    def clear_evolution_data(self):
+        try:
+            del self.state
+            del self.ideal_projector
+            del self.fidelity
+            del self.meas_record
+        except AttributeError:
+            pass
+
+
+# class CatNode(StateNode):
+#     state_vector: List[complex]
+#     logical_states: List[qt.Qobj]
+
+#     def accept(
+#         self, 
+#         meas_record: MeasurementRecord, 
+#         state: qt.Qobj, 
+#         state_vector: List[complex],
+#         logical_states: List[qt.Qobj],
+#     ):
+#         self.state_vector = state_vector
+#         self.logical_states = logical_states
+
+#         ideal_state
+#         ideal_projector = qt.ket2dm(state)
+        
+#         super().accept(meas_record, state, ideal_projector)
+
 
 class StateEnsemble:
 
@@ -92,7 +133,7 @@ class StateEnsemble:
     ):
         if nodes is None:
             nodes = []
-        self.nodes = nodes
+        self.nodes: List[StateNode] = nodes
 
     def append(self, node: StateNode):
         self.nodes.append(node)
@@ -110,6 +151,16 @@ class StateEnsemble:
         trace = sum([node.state.tr() for node in self.nodes])
         return np.abs(trace - 1) < 1e-8
     
+    @property
+    def state(self) -> qt.Qobj:
+        """
+        Calculate the total state
+        """
+        if not self.is_trace_1():
+            warn("The total trace is not 1. The averaged state is not"
+                 " physical. ")
+        return sum([node.state for node in self.nodes])
+
     @property
     def fidelity(self) -> float:
         """

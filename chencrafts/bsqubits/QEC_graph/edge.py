@@ -1,8 +1,8 @@
+import copy
 import qutip as qt
+from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict
 
 from chencrafts.cqed import superop_evolve
-
-from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict
 
 if TYPE_CHECKING:
     from chencrafts.bsqubits.QEC_graph.node import (
@@ -20,7 +20,7 @@ class EdgeBase:
         self, 
         name: str,
         real_map: qt.Qobj | Callable[["MeasurementRecord"], qt.Qobj],
-        ideal_map: Callable[[qt.Qobj, "MeasurementRecord"], qt.Qobj],
+        ideal_map: qt.Qobj | Callable[[qt.Qobj, "MeasurementRecord"], qt.Qobj],
     ):
         """
         Edge that connects two StateNodes.
@@ -33,9 +33,10 @@ class EdgeBase:
             The actual map that evolves the initial state to the final state.
             Should be a superoperator or a function that takes the measurement
             record as the input and returns a superoperator.
-        ideal_map : Callable[[qt.Qobj, MeasurementRecord], qt.Qobj]
+        ideal_map : qt.Qobj | Callable[[qt.Qobj, MeasurementRecord], qt.Qobj]
             The ideal map that evolves the initial ideal projector to 
-            the final ideal projector. Measurement record is also needed.
+            the final ideal projector. It could be a superoperator or a function. When it's a function, the measurement record is 
+            needed as one of the inputs.
         """
         self.name = name
         self.real_map = real_map
@@ -68,10 +69,15 @@ class EdgeBase:
                 map_superop, self.init_state.state
             )
             # ideal map
-            ideal_final_projector = self.ideal_map(
-                self.init_state.ideal_projector,
-                self.init_state.meas_record
-            )
+            if isinstance(self.ideal_map, qt.Qobj):
+                ideal_final_projector = superop_evolve(
+                    self.ideal_map, self.init_state.ideal_projector
+                )
+            else:
+                ideal_final_projector = self.ideal_map(
+                    self.init_state.ideal_projector,
+                    self.init_state.meas_record
+                )
         except AttributeError:
             raise AttributeError("The initial state are not evolved.")
         
@@ -123,7 +129,8 @@ class MeasurementEdge(EdgeBase):
         and then append the measurement outcome to the measurement record
         """
         super().evolve()
-        self.final_state.meas_record.append(self.outcome)
+        init_record = copy.copy(self.init_state.meas_record)
+        self.final_state.meas_record = init_record + [self.outcome]
 
 
 Edge = PropagatorEdge | MeasurementEdge

@@ -47,6 +47,14 @@ class EvolutionGraph:
 
         return nx_graph
     
+    def clear_evolution_data(
+        self, 
+        exclude: List[StateNode] = [],
+    ):
+        for node in self.nodes:
+            if node not in exclude:
+                node.clear_evolution_data()
+    
 
 class EvolutionTree(EvolutionGraph):
     """
@@ -68,6 +76,38 @@ class EvolutionTree(EvolutionGraph):
                 final_ensemble.append(edge.final_state)
 
         return final_ensemble
+    
+    def _move_single_step(self, initial_ensemble: StateEnsemble) -> StateEnsemble:
+        """
+        In the tree, the node will not be traversed twice when evolving.
+        By moving on the tree, the evolution data can be retrieved.
+        This function return the ensemble at the next step without evolving
+        """
+        next_ensemble = StateEnsemble()
+
+        for node in initial_ensemble:
+            for edge in node.out_edges:
+                next_ensemble.append(edge.final_state)
+
+        return next_ensemble
+
+    def ensemble_at(self, step: int) -> StateEnsemble:
+        """
+        In the tree, the node will not be traversed twice when evolving.
+        By moving on the tree, the evolution data can be retrieved.
+        This function return the ensemble at the next step at the given step
+        """
+        current_ensemble = StateEnsemble([self.nodes[0]])
+
+        for stp in range(step):
+            try:
+                current_ensemble = self._move_single_step(current_ensemble)
+            except RuntimeError:
+                print(f"The evolution stops at step {stp}.")
+                break
+
+        return current_ensemble
+        
 
     def evolve(
         self,
@@ -89,6 +129,7 @@ class EvolutionTree(EvolutionGraph):
         final_ensemble : StateEnsemble
             The final ensemble after evolution
         """
+        self.clear_evolution_data(exclude=initial_ensemble)
         
         current_ensemble = initial_ensemble
 
@@ -101,6 +142,6 @@ class EvolutionTree(EvolutionGraph):
 
         return current_ensemble
     
-    def evolve_node_0(self, steps: int):
-        return self.evolve(StateEnsemble([self.nodes[0]]), steps)
+    def evolve_all(self):
+        return self.evolve(StateEnsemble([self.nodes[0]]), 9999)
     

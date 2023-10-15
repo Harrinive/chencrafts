@@ -220,7 +220,7 @@ def qubit_rot_propagator(
     """
     The ideal qubit rotation propagator.
     """
-    generator = _qubit_pauli(res_dim, qubit_dim, res_mode_idx, axis)
+    generator = _qubit_pauli(res_dim, qubit_dim, res_mode_idx, axis) / 2
     unitary = (-1j * angle * generator).expm()
 
     if superop:
@@ -244,6 +244,23 @@ def parity_mapping_propagator(
     else:
         return unitary
     
+def qubit_projectors(
+    res_dim: int, qubit_dim: int,
+    res_mode_idx: Literal[0, 1] = 0,
+    superop: bool = False,
+) -> List[qt.Qobj]:
+    """
+    The ideal qubit measurement projectors.
+    """
+    ops = [
+        _qubit_proj(res_dim, qubit_dim, res_mode_idx, qubit_state=i) 
+        for i in range(qubit_dim)
+    ]
+    if superop:
+        return [qt.sprepost(op, op.dag()) for op in ops]
+    else:
+        return ops
+    
 def qubit_measurement_func(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
@@ -264,9 +281,9 @@ def qubit_measurement_func(
     A function that takes in a state and returns the measurement result.
 
     """
-    proj_list = [
-        _qubit_proj(res_dim, qubit_dim, res_mode_idx, qubit_state=i) for i in range(qubit_dim)
-    ]
+    proj_list = qubit_projectors(
+        res_dim, qubit_dim, res_mode_idx, superop=False
+    )
 
     def measurement(state: qt.Qobj):
         prob_list = np.array([qt.expect(proj, state) for proj in proj_list], dtype=float)
