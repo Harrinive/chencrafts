@@ -30,6 +30,14 @@ from chencrafts.toolbox.plot import (
     bar_plot_compare,
     plot_dictionary_2d
 )
+from chencrafts.toolbox.small_tools import (
+    capacitance_2_EC,
+    EC_2_capacitance,
+    EL_2_inductance,
+    inductance_2_EL,
+    EC_EL_2_omega_Z,
+    omega_Z_2_EC_EL,
+)
 
 # specify private/public modules
 __all__ = [
@@ -60,4 +68,11 @@ __all__ = [
     'filter',
     'bar_plot_compare',
     'plot_dictionary_2d',
+
+    'capacitance_2_EC',
+    'EC_2_capacitance',
+    'EL_2_inductance',
+    'inductance_2_EL',
+    'EC_EL_2_omega_Z',
+    'omega_Z_2_EC_EL',
 ]

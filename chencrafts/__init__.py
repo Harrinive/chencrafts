@@ -2,20 +2,18 @@ from chencrafts.version import version as __version__
 
 import numpy as np
 
+import scqubits as scq
+
+# set matplotlib 
 import matplotlib as mpl
 import matplotlib.font_manager as mpl_font
 import matplotlib_inline.backend_inline
-
-import scqubits as scq
-
-from chencrafts.toolbox.plot import color_cyclers
-
-# set matplotlib 
+from chencrafts.toolbox.plot import color_cyclers as _color_cyclers
 mpl.rcParams = mpl.rcParamsDefault.copy()
 # figure format
 matplotlib_inline.backend_inline.set_matplotlib_formats("png")
 # color cycle
-mpl.rcParams["axes.prop_cycle"] = color_cyclers["PGL"]
+mpl.rcParams["axes.prop_cycle"] = _color_cyclers["PGL"]
 mpl.rcParams['text.usetex'] = False
 # disable font warning message
 font_selected = None

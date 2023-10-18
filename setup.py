@@ -4,11 +4,11 @@ import os
 VERSION = 0.2
 PACKAGES = [
     'chencrafts',
-    'chencrafts/toolbox',
-    'chencrafts/bsqubits',
-    'chencrafts/cqed',
-    'chencrafts/specfit',
-    'chencrafts/projects',
+    'chencrafts.toolbox',
+    'chencrafts.bsqubits',
+    'chencrafts.cqed',
+    'chencrafts.specfit',
+    'chencrafts.projects',
 ]
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
