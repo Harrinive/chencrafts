@@ -14,6 +14,8 @@ from chencrafts.cqed.qt_helper import oprt_in_basis
 from typing import Dict, List, Tuple, Callable, Any, Literal
 import warnings
 
+Esys = Tuple[np.ndarray, np.ndarray]
+
 # ##############################################################################
 def _collapse_operators_by_rate(
     hilbertspace: HilbertSpace,
@@ -111,7 +113,7 @@ def cavity_ancilla_me_ingredients(
     dressed_indices: np.ndarray | None = None, eigensys = None,
     collapse_parameters: Dict[str, Any] = {},
     in_rot_frame: bool = True,
-) -> Tuple[qt.Qobj, List[qt.Qobj]]:
+) -> Tuple[qt.Qobj, List[qt.Qobj], Esys]:
     """
     Generate hamiltonian and collapse operators for a cavity-ancilla system. The operators
     will be truncated to two modes only with the specified dimension.
@@ -229,7 +231,7 @@ def cavity_ancilla_me_ingredients(
         for op in res_collapse_operators + qubit_collapse_operators
     ]       # change the dims of the collapse operators
     
-    return hamiltonian, c_ops
+    return hamiltonian, c_ops, (truncated_evals.ravel(), truncated_evecs.ravel())
 
 def idling_propagator(
     hamiltonian: qt.Qobj, 

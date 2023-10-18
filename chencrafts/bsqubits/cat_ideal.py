@@ -1,7 +1,11 @@
 import numpy as np
 import math
 import qutip as qt
-from typing import Literal, Callable, List, Tuple, overload
+from typing import Literal, Callable, List, Tuple, overload, TYPE_CHECKING
+
+from chencrafts.cqed import oprt_in_basis, superop_evolve
+if TYPE_CHECKING:
+    from chencrafts.bsqubits.QEC_graph.node import MeasurementRecord
 
 # ##############################################################################
 def _res_qubit_tensor(
@@ -73,13 +77,75 @@ def _qubit_proj(
 
     return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
 
+def _res_rotation(
+    res_dim: int, qubit_dim: int,
+    res_mode_idx: Literal[0, 1] = 0,
+    angle: float = np.pi / 2,
+) -> qt.Qobj:
+    res_oprt = (-1j * angle * qt.num(res_dim)).expm()
+    qubit_oprt = qt.qeye(qubit_dim)
+
+    return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
+
+def res_qubit_basis(
+    res_dim: int, qubit_dim: int,
+    bare_label: Tuple[int, int] = (0, 0),
+    res_mode_idx: Literal[0, 1] = 0,
+):
+    """
+    Generate a basis state for the resonator-qubit Hilbert space.
+    """
+    res_basis = qt.basis(res_dim, bare_label[res_mode_idx])
+    qubit_basis = qt.basis(qubit_dim, bare_label[1 - res_mode_idx])
+
+    return _res_qubit_tensor(res_basis, qubit_basis, res_mode_idx)
+
 # #############################################################################
 def idling_proj_map(
     res_dim: int, qubit_dim: int,
-    res_mode_idx: Literal[0, 1] = 0, 
-    superop: bool = False,
-) -> qt.Qobj:
-    
+    res_mode_idx: Literal[0, 1], 
+    static_hamiltonian: qt.Qobj,
+    time: float,
+    decay_rate: float = 0.0,
+    self_Kerr: float = 0.0,
+    # basis: List[qt.Qobj] | np.ndarray | None = None,
+) -> Callable[[qt.Qobj, "MeasurementRecord"], qt.Qobj]:
+    """
+    Given an initial rank-1 density matrix (a projector), return a 
+    rank-n projector, where n is the number of correctable states. 
+    """
+    # free evolution
+    shrinkage_oprt = (
+        -decay_rate * time / 2 * _res_number(res_dim, qubit_dim, res_mode_idx)
+    ).expm()
+    free_evolution_oprt = shrinkage_oprt * (-1j * static_hamiltonian * time).expm()
+
+    # single-photon loss related operators
+    spl_rotation_oprt = _res_rotation(
+        res_dim, qubit_dim, res_mode_idx, angle = self_Kerr * time
+    )   # average rotation due to self-Kerr
+    a_oprt = _res_destroy(res_dim, qubit_dim, res_mode_idx)
+    # if basis is not None:
+    #     a_oprt = oprt_in_basis(a_oprt, basis)
+
+    # the map: zero photon loss
+    zpl_superop = qt.sprepost(free_evolution_oprt, free_evolution_oprt.dag())
+    # the map: single photon loss
+    spl_op = free_evolution_oprt * spl_rotation_oprt * a_oprt
+    spl_superop = qt.sprepost(spl_op, spl_op.dag())
+
+    def ideal_map(proj: qt.Qobj, meas_record: "MeasurementRecord"):
+        # check proj is rank-1
+        if np.linalg.matrix_rank(proj.full(), tol=1e-12) != 1:
+            raise ValueError("The input is not a rank-1 projector.")
+
+        zpl_state = superop_evolve(zpl_superop, proj).unit()
+        spl_state = superop_evolve(spl_superop, proj).unit()
+
+        return zpl_state + spl_state
+
+    return ideal_map
+
 
 @overload
 def idling_w_decay_propagator(
@@ -154,7 +220,7 @@ def qubit_rot_propagator(
     """
     The ideal qubit rotation propagator.
     """
-    generator = _qubit_pauli(res_dim, qubit_dim, res_mode_idx, axis)
+    generator = _qubit_pauli(res_dim, qubit_dim, res_mode_idx, axis) / 2
     unitary = (-1j * angle * generator).expm()
 
     if superop:
@@ -178,6 +244,23 @@ def parity_mapping_propagator(
     else:
         return unitary
     
+def qubit_projectors(
+    res_dim: int, qubit_dim: int,
+    res_mode_idx: Literal[0, 1] = 0,
+    superop: bool = False,
+) -> List[qt.Qobj]:
+    """
+    The ideal qubit measurement projectors.
+    """
+    ops = [
+        _qubit_proj(res_dim, qubit_dim, res_mode_idx, qubit_state=i) 
+        for i in range(qubit_dim)
+    ]
+    if superop:
+        return [qt.sprepost(op, op.dag()) for op in ops]
+    else:
+        return ops
+    
 def qubit_measurement_func(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
@@ -198,9 +281,9 @@ def qubit_measurement_func(
     A function that takes in a state and returns the measurement result.
 
     """
-    proj_list = [
-        _qubit_proj(res_dim, qubit_dim, res_mode_idx, qubit_state=i) for i in range(qubit_dim)
-    ]
+    proj_list = qubit_projectors(
+        res_dim, qubit_dim, res_mode_idx, superop=False
+    )
 
     def measurement(state: qt.Qobj):
         prob_list = np.array([qt.expect(proj, state) for proj in proj_list], dtype=float)
