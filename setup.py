@@ -2,6 +2,7 @@ import setuptools
 import os
 
 VERSION = 0.2
+# when changed, remember to change chencrafts/__init__.py
 PACKAGES = [
     'chencrafts',
     'chencrafts.toolbox',

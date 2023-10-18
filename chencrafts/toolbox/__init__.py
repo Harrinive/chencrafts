@@ -30,7 +30,7 @@ from chencrafts.toolbox.plot import (
     bar_plot_compare,
     plot_dictionary_2d
 )
-from chencrafts.toolbox.small_tools import (
+from chencrafts.toolbox.gadgets import (
     capacitance_2_EC,
     EC_2_capacitance,
     EL_2_inductance,
