@@ -22,23 +22,23 @@ def EC_2_capacitance(EC):
 
 def EL_2_inductance(EL):
     """
-    Give EL in GHz, return inductance in pH
+    Give EL in GHz, return inductance in uH
 
     Inductive energy, coefficient of (phi - phi_ext)^2, 
     EL = 1 / (2L) * Phi_0^2 / (2 pi)^2. Flux quantum Phi_0 = h / (2e)
     """
     Phi_0 = h / (2 * e)
-    return Phi_0**2 / (2 * pi)**2 / (2 * h * EL * 1e9) / 1e-12
+    return Phi_0**2 / (2 * pi)**2 / (2 * h * EL * 1e9) / 1e-6
 
 def inductance_2_EL(L):
     """
-    Give inductance in pH, return EL in GHz
+    Give inductance in uH, return EL in GHz
 
     Inductive energy, coefficient of (phi - phi_ext)^2, 
     EL = 1 / (2L) * Phi_0^2 / (2 pi)^2. Flux quantum Phi_0 = h / (2e)
     """
     Phi_0 = h / (2 * e)
-    return Phi_0**2 / (2 * pi)**2 / (2 * L * 1e-12) / h / 1e9
+    return Phi_0**2 / (2 * pi)**2 / (2 * L * 1e-6) / h / 1e9
 
 def EC_EL_2_omega_Z(EC, EL):
     """
@@ -49,9 +49,9 @@ def EC_EL_2_omega_Z(EC, EL):
     Z = sqrt(L / C)
     """
     C = EC_2_capacitance(EC) * 1e-15
-    L = EL_2_inductance(EL) * 1e-12
+    L = EL_2_inductance(EL) * 1e-6
     
-    freq = 1 / np.sqrt(L * C) / 2 / pi / 1e9
+    freq = 1 / np.sqrt(L * C) / np.pi / 2 / 1e9
     Z = np.sqrt(L / C)
 
     return freq, Z
@@ -64,11 +64,11 @@ def omega_Z_2_EC_EL(freq, Z):
     L = Z / (freq * 2 pi)
     C = L / Z^2
     """
-    L = Z / (freq * 2 * pi * 1e9)
+    L = Z / (freq * 2 * np.pi * 1e9)
     C = L / Z**2
 
-    EC = capacitance_2_EC(C)
-    EL = inductance_2_EL(L)
+    EC = capacitance_2_EC(C * 1e15)
+    EL = inductance_2_EL(L * 1e6)
 
     return EC, EL
 
