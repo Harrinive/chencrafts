@@ -272,7 +272,13 @@ def dressed_state_component(
         dressed_esys = hilbertspace.eigensys(hilbertspace.dimension)
     _, evecs = dressed_esys
 
-    hilbertspace.generate_lookup(dressed_esys=dressed_esys)
+    try:
+        hilbertspace.generate_lookup(dressed_esys=dressed_esys)
+    except TypeError:
+        # TypeError: HilbertSpace.generate_lookup() got an unexpected 
+        # keyword argument 'dressed_esys'
+        # meaning that it's not in danyang branch
+        hilbertspace.generate_lookup()
 
     drs_idx = hilbertspace.dressed_index(bare_label)
     if drs_idx is None:
@@ -283,7 +289,7 @@ def dressed_state_component(
 
     bare_label_list = []
     prob_list = []
-    for idx in range(len(evec_1)):
+    for idx in range(evec_1.shape[0]):
         drs_label = int(largest_occupation_label[idx])
         bare_label = label_convert(drs_label, hilbertspace)
         prob = (np.abs(evec_1.data.toarray()[:, 0])**2)[drs_label]
