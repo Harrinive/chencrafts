@@ -11,6 +11,7 @@ from chencrafts.cqed.scq_helper import (
 
 from chencrafts.cqed.qt_helper import (
     projector_w_basis,
+    ket_in_basis,
     oprt_in_basis,
     superop_in_basis,
     basis_of_projector,
@@ -81,6 +82,7 @@ __all__ = [
     "wavefunc_FT",
 
     "projector_w_basis",
+    "ket_in_basis",
     "oprt_in_basis",
     "superop_in_basis",
     "basis_of_projector",

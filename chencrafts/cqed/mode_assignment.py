@@ -288,14 +288,14 @@ def dressed_state_component(
         raise IndexError(f"no dressed state found for bare label {bare_label}")
 
     evec_1 = evecs[drs_idx]
-    largest_occupation_label = np.argsort(np.abs(evec_1.data.toarray()[:, 0]))[::-1]
+    largest_occupation_label = np.argsort(np.abs(evec_1.full()[:, 0]))[::-1]
 
     bare_label_list = []
     prob_list = []
     for idx in range(evec_1.shape[0]):
         drs_label = int(largest_occupation_label[idx])
         bare_label = label_convert(drs_label, hilbertspace)
-        prob = (np.abs(evec_1.data.toarray()[:, 0])**2)[drs_label]
+        prob = (np.abs(evec_1.full()[:, 0])**2)[drs_label]
 
         bare_label_list.append(bare_label)
         prob_list.append(prob)

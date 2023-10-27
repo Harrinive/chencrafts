@@ -30,6 +30,37 @@ def basis_of_projector(projector: qt.Qobj) -> List[qt.Qobj]:
                              "neither 0 nor 1.")
     return projected_basis
 
+def ket_in_basis(
+    ket: np.ndarray | qt.Qobj,
+    states: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
+):
+    """
+    Convert a ket to a vector representation described by a given set of basis.
+    If the number of basis is smaller than the dimension of the Hilbert space, the ket
+    will be projected onto the subspace spanned by the basis.
+    """
+    length = len(states)
+
+    # go through all states and oprt, to find a dimension 
+    if isinstance(ket, qt.Qobj):
+        dim = ket.dims[0]
+    elif isinstance(states[0], qt.Qobj):
+        dim = states[0].dims[0]
+    else:
+        dim = [ket.shape[0]]
+
+    # convert to qobj
+    if isinstance(ket, np.ndarray):
+        ket = qt.Qobj(ket, dims=[dim, list(np.ones_like(dim).astype(int))])
+    state_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in states]
+
+    # calculate matrix elements
+    data = np.zeros((length, 1), dtype=complex)
+    for j in range(length):
+        data[j, 0] = state_qobj[j].overlap(ket) 
+
+    return qt.Qobj(data)
+
 def oprt_in_basis(
     oprt: np.ndarray | qt.Qobj, 
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray
