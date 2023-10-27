@@ -24,28 +24,31 @@ def EL_2_inductance(EL):
     """
     Give EL in GHz, return inductance in uH
 
-    Inductive energy, coefficient of (phi - phi_ext)^2, 
-    EL = 1 / (2L) * Phi_0^2 / (2 pi)^2. Flux quantum Phi_0 = h / (2e)
+    Inductive energy, coefficient of 1/2 * (phi - phi_ext)^2, 
+    EL = 1 / L * Phi_0^2 / (2 pi)^2. Flux quantum Phi_0 = h / (2e)
     """
     Phi_0 = h / (2 * e)
-    return Phi_0**2 / (2 * pi)**2 / (2 * h * EL * 1e9) / 1e-6
+    return Phi_0**2 / (2 * pi)**2 / (h * EL * 1e9) / 1e-6
 
 def inductance_2_EL(L):
     """
     Give inductance in uH, return EL in GHz
 
-    Inductive energy, coefficient of (phi - phi_ext)^2, 
-    EL = 1 / (2L) * Phi_0^2 / (2 pi)^2. Flux quantum Phi_0 = h / (2e)
+    Inductive energy, coefficient of 1/2 * (phi - phi_ext)^2, 
+    EL = 1 / L * Phi_0^2 / (2 pi)^2. Flux quantum Phi_0 = h / (2e)
     """
     Phi_0 = h / (2 * e)
-    return Phi_0**2 / (2 * pi)**2 / (2 * L * 1e-6) / h / 1e9
+    return Phi_0**2 / (2 * pi)**2 / (L * 1e-6) / h / 1e9
 
 def EC_EL_2_omega_Z(EC, EL):
     """
     Give EC and EL in GHz, return oscillation frequency in GHz and
-    impedence in ohms
+    impedence in ohms, where 
+    EC is the charging energy, defined as e^2 / (2C), and 
+    EL is the inductive energy, defined as a coeefficient of 1/2 * (phi - phi_ext)^2,
 
-    freq = 1 / sqrt(LC) / (2 pi)
+    We make use of the fact that the oscillation frequency is given by
+    freq = 1 / sqrt(LC) / (2 pi), and the impedence is given by
     Z = sqrt(L / C)
     """
     C = EC_2_capacitance(EC) * 1e-15
@@ -59,7 +62,9 @@ def EC_EL_2_omega_Z(EC, EL):
 def omega_Z_2_EC_EL(freq, Z):
     """
     Give oscillation frequency in GHz and impedence in ohms, return
-    EC and EL in GHz
+    EC and EL in GHz, where
+    EC is the charging energy, defined as e^2 / (2C), and 
+    EL is the inductive energy, defined as a coeefficient of 1/2 * (phi - phi_ext)^2,
 
     L = Z / (freq * 2 pi)
     C = L / Z^2
