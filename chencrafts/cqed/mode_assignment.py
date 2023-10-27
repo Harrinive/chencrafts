@@ -3,6 +3,7 @@ import qutip as qt
 
 from scqubits.core.hilbert_space import HilbertSpace
 
+from warnings import warn
 from typing import List, Tuple, Any, overload
 
 @overload
@@ -278,6 +279,8 @@ def dressed_state_component(
         # TypeError: HilbertSpace.generate_lookup() got an unexpected 
         # keyword argument 'dressed_esys'
         # meaning that it's not in danyang branch
+        warn("Not in danyang's branch of scqubits. Generate lookup without "
+             "the eigensys if given.")
         hilbertspace.generate_lookup()
 
     drs_idx = hilbertspace.dressed_index(bare_label)
