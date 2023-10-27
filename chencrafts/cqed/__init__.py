@@ -67,6 +67,10 @@ from chencrafts.cqed.crit_photon_num import (
     n_crit_by_diag_subspace_w_hilbertspace,
 )
 
+from chencrafts.cqed.symbolic_bosons import (
+    normal
+)
+
 # specify private/public modules
 __all__ = [
     "GeneralPulse",
@@ -117,4 +121,6 @@ __all__ = [
     "n_crit_by_1st_pert",
     "n_crit_by_diag_subspace",
     "n_crit_by_diag_subspace_w_hilbertspace",
+
+    "normal",
 ]
