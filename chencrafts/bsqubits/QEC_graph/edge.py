@@ -1,8 +1,12 @@
 import copy
 import qutip as qt
+import numpy as np
 from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict
 
-from chencrafts.cqed import superop_evolve
+from chencrafts.cqed.qt_helper import (
+    superop_evolve,
+    normalization_factor,
+)
 
 if TYPE_CHECKING:
     from chencrafts.bsqubits.QEC_graph.node import (
@@ -20,7 +24,7 @@ class EdgeBase:
         self, 
         name: str,
         real_map: qt.Qobj | Callable[["MeasurementRecord"], qt.Qobj],
-        ideal_map: qt.Qobj | Callable[[qt.Qobj, "MeasurementRecord"], qt.Qobj],
+        ideal_maps: List[qt.Qobj] | Callable[["MeasurementRecord"], List[qt.Qobj]],
     ):
         """
         Edge that connects two StateNodes.
@@ -33,14 +37,15 @@ class EdgeBase:
             The actual map that evolves the initial state to the final state.
             Should be a superoperator or a function that takes the measurement
             record as the input and returns a superoperator.
-        ideal_map : qt.Qobj | Callable[[qt.Qobj, MeasurementRecord], qt.Qobj]
-            The ideal map that evolves the initial ideal projector to 
-            the final ideal projector. It could be a superoperator or a function. When it's a function, the measurement record is 
-            needed as one of the inputs.
+        ideal_maps : List[qt.Qobj] | List[Callable[[MeasurementRecord], qt.Qobj]]
+            The ideal map that evolves the initial ideal state (pure) to 
+            the final ideal state (pure, but may not be properly normalized). 
+            It could be a operator or a function. When it's a function, 
+            the measurement record is needed as the input.
         """
         self.name = name
         self.real_map = real_map
-        self.ideal_map = ideal_map
+        self.ideal_maps = ideal_maps
 
     def connect(self, init_state: "StateNode", final_state: "StateNode"):
         """
@@ -51,7 +56,9 @@ class EdgeBase:
 
     def evolve(self):
         """
-        Evolve the initial state to the final state using the map
+        Evolve the initial state to the final state using the map. 
+        
+        All of the evolved ideal states are normalized to norm 1.
         """
         try:
             self.init_state
@@ -60,31 +67,56 @@ class EdgeBase:
             raise AttributeError("The initial state and the final state are not connected.")
         
         try:
-            # real map
-            if isinstance(self.real_map, qt.Qobj):
-                map_superop = self.real_map
-            else:
-                map_superop = self.real_map(self.init_state.meas_record) 
-            final_state = superop_evolve(
-                map_superop, self.init_state.state
-            )
-            # ideal map
-            if isinstance(self.ideal_map, qt.Qobj):
-                ideal_final_projector = superop_evolve(
-                    self.ideal_map, self.init_state.ideal_projector
-                )
-            else:
-                ideal_final_projector = self.ideal_map(
-                    self.init_state.ideal_projector,
-                    self.init_state.meas_record
-                )
+            self.init_state.state
+            self.init_state.prob_amp_01
+            self.init_state.ideal_logical_states
         except AttributeError:
             raise AttributeError("The initial state are not evolved.")
-        
+
+        # evolve the state using the real map
+        if isinstance(self.real_map, qt.Qobj):
+            map_superop = self.real_map
+        else:
+            map_superop = self.real_map(self.init_state.meas_record) 
+        final_state = superop_evolve(
+            map_superop, self.init_state.state
+        )
+
+        # evolve the ideal states using the ideal maps
+        if isinstance(self.ideal_maps, list):
+            map_op_list = self.ideal_maps
+        else:
+            map_op_list = self.ideal_maps(self.init_state.meas_record)
+
+        new_ideal_logical_states = []
+        for map_op in map_op_list:
+            for logical_0, logical_1 in self.init_state.ideal_logical_states:
+                new_logical_0 = map_op * logical_0
+                new_logical_1 = map_op * logical_1
+
+                # when a syndrome measurement is done, it's likely that the 
+                # number of ideal states will be reduced and the state is not 
+                # normalized anymore. Only add the state to the list if it's 
+                # not zero norm.
+                norm_0 = normalization_factor(new_logical_0)
+                norm_1 = normalization_factor(new_logical_1)
+                if norm_0 > 1e-13 or norm_1 > 1e-13:
+                    new_ideal_logical_states.append(
+                        [new_logical_0 / norm_0, new_logical_1 / norm_1]
+                    )
+
+        # convert to ndarray
+        new_ideal_logical_state_array = np.empty(
+            (len(new_ideal_logical_states), 2), dtype=object
+        )
+        new_ideal_logical_state_array[:] = new_ideal_logical_states
+
+        # feed the result to the final state
         self.final_state.accept(
-            self.init_state.meas_record, 
+            copy.copy(self.init_state.meas_record), 
             final_state, 
-            ideal_final_projector,
+            copy.copy(self.init_state.prob_amp_01),
+            new_ideal_logical_state_array,
         )
 
     def assign_index(self, index: int):
@@ -103,6 +135,12 @@ class EdgeBase:
                 "process": self,
             }
         )       
+    
+    def __str__(self) -> str:
+        return f"{self.name}"
+    
+    def __repr__(self) -> str:
+        return self.__str__()
 
 class PropagatorEdge(EdgeBase):
     pass
@@ -131,6 +169,11 @@ class MeasurementEdge(EdgeBase):
         super().evolve()
         init_record = copy.copy(self.init_state.meas_record)
         self.final_state.meas_record = init_record + [self.outcome]
+
+    def __str__(self) -> str:
+        return super().__str__() + f" ({self.outcome})"
+
+    
 
 
 Edge = PropagatorEdge | MeasurementEdge

@@ -65,19 +65,27 @@ class EvolutionTree(EvolutionGraph):
     def _evolve_single_step(self, initial_ensemble: StateEnsemble) -> StateEnsemble:
         final_ensemble = StateEnsemble()
 
-        for node in initial_ensemble:
-            if node.out_edges == []:
-                raise RuntimeError(
+        # check if the evolution reaches the final state, namely no node
+        # has out edges
+        if initial_ensemble.no_further_evolution:
+            raise RuntimeError(
                 "The node has no out edges. "
                 "Possibly the evolution reaches the final state."
             )
+
+        # evolve
+        for node in initial_ensemble:
+            if node.out_edges == []:
+                # this node has no out edges, usually because the occupation 
+                # of the state (normalization factor) is very small
+                continue
             for edge in node.out_edges:
                 edge.evolve()
                 final_ensemble.append(edge.final_state)
 
         return final_ensemble
     
-    def _move_single_step(self, initial_ensemble: StateEnsemble) -> StateEnsemble:
+    def ensemble_at_next_step(self, initial_ensemble: StateEnsemble) -> StateEnsemble:
         """
         In the tree, the node will not be traversed twice when evolving.
         By moving on the tree, the evolution data can be retrieved.
@@ -85,13 +93,19 @@ class EvolutionTree(EvolutionGraph):
         """
         next_ensemble = StateEnsemble()
 
+        if initial_ensemble.no_further_evolution:
+            raise RuntimeError(
+                "The node has no out edges. "
+                "Possibly the evolution reaches the final state."
+            )
+
         for node in initial_ensemble:
             for edge in node.out_edges:
                 next_ensemble.append(edge.final_state)
 
         return next_ensemble
 
-    def ensemble_at(self, step: int) -> StateEnsemble:
+    def ensemble_at_step(self, step: int) -> StateEnsemble:
         """
         In the tree, the node will not be traversed twice when evolving.
         By moving on the tree, the evolution data can be retrieved.
@@ -101,14 +115,13 @@ class EvolutionTree(EvolutionGraph):
 
         for stp in range(step):
             try:
-                current_ensemble = self._move_single_step(current_ensemble)
+                current_ensemble = self.ensemble_at_next_step(current_ensemble)
             except RuntimeError:
                 print(f"The evolution stops at step {stp}.")
                 break
 
         return current_ensemble
         
-
     def evolve(
         self,
         initial_ensemble: StateEnsemble,

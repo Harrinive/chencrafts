@@ -194,3 +194,15 @@ def process_fidelity(
         qt.to_choi(super_propagator_1) / subspace_dim,
         qt.to_choi(super_propagator_2) / subspace_dim
     )**2
+
+
+# ##############################################################################
+def normalization_factor(ket_or_dm: qt.Qobj):
+    """
+    Return the normalization factor (N) of a ket or a density matrix (Qobj).
+    Such factor makes Qobj / N normalized.
+    """
+    if qt.isket(ket_or_dm):
+        return np.sqrt(((ket_or_dm.dag() * ket_or_dm).tr()).real)
+    elif qt.isoper(ket_or_dm):
+        return (ket_or_dm.tr()).real

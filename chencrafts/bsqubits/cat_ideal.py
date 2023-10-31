@@ -101,7 +101,7 @@ def res_qubit_basis(
     return _res_qubit_tensor(res_basis, qubit_basis, res_mode_idx)
 
 # #############################################################################
-def idling_proj_map(
+def idling_proj_maps(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1], 
     static_hamiltonian: qt.Qobj,
@@ -109,10 +109,9 @@ def idling_proj_map(
     decay_rate: float = 0.0,
     self_Kerr: float = 0.0,
     # basis: List[qt.Qobj] | np.ndarray | None = None,
-) -> Callable[[qt.Qobj, "MeasurementRecord"], qt.Qobj]:
+) -> List[qt.Qobj]:
     """
-    Given an initial rank-1 density matrix (a projector), return a 
-    rank-n projector, where n is the number of correctable states. 
+    Return the correctable maps for the idling process.
     """
     # free evolution
     shrinkage_oprt = (
@@ -125,27 +124,11 @@ def idling_proj_map(
         res_dim, qubit_dim, res_mode_idx, angle = self_Kerr * time
     )   # average rotation due to self-Kerr
     a_oprt = _res_destroy(res_dim, qubit_dim, res_mode_idx)
-    # if basis is not None:
-    #     a_oprt = oprt_in_basis(a_oprt, basis)
 
-    # the map: zero photon loss
-    zpl_superop = qt.sprepost(free_evolution_oprt, free_evolution_oprt.dag())
-    # the map: single photon loss
-    spl_op = free_evolution_oprt * spl_rotation_oprt * a_oprt
-    spl_superop = qt.sprepost(spl_op, spl_op.dag())
-
-    def ideal_map(proj: qt.Qobj, meas_record: "MeasurementRecord"):
-        # check proj is rank-1
-        if np.linalg.matrix_rank(proj.full(), tol=1e-12) != 1:
-            raise ValueError("The input is not a rank-1 projector.")
-
-        zpl_state = superop_evolve(zpl_superop, proj).unit()
-        spl_state = superop_evolve(spl_superop, proj).unit()
-
-        return zpl_state + spl_state
-
-    return ideal_map
-
+    return [
+        free_evolution_oprt,    # zero-photon loss
+        free_evolution_oprt * spl_rotation_oprt * a_oprt    # single-photon loss
+    ]
 
 @overload
 def idling_w_decay_propagator(
@@ -257,7 +240,7 @@ def qubit_projectors(
         for i in range(qubit_dim)
     ]
     if superop:
-        return [qt.sprepost(op, op.dag()) for op in ops]
+        return [qt.to_super(op) for op in ops]
     else:
         return ops
     
@@ -320,3 +303,16 @@ def qubit_reset_propagator(
     return qubit_rot_propagator(
         res_dim, qubit_dim, res_mode_idx, angle=np.pi, axis='x', superop=superop
     )
+
+def identity(
+    res_dim: int, qubit_dim: int,
+    res_mode_idx: Literal[0, 1] = 0,
+    superop: bool = False,
+):
+    """
+    The identity propagator.
+    """
+    if superop:
+        return qt.to_super(_eye(res_dim, qubit_dim, res_mode_idx))
+    else:
+        return _eye(res_dim, qubit_dim, res_mode_idx)

@@ -37,18 +37,25 @@ class CatGraphBuilder(GraphBuilder):
     c_ops: List[qt.Qobj]
     esys: Tuple[np.ndarray, np.ndarray]
 
+    # the ideal process and the real process share the same outcomes,
+    # as the actual action is based on the real outcomes.
+    _measurement_outcome_pool = [0, 1]
+
     # processes:
-    idling_real: qt.Qobj
-    idling_ideal: Callable
-    qubit_gate_m_ideal: qt.Qobj
-    qubit_gate_p_ideal: qt.Qobj
-    qubit_gate_m_real: qt.Qobj
-    qubit_gate_p_real: qt.Qobj
-    parity_mapping_ideal: qt.Qobj
-    parity_mapping_real: qt.Qobj
-    measurement_outcomes: List[int]
-    qubit_projs_ideal: List[qt.Qobj]
-    qubit_projs_real: List[qt.Qobj]
+    _idling_real: qt.Qobj
+    _idling_ideal: List[qt.Qobj]
+    _qubit_gate_m_ideal: List[qt.Qobj]
+    _qubit_gate_p_ideal: List[qt.Qobj]
+    _qubit_gate_m_real: qt.Qobj
+    _qubit_gate_p_real: qt.Qobj
+    _parity_mapping_ideal: List[qt.Qobj]
+    _parity_mapping_real: qt.Qobj
+    _measurement_outcome_pool: List[int]
+    _qubit_projs_ideal: List[qt.Qobj]
+    _qubit_projs_real: List[qt.Qobj]
+    _qubit_reset_real: qt.Qobj
+    _qubit_reset_ideal: [qt.Qobj]
+    _identity: qt.Qobj
 
     def __init__(
         self,
@@ -134,14 +141,14 @@ class CatGraphBuilder(GraphBuilder):
         init_nodes : StateEnsemble
             A collection of initial nodes that 
         """
-        self.idling_real = cat_real.idling_propagator(
+        self._idling_real = cat_real.idling_propagator(
             self.static_hamiltonian,
             self.c_ops,
             # Qobj * array(1.0) will return a scipy sparse matrix
             # while Qobj * 1.0 returns a Qobj
             float(self.fsweep["T_W"]),
         )
-        self.idling_ideal = cat_ideal.idling_proj_map(
+        self._idling_ideal = cat_ideal.idling_proj_maps(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
             static_hamiltonian=self.static_hamiltonian,
@@ -151,7 +158,7 @@ class CatGraphBuilder(GraphBuilder):
             # basis=self.esys[1],
         )
 
-    def _idle(
+    def idle(
         self,
         step: int | str,
         graph: EvolutionTree,
@@ -162,8 +169,8 @@ class CatGraphBuilder(GraphBuilder):
         for node in init_nodes:
             edge_idling = PropagatorEdge(
                 f"idling ({step})",
-                self.idling_real,
-                self.idling_ideal,
+                self._idling_real,
+                self._idling_ideal,
             )
             final_nodes.append(StateNode())
 
@@ -181,52 +188,55 @@ class CatGraphBuilder(GraphBuilder):
     def _build_qubit_gate_process(
         self,
     ):
-        self.qubit_gate_p_ideal = cat_ideal.qubit_rot_propagator(
+        self._qubit_gate_p_ideal = [cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
-            angle=np.pi/2, axis="x", superop=True,
-        )   # p stands for angle's sign plus
-        self.qubit_gate_m_ideal = cat_ideal.qubit_rot_propagator(
+            angle=np.pi/2, axis="x", superop=False,
+        )]   # p stands for angle's sign plus
+        self._qubit_gate_m_ideal = [cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
-            angle=-np.pi/2, axis="x", superop=True,
-        )
+            angle=-np.pi/2, axis="x", superop=False,
+        )]
 
         # currently the same as the ideal one   
-        self.qubit_gate_p_real = self.qubit_gate_p_ideal
-        self.qubit_gate_m_real = self.qubit_gate_m_ideal
+        self._qubit_gate_p_real = qt.to_super(self._qubit_gate_p_ideal[0])
+        self._qubit_gate_m_real = qt.to_super(self._qubit_gate_m_ideal[0])
 
     # the qubit gate after parity mapping
-    def qubit_gate_2_real(
+    def _qubit_gate_2_map_real(
         self,
         meas_record: MeasurementRecord,
     ) -> qt.Qobj:
         """
+        Different from the gate 1, the gate 2 depend on previous measurement results
+        to minimize the possibility of being at the excited state.
         Try to keep the qubit at |0> while the parity isn't changed
         """
         if self._current_parity(meas_record) == 0:
             # even parity, use the opposite gate
-            return self.qubit_gate_m_real
+            return self._qubit_gate_m_real
         else:
             # odd parity, use the same gate
-            return self.qubit_gate_p_real
+            return self._qubit_gate_p_real
         
-    def qubit_gate_2_ideal(
+    def _qubit_gate_2_map_ideal(
         self,
-        proj: qt.Qobj,
         meas_record: MeasurementRecord,
-    ) -> qt.Qobj:
+    ) -> List[qt.Qobj]:
         """
+        Different from the gate 1, the gate 2 depend on previous measurement results
+        to minimize the possibility of being at the excited state.
         Try to keep the qubit at |0> while the parity isn't changed
         """
         if self._current_parity(meas_record) == 0:
             # even parity, use the opposite gate
-            return superop_evolve(self.qubit_gate_m_ideal, proj)
+            return self._qubit_gate_m_ideal
         else:
             # odd parity, use the same gate
-            return superop_evolve(self.qubit_gate_p_ideal, proj)
+            return self._qubit_gate_p_ideal
 
-    def _qubit_gate_1(
+    def qubit_gate_1(
         self,
         step: int | str,
         graph: EvolutionTree,
@@ -237,8 +247,8 @@ class CatGraphBuilder(GraphBuilder):
         for node in init_nodes:
             edge_qubit_gate = PropagatorEdge(
                 f"qubit_gate_1 ({step})",
-                self.qubit_gate_p_real,
-                self.qubit_gate_p_ideal,
+                self._qubit_gate_p_real,
+                self._qubit_gate_p_ideal,
             )
             final_nodes.append(StateNode())
 
@@ -252,7 +262,7 @@ class CatGraphBuilder(GraphBuilder):
 
         return final_nodes
     
-    def _qubit_gate_2(
+    def qubit_gate_2(
         self,
         step: int | str,
         graph: EvolutionTree,
@@ -263,8 +273,8 @@ class CatGraphBuilder(GraphBuilder):
         for node in init_nodes:
             edge_qubit_gate = PropagatorEdge(
                 f"qubit_gate_2 ({step})",
-                self.qubit_gate_2_real,
-                self.qubit_gate_2_ideal,
+                self._qubit_gate_2_map_real,
+                self._qubit_gate_2_map_ideal,
             )
             final_nodes.append(StateNode())
 
@@ -282,15 +292,15 @@ class CatGraphBuilder(GraphBuilder):
     def _build_parity_mapping_process(
         self,
     ):
-        self.parity_mapping_ideal = cat_ideal.parity_mapping_propagator(
+        self._parity_mapping_ideal = [cat_ideal.parity_mapping_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx, superop=True,
-        )
+            res_mode_idx=self._res_mode_idx, superop=False,
+        )]
 
         # currently the same as the ideal one
-        self.parity_mapping_real = self.parity_mapping_ideal
+        self._parity_mapping_real = qt.to_super(self._parity_mapping_ideal[0],)
 
-    def _parity_mapping(
+    def parity_mapping(
         self,
         step: int | str,
         graph: EvolutionTree,
@@ -301,8 +311,8 @@ class CatGraphBuilder(GraphBuilder):
         for node in init_nodes:
             edge_parity_mapping = PropagatorEdge(
                 f"parity_mapping ({step})",
-                self.parity_mapping_real,
-                self.parity_mapping_ideal,
+                self._parity_mapping_real,
+                self._parity_mapping_ideal,
             )
             final_nodes.append(StateNode())
 
@@ -320,23 +330,21 @@ class CatGraphBuilder(GraphBuilder):
     def _build_qubit_measurement_process(
         self,
     ):
-        # the ideal process and the real process share the same outcomes,
-        # as the actual action is based on the real outcomes.
-        self.measurement_outcomes = [0, 1]
-
-        self.qubit_projs_ideal = cat_ideal.qubit_projectors(
+        self._qubit_projs_ideal = cat_ideal.qubit_projectors(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx, superop=True,
+            res_mode_idx=self._res_mode_idx, superop=False,
         )
 
         # currently the same as the ideal one
-        self.qubit_projs_real = self.qubit_projs_ideal
+        self._qubit_projs_real = [
+            qt.to_super(proj) for proj in self._qubit_projs_ideal
+        ]
 
         # all of the lists should have the same length
-        assert len(self.qubit_projs_ideal) == len(self.measurement_outcomes)
-        assert len(self.qubit_projs_ideal) == len(self.qubit_projs_real)
+        assert len(self._qubit_projs_ideal) == len(self._measurement_outcome_pool)
+        assert len(self._qubit_projs_ideal) == len(self._qubit_projs_real)
 
-    def _qubit_measurement(
+    def qubit_measurement(
         self,
         step: int | str,
         graph: EvolutionTree,
@@ -345,12 +353,12 @@ class CatGraphBuilder(GraphBuilder):
         final_nodes = StateEnsemble()
 
         for node in init_nodes:
-            for idx in range(len(self.qubit_projs_ideal)):
+            for idx in range(len(self._qubit_projs_ideal)):
                 edge_qubit_measurement = MeasurementEdge(
                     f"qubit_meas ({step})",
-                    self.measurement_outcomes[idx],
-                    self.qubit_projs_real[idx],
-                    self.qubit_projs_ideal[idx],
+                    self._measurement_outcome_pool[idx],
+                    self._qubit_projs_real[idx],
+                    [self._qubit_projs_ideal[idx]],
                 )
                 final_nodes.append(StateNode())
 
@@ -363,6 +371,71 @@ class CatGraphBuilder(GraphBuilder):
                 )
 
         return final_nodes
+    
+    # qubit reset ######################################################
+    def _build_qubit_reset_process(
+        self,
+    ):
+        self._qubit_reset_ideal = [cat_ideal.qubit_reset_propagator(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx, superop=False,
+        )]
+        # currently the same as the ideal one
+        self._qubit_reset_real = qt.to_super(self._qubit_reset_ideal[0])
+
+        # if there is no need to reset
+        self._identity = cat_ideal.identity(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx, superop=False,
+        )
+
+    def _qubit_reset_map_real(
+        self,
+        meas_record: MeasurementRecord,
+    ) -> qt.Qobj:
+        if meas_record[-1] == 1:
+            return self._qubit_reset_real
+        elif meas_record[-1] == 0:
+            return qt.to_super(self._identity)
+        else:
+            raise ValueError("The measurement outcome should be 0 or 1.")
+        
+    def _qubit_reset_map_ideal(
+        self,
+        meas_record: MeasurementRecord,
+    ) -> List[qt.Qobj]:
+        if meas_record[-1] == 1:
+            return self._qubit_reset_ideal
+        elif meas_record[-1] == 0:
+            return [self._identity]
+        else:
+            raise ValueError("The measurement outcome should be 0 or 1.")
+        
+    def qubit_reset(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        final_nodes = StateEnsemble()
+
+        for node in init_nodes:
+            edge_qubit_reset = PropagatorEdge(
+                f"qubit_reset ({step})",
+                self._qubit_reset_map_real,
+                self._qubit_reset_map_ideal,
+            )
+            final_nodes.append(StateNode())
+
+            graph.add_node(final_nodes[-1])
+
+            graph.add_edge_connect(
+                edge_qubit_reset,
+                node,
+                final_nodes[-1],
+            )
+
+        return final_nodes
 
 
     # overall generation ###############################################
@@ -373,10 +446,13 @@ class CatGraphBuilder(GraphBuilder):
         self._build_qubit_gate_process()
         self._build_parity_mapping_process()
         self._build_qubit_measurement_process()
+        self._build_qubit_reset_process()
 
     def generate_tree(
         self,
-        init_state: qt.Qobj,
+        init_prob_amp_01: Tuple[float, float],
+        logical_0: qt.Qobj,
+        logical_1: qt.Qobj,
         QEC_rounds: int = 1,
     ) -> EvolutionTree:
         """
@@ -385,26 +461,31 @@ class CatGraphBuilder(GraphBuilder):
         graph = EvolutionTree()
 
         # add the initial state
-        init_state_node = StateNode.initial_note(init_state)
+        init_state_node = StateNode.initial_note(
+            init_prob_amp_01, logical_0, logical_1,
+        )
         graph.add_node(init_state_node)
         current_ensemble = StateEnsemble([init_state_node])
 
         # add the idling edge
         step_counter = 0
         for round in range(QEC_rounds):
-            current_ensemble = self._idle(
+            current_ensemble = self.idle(
                 f"{round}.{step_counter}", graph, current_ensemble)
             step_counter += 1
-            current_ensemble = self._qubit_gate_1(
+            current_ensemble = self.qubit_gate_1(
                 f"{round}.{step_counter}", graph, current_ensemble)
             step_counter += 1
-            current_ensemble = self._parity_mapping(
+            current_ensemble = self.parity_mapping(
                 f"{round}.{step_counter}", graph, current_ensemble)
             step_counter += 1
-            current_ensemble = self._qubit_gate_2(
+            current_ensemble = self.qubit_gate_2(
                 f"{round}.{step_counter}", graph, current_ensemble)
             step_counter += 1
-            current_ensemble = self._qubit_measurement(
+            current_ensemble = self.qubit_measurement(
+                f"{round}.{step_counter}", graph, current_ensemble)
+            step_counter += 1
+            current_ensemble = self.qubit_reset(
                 f"{round}.{step_counter}", graph, current_ensemble)
             step_counter += 1
 
