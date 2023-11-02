@@ -90,7 +90,7 @@ class StateNode:
     @staticmethod
     def _orthogonalize(state_arr: np.ndarray[qt.Qobj]) -> np.ndarray[qt.Qobj]:
         """
-        Orthogonalize the states in the array
+        Orthogonalize the states in the N*2 array, return a N*2 array
         """
         new_state_arr = np.empty_like(state_arr)
         for i in range(len(state_arr)):
@@ -101,6 +101,13 @@ class StateNode:
             )
         
         return new_state_arr
+    
+    @staticmethod
+    def _qobj_unit(qobj: qt.Qobj) -> qt.Qobj:
+        """
+        used for vectorization of qobj.unit()
+        """
+        return qobj.unit()
 
     @property
     def ideal_states(self) -> np.ndarray[qt.Qobj]:
@@ -124,7 +131,10 @@ class StateNode:
                 + self.prob_amp_01[1] * othogonalized_states[:, 1]
             )
         else:
-            return (
+            qobj_array_unit = np.vectorize(
+                self._qobj_unit, otypes = [qt.Qobj]
+            )
+            return qobj_array_unit(
                 self.prob_amp_01[0] * self.ideal_logical_states[:, 0] 
                 + self.prob_amp_01[1] * self.ideal_logical_states[:, 1]
             )
@@ -136,6 +146,10 @@ class StateNode:
     @property
     def fidelity(self) -> float:
         return ((self.state * self.ideal_projector).tr()).real
+    
+    @property
+    def probability(self) -> float:
+        return (self.state.tr()).real
 
     def deepcopy(self):
         """
@@ -157,10 +171,25 @@ class StateNode:
         logical_0: qt.Qobj,
         logical_1: qt.Qobj,
     ) -> "StateNode":
-        state = init_prob_amp_01[0] * logical_0 + init_prob_amp_01[1] * logical_1
+        # put the logical states in an array, as the other part of the code
+        # only accepts ndarray
         logical_state_arr = np.empty((1, 2), dtype=object)
         logical_state_arr[:] = [[logical_0, logical_1]]
 
+        # need to be modified as the logical states are not necessarily
+        # orthogonal
+        if cls.OTHOGONALIZE_LOGICAL_STATES:
+            othogonalized_states = cls._orthogonalize(logical_state_arr)
+            state = (
+                init_prob_amp_01[0] * othogonalized_states[0, 0]
+                + init_prob_amp_01[1] * othogonalized_states[0, 1]
+            )
+        else:
+            state = (
+                init_prob_amp_01[0] * logical_state_arr[0, 0] 
+                + init_prob_amp_01[1] * logical_state_arr[0, 1]
+            ).unit()
+        
         init_node = cls()
         init_node.accept(
             meas_record = [], 
@@ -199,7 +228,14 @@ class StateNode:
             idx = self.index
         except AttributeError:
             idx = "No Index"
-        return f"StateNode ({idx}), record {self.meas_record}, fidelity {self.fidelity:.3f}"
+            
+        try:
+            return (
+                f"StateNode ({idx}), record {self.meas_record}, "
+                + f"prob {self.probability:.3f}, fid {self.fidelity:.3f}"
+            )
+        except AttributeError:
+            return f"StateNode ({idx})"
     
     def __repr__(self) -> str:
         return self.__str__()
@@ -313,6 +349,12 @@ class StateEnsemble:
         Return the nodes ordered by fidelity
         """
         return sorted(self.nodes, key=lambda node: node.fidelity, reverse=True)
+    
+    def order_by_probability(self) -> List[StateNode]:
+        """
+        Return the nodes ordered by probability
+        """
+        return sorted(self.nodes, key=lambda node: node.probability, reverse=True)
     
     def expect(self, op: qt.Qobj) -> float:
         """
