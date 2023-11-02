@@ -261,13 +261,26 @@ def two_mode_dressed_esys(
 
 def dressed_state_component(
     hilbertspace: HilbertSpace, 
-    bare_label, 
-    dressed_esys=None,
+    state_label: Tuple[int, ...] | List[int] | int,
+    dressed_esys = None,
 ) -> Tuple[List[int], List[float]]:
     """
     For a dressed state with bare_label, will return the bare state conponents and the 
     corresponding occupation probability. 
     They are sorted by the probability in descending order.
+
+    Parameters
+    ----------
+    hilbertspace:
+        scq.HilbertSpace object
+    state_label:
+        The bare label of the dressed state of interest. Could be 
+            - a tuple/list of bare labels (int)
+            - a single dressed label (int)
+    dressed_esys:
+        The eigenenergies and eigenstates of the bare Hilbert space in 
+        a tuple. Usually given by
+        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`.
     """
     if dressed_esys is None:
         dressed_esys = hilbertspace.eigensys(hilbertspace.dimension)
@@ -283,9 +296,12 @@ def dressed_state_component(
              "the eigensys if given.")
         hilbertspace.generate_lookup()
 
-    drs_idx = hilbertspace.dressed_index(bare_label)
-    if drs_idx is None:
-        raise IndexError(f"no dressed state found for bare label {bare_label}")
+    if isinstance(state_label, tuple | list): 
+        drs_idx = hilbertspace.dressed_index(tuple(state_label))
+        if drs_idx is None:
+            raise IndexError(f"no dressed state found for bare label {state_label}")
+    elif isinstance(state_label, int):
+        drs_idx = state_label
 
     evec_1 = evecs[drs_idx]
     largest_occupation_label = np.argsort(np.abs(evec_1.full()[:, 0]))[::-1]
@@ -294,10 +310,10 @@ def dressed_state_component(
     prob_list = []
     for idx in range(evec_1.shape[0]):
         drs_label = int(largest_occupation_label[idx])
-        bare_label = label_convert(drs_label, hilbertspace)
+        state_label = label_convert(drs_label, hilbertspace)
         prob = (np.abs(evec_1.full()[:, 0])**2)[drs_label]
 
-        bare_label_list.append(bare_label)
+        bare_label_list.append(state_label)
         prob_list.append(prob)
 
     return bare_label_list, prob_list
