@@ -64,7 +64,9 @@ def organize_dressed_esys(
         given by `ParameterSweep["dressed_indices"]`.
     eigensys:
         The eigenenergies and eigenstates of the bare Hilbert space. Usually given by
-        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. eigensys and dressed_indices should be given together.
+        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. eigensys and 
+        dressed_indices should be given together. Can also be a string "stored" indicating
+        that the eigensys is stored inside the hilbertspace object.
     adjust_phase:
         If True, the phase of "bare element" of each eigenstate will be adjusted to be 0.
 
@@ -75,6 +77,8 @@ def organize_dressed_esys(
     """
     if eigensys is None:
         evals, evecs = hilbertspace.eigensys(hilbertspace.dimension)
+    elif eigensys == "stored":
+        evals, evecs = hilbertspace["evals"][0], hilbertspace["evecs"][0]
     else:
         evals, evecs = eigensys
 
@@ -144,7 +148,8 @@ def single_mode_dressed_esys(
         given by `ParameterSweep["dressed_indices"]`.
     eigensys:
         The eigenenergies and eigenstates of the bare Hilbert space. Usually given by
-        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`.
+        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. Can also be a string
+        "stored" indicating that the eigensys is stored inside the hilbertspace object.
     adjust_phase:
         If True, the phase of "bare element" of each eigenstate will be adjusted to be 0.
 
@@ -211,7 +216,8 @@ def two_mode_dressed_esys(
         given by `ParameterSweep["dressed_indices"]`.
     eigensys:
         The eigenenergies and eigenstates of the bare Hilbert space. Usually given by
-        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`.
+        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. Can also be a string
+        "stored" indicating that the eigensys is stored inside the hilbertspace object.
     adjust_phase:
         If True, the phase of "bare element" of each eigenstate will be adjusted to be 0.
     
@@ -262,7 +268,7 @@ def two_mode_dressed_esys(
 def dressed_state_component(
     hilbertspace: HilbertSpace, 
     state_label: Tuple[int, ...] | List[int] | int,
-    dressed_esys = None,
+    eigensys = None,
 ) -> Tuple[List[int], List[float]]:
     """
     For a dressed state with bare_label, will return the bare state conponents and the 
@@ -277,17 +283,22 @@ def dressed_state_component(
         The bare label of the dressed state of interest. Could be 
             - a tuple/list of bare labels (int)
             - a single dressed label (int)
-    dressed_esys:
+    eigensys:
         The eigenenergies and eigenstates of the bare Hilbert space in 
         a tuple. Usually given by
-        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`.
+        `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. Can also
+        be a string "stored" indicating that the eigensys is stored inside
+        the hilbertspace object.
     """
-    if dressed_esys is None:
-        dressed_esys = hilbertspace.eigensys(hilbertspace.dimension)
-    _, evecs = dressed_esys
+    if eigensys is None:
+        eigensys = hilbertspace.eigensys(hilbertspace.dimension)
+    elif eigensys == "stored":
+        eigensys = hilbertspace["evals"][0], hilbertspace["evecs"][0]
+        
+    _, evecs = eigensys
 
     try:
-        hilbertspace.generate_lookup(dressed_esys=dressed_esys)
+        hilbertspace.generate_lookup(dressed_esys=eigensys)
     except TypeError:
         # TypeError: HilbertSpace.generate_lookup() got an unexpected 
         # keyword argument 'dressed_esys'
