@@ -1,5 +1,6 @@
 import numpy as np
 import qutip as qt
+from scipy.sparse import csc_matrix
 
 from typing import Literal, Callable, List, Tuple, overload
 
@@ -31,7 +32,7 @@ def basis_of_projector(projector: qt.Qobj) -> List[qt.Qobj]:
     return projected_basis
 
 def ket_in_basis(
-    ket: np.ndarray | qt.Qobj,
+    ket: np.ndarray | qt.Qobj | csc_matrix,
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
 ):
     """
@@ -50,7 +51,7 @@ def ket_in_basis(
         dim = [ket.shape[0]]
 
     # convert to qobj
-    if isinstance(ket, np.ndarray):
+    if isinstance(ket, np.ndarray | csc_matrix):
         ket = qt.Qobj(ket, dims=[dim, list(np.ones_like(dim).astype(int))])
     state_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in states]
 
@@ -62,7 +63,7 @@ def ket_in_basis(
     return qt.Qobj(data)
 
 def oprt_in_basis(
-    oprt: np.ndarray | qt.Qobj, 
+    oprt: np.ndarray | qt.Qobj | csc_matrix, 
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray
 ):
     """
@@ -81,7 +82,7 @@ def oprt_in_basis(
         dim = [oprt.shape[0]]
 
     # convert to qobj
-    if isinstance(oprt, np.ndarray):
+    if isinstance(oprt, np.ndarray | csc_matrix):
         oprt = qt.Qobj(oprt, dims=[dim, dim])
     state_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in states]
 
@@ -99,7 +100,7 @@ def oprt_in_basis(
     return qt.Qobj(data)
 
 def superop_in_basis(
-    superop: np.ndarray | qt.Qobj,
+    superop: np.ndarray | qt.Qobj | csc_matrix,
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
 ):
     """
@@ -121,7 +122,7 @@ def superop_in_basis(
         dim = [[states[0].shape[0]], [states[0].shape[0]]]
 
     # convert to qobj
-    if isinstance(superop, np.ndarray):
+    if isinstance(superop, np.ndarray | csc_matrix):
         superop = qt.Qobj(superop, dims=[dim, dim])
     state_qobj = [qt.Qobj(state, dims=dim) for state in states] 
 
