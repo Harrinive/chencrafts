@@ -200,6 +200,7 @@ def batched_sweep_readout(
         # chi = non_lin * g^2 / delta^2
         lambda_2 = np.abs(sweep["chi_ar"] / sweep["non_lin"])
     elif isinstance(qubit, scq.Fluxonium):
+        # assume chi is only contributed by the coupling of two levels
         # chi = 2 * g^2 / delta, so lambda_2 = (chi / 2) / delta
         lambda_2 = np.abs(sweep["chi_ar"] / 2 / detuning_ar)
     else:
@@ -259,7 +260,7 @@ def batched_sweep_total_decoherence(
     """
     Should be called after calling
     batched_sweep_general, 
-    batched_sweep_bare_decoherence
+    batched_sweep_bare_decoherence,
     batched_sweep_purcell_fock,
     batched_sweep_purcell_cat,
     and batched_sweep_readout

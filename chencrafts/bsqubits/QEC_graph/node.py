@@ -361,3 +361,28 @@ class StateEnsemble:
         Calculate the expectation value of the operator
         """
         return sum([node.expect(op) for node in self.nodes])
+    
+    def next_step_name(self) -> str:
+        """
+        Usually, the edges that the state nodes are connected to are named
+        similarly as operations are applied to the whole ensemble.
+        """
+        if self.nodes == []:
+            return "[NO NEXT STEP DUE TO EMPTY ENSEMBLE]"
+        
+        if self.nodes[0].out_edges == []:
+            return "[NO NEXT STEP DUE TO NO OUT EDGES]"
+
+        return self.nodes[0].out_edges[0].name
+    
+    def __str__(self) -> str:
+        try:
+            return (
+                f"StateEnsemble before {self.next_step_name()}, "
+                + f"prob {self.state.tr().real:.3f}, fid {self.fidelity:.3f}"
+            )
+        except AttributeError:
+            return f"StateEnsemble before {self.next_step_name()}"
+    
+    def __repr__(self) -> str:
+        return self.__str__()

@@ -258,4 +258,61 @@ def idling_propagator(
 
     return (liouv * time).expm()
 
-# def measurement
+
+from chencrafts.bsqubits.cat_ideal import qubit_projectors as ideal_qubit_projectors
+def qubit_projectors(
+    res_dim: int, qubit_dim: int,
+    res_mode_idx: Literal[0, 1] = 0,
+    confusion_matrix: np.ndarray | List = None,
+    ensamble_average: bool = False,
+    superop: bool = True,
+) -> List[qt.Qobj]:
+    """
+    A senario of qubit measurement with the assignment error - when applying 
+    the projective measurement, the outcome has the probability to be different
+    from the projectors applied. In this case, a set of measurement operators 
+    M_j determined by the confusion matrix. 
+    
+    The confusion matrix C_ij is the 
+    probability of measuring state i and getting 
+    result j. It is a square matrix with dimension qubit_dim.
+    
+    The measurement operators are given by M_j = sum_i sqrt(C_ij) |i><i|, 
+    corresponding to the measurement result j. Those M_j satisfy the completeness 
+    relation: sum_j M_j^\dag M_j = I. 
+    
+    """
+    projs = ideal_qubit_projectors(
+        res_dim=res_dim, qubit_dim=qubit_dim,
+        res_mode_idx=res_mode_idx,
+        superop=False,
+    )
+
+    if confusion_matrix is None:
+        confusion_matrix = np.eye(qubit_dim)
+    else:
+        # check the normalization of the confusion matrix
+        confusion_matrix = np.array(confusion_matrix)
+        if not np.allclose(np.sum(confusion_matrix, axis=1), 1):
+            raise ValueError("Each row of the confusion matrix should be "
+                             "normalized to 1.")
+        
+    # construct the measurement operators
+    measurement_ops = np.empty_like(confusion_matrix, dtype=object)
+    for idx, prob in np.ndenumerate(confusion_matrix):
+        measurement_ops[idx] = np.sqrt(prob) * projs[idx[0]]
+
+    if ensamble_average:
+        measurement_ops = np.sum(measurement_ops, axis=0)
+    else:
+        measurement_ops = measurement_ops.ravel()
+
+    if superop:
+        measurement_ops = [qt.to_super(op) for op in measurement_ops]
+    else:
+        measurement_ops = measurement_ops.tolist()
+        
+    return measurement_ops
+    
+
+    

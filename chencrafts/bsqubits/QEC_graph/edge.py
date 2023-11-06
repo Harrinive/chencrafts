@@ -104,6 +104,12 @@ class EdgeBase:
                     new_ideal_logical_states.append(
                         [new_logical_0 / norm_0, new_logical_1 / norm_1]
                     )
+        
+        # no any ideal state component, usually means the state is in it's 
+        # steady state - no single photon loss anymore
+        if len(new_ideal_logical_states) == 0:
+            raise ValueError("No ideal state component left. "
+                             "The state is likely in it's steady state.")
 
         # convert to ndarray
         new_ideal_logical_state_array = np.empty(
@@ -151,8 +157,8 @@ class MeasurementEdge(EdgeBase):
         self, 
         name: str,
         outcome: float,
-        real_map: qt.Qobj,
-        ideal_map: qt.Qobj,
+        real_map: qt.Qobj | Callable[["MeasurementRecord"], qt.Qobj],
+        ideal_map: List[qt.Qobj] | Callable[["MeasurementRecord"], List[qt.Qobj]],
     ):
         """
         One of the measurement outcomes and projections

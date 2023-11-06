@@ -34,7 +34,7 @@ def _qubit_pauli(
     res_mode_idx: Literal[0, 1] = 0,
     axis: Literal['x', 'y', 'z'] = 'x',
 ) -> qt.Qobj:
-    qubit_oprt = np.eye(qubit_dim)
+    qubit_oprt = np.eye(qubit_dim, dtype=complex)
     if axis == 'x':
         qubit_oprt[:2, :2] = qt.sigmax().full()
     elif axis == 'y':
@@ -101,14 +101,13 @@ def res_qubit_basis(
     return _res_qubit_tensor(res_basis, qubit_basis, res_mode_idx)
 
 # #############################################################################
-def idling_proj_maps(
+def idling_maps(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1], 
     static_hamiltonian: qt.Qobj,
     time: float,
     decay_rate: float = 0.0,
     self_Kerr: float = 0.0,
-    # basis: List[qt.Qobj] | np.ndarray | None = None,
 ) -> List[qt.Qobj]:
     """
     Return the correctable maps for the idling process.
@@ -233,7 +232,8 @@ def qubit_projectors(
     superop: bool = False,
 ) -> List[qt.Qobj]:
     """
-    The ideal qubit measurement projectors.
+    The ideal qubit measurement projectors, projecting to qubit states 
+    0, 1, ..., qubit_dim - 1.
     """
     ops = [
         _qubit_proj(res_dim, qubit_dim, res_mode_idx, qubit_state=i) 

@@ -2,7 +2,6 @@ import numpy as np
 import qutip as qt
 import scqubits as scq
 
-from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, overload
 
 from chencrafts.cqed import FlexibleSweep, superop_evolve
 
@@ -12,6 +11,9 @@ from chencrafts.bsqubits.QEC_graph.graph import EvolutionGraph, EvolutionTree
 
 import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.cat_real as cat_real
+
+from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, overload
+from warnings import warn
 
 
 class GraphBuilder:
@@ -57,6 +59,14 @@ class CatGraphBuilder(GraphBuilder):
     _qubit_reset_real: qt.Qobj
     _qubit_reset_ideal: [qt.Qobj]
 
+    # ideal_process_switches
+    idling_is_ideal: bool = False
+    gate_1_is_ideal: bool = True
+    parity_mapping_is_ideal: bool = False
+    gate_2_is_ideal: bool = True
+    qubit_measurement_is_ideal: bool = False
+    qubit_reset_is_ideal: bool = True
+
     def __init__(
         self,
         fsweep: FlexibleSweep,
@@ -67,8 +77,6 @@ class CatGraphBuilder(GraphBuilder):
         self._find_sim_param()
 
         self._generate_cat_ingredients()
-
-        self._build_all_processes()
 
     def _generate_cat_ingredients(
         self,
@@ -167,6 +175,16 @@ class CatGraphBuilder(GraphBuilder):
             # while Qobj * 1.0 returns a Qobj
         )
     
+    def _idling_ideal_by_time(self, time: float) -> List[qt.Qobj]:
+        return cat_ideal.idling_maps(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            static_hamiltonian=self.static_hamiltonian,
+            time=time,
+            decay_rate=self.fsweep["kappa_s"],
+            self_Kerr=self.fsweep["K_s"],
+        )
+    
     def _build_idling_process(
         self,
     ):
@@ -176,20 +194,24 @@ class CatGraphBuilder(GraphBuilder):
         - the ideal (correctable) Kraus operators
         - the identity superoperator, used for many other processes
         """
-        self._idling_real = self._idling_real_by_time(self.fsweep["T_W"])
-        self._idling_ideal = cat_ideal.idling_proj_maps(
-            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx,
-            static_hamiltonian=self.static_hamiltonian,
-            time=float(self.fsweep["T_W"]),
-            decay_rate=self.fsweep["kappa_s"],
-            self_Kerr=self.fsweep["K_s"],
-            # basis=self.esys[1],
-        )
+        self._idling_real = self._idling_real_by_time(self._idling_time)
+        self._idling_ideal = self._idling_ideal_by_time(self._idling_time)
 
         self._identity = cat_ideal.identity(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx, superop=False,
+        )   # may be used later
+
+    @property
+    def _idling_time(self) -> float:
+        return float(self.fsweep["T_W"] * (1 - self.idling_is_ideal))
+
+    @property
+    def _total_simulation_time(self) -> float:
+        return (
+            self._idling_time
+            + self._parity_mapping_time
+            + self._qubit_measurement_time
         )
 
     def idle(
@@ -197,7 +219,6 @@ class CatGraphBuilder(GraphBuilder):
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
-        ideal: bool = False,
     ) -> StateEnsemble:
         """
         Idling process.
@@ -210,7 +231,7 @@ class CatGraphBuilder(GraphBuilder):
         for node in init_nodes:
             edge_idling = PropagatorEdge(
                 f"idling ({step})",
-                self._idling_real if not ideal else qt.to_super(self._identity),
+                self._idling_real,  # when ideal, time=0, it's already the identity, no need to change
                 self._idling_ideal,
             )
             final_nodes.append(StateNode())
@@ -241,7 +262,7 @@ class CatGraphBuilder(GraphBuilder):
         )]
 
         # currently the same as the ideal one   
-        self._qubit_gate_p_real = self._kraus_to_super(self._qubit_gate_p_ideal)
+        self._qubit_gate_p_real = self._kraus_to_super(self._qubit_gate_p_ideal) 
         self._qubit_gate_m_real = self._kraus_to_super(self._qubit_gate_m_ideal)
 
     # the qubit gate after parity mapping
@@ -282,14 +303,13 @@ class CatGraphBuilder(GraphBuilder):
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
-        ideal: bool = False,
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
         for node in init_nodes:
             edge_qubit_gate = PropagatorEdge(
                 f"qubit_gate_1 ({step})",
-                (self._qubit_gate_p_real if not ideal 
+                (self._qubit_gate_p_real if not self.gate_1_is_ideal 
                     else self._kraus_to_super(self._qubit_gate_p_ideal)),
                 self._qubit_gate_p_ideal,
             )
@@ -310,14 +330,13 @@ class CatGraphBuilder(GraphBuilder):
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
-        ideal: bool = False,
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
         for node in init_nodes:
             edge_qubit_gate = PropagatorEdge(
                 f"qubit_gate_2 ({step})",
-                (self._qubit_gate_2_map_real if not ideal 
+                (self._qubit_gate_2_map_real if not self.gate_2_is_ideal 
                     else self._kraus_to_super(self._qubit_gate_2_map_ideal)),
                 self._qubit_gate_2_map_ideal,
             )
@@ -343,21 +362,32 @@ class CatGraphBuilder(GraphBuilder):
         )]
 
         # currently the same as the ideal one
-        self._parity_mapping_real = self._kraus_to_super(self._parity_mapping_ideal)
+        self._parity_mapping_real = self._idling_real_by_time(self._parity_mapping_time)
+
+    @property
+    def _parity_mapping_time(self) -> float:
+        t = float(np.abs(np.pi / self.fsweep["chi_sa"]))
+
+        if t > self.fsweep["T_W"]:
+            # usually because a unreasonable parameter is set, making the chi_sa too small
+            warn("The parity mapping time is longer than the waiting time. Set the time to be the waiting time.")
+            t = self.fsweep["T_W"]
+
+        return t * (1 - self.parity_mapping_is_ideal)
 
     def parity_mapping(
         self,
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
-        ideal: bool = False,
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
         for node in init_nodes:
             edge_parity_mapping = PropagatorEdge(
                 f"parity_mapping ({step})",
-                (self._parity_mapping_real if not ideal 
+                (self._parity_mapping_real
+                    if not self.parity_mapping_is_ideal 
                     else self._kraus_to_super(self._parity_mapping_ideal)),
                 self._parity_mapping_ideal,
             )
@@ -372,31 +402,52 @@ class CatGraphBuilder(GraphBuilder):
             )
 
         return final_nodes
-    
+
     # qubit measurement ################################################
     def _build_qubit_measurement_process(
         self,
     ):
-        self._qubit_projs_ideal = cat_ideal.qubit_projectors(
+        # ideal process
+        ideal_projs = cat_ideal.qubit_projectors(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx, superop=False,
         )
+        # multiply by the idling propagator to mimic the time it takes to measure
+        idling_prop = self._idling_ideal_by_time(self._qubit_measurement_time)[0]
+        self._qubit_projs_ideal = [
+            proj * idling_prop for proj in ideal_projs
+        ]
 
-        # currently the same as the ideal one
+        # real process
+        confusion_matrix = np.array([
+            [1 - self.fsweep["M_ge"], self.fsweep["M_ge"]],
+            [self.fsweep["M_eg"], 1 - self.fsweep["M_eg"]],
+        ])
+        real_projs = cat_real.qubit_projectors(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            confusion_matrix=confusion_matrix,
+            ensamble_average=True,  # currently, only support True because the length of the list should be the same as the ideal one
+            superop=True,
+        )
+        idling_prop = self._idling_real_by_time(self._qubit_measurement_time)
         self._qubit_projs_real = [
-            qt.to_super(proj) for proj in self._qubit_projs_ideal
+            proj * idling_prop for proj in real_projs
         ]
 
         # all of the lists should have the same length
         assert len(self._qubit_projs_ideal) == len(self._measurement_outcome_pool)
         assert len(self._qubit_projs_ideal) == len(self._qubit_projs_real)
 
+    @property
+    def _qubit_measurement_time(self) -> float:
+        return float(self.fsweep["tau_m"] * (1 - self.qubit_measurement_is_ideal))
+
     def qubit_measurement(
         self,
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
-        ideal: bool = False,
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
@@ -405,7 +456,7 @@ class CatGraphBuilder(GraphBuilder):
                 edge_qubit_measurement = MeasurementEdge(
                     f"qubit_meas ({step})",
                     self._measurement_outcome_pool[idx],
-                    (self._qubit_projs_real[idx] if not ideal 
+                    (self._qubit_projs_real[idx] if not self.qubit_measurement_is_ideal 
                         else qt.to_super(self._qubit_projs_ideal[idx])),
                     [self._qubit_projs_ideal[idx]],
                 )
@@ -420,7 +471,7 @@ class CatGraphBuilder(GraphBuilder):
                 )
 
         return final_nodes
-    
+
     # qubit reset ######################################################
     def _build_qubit_reset_process(
         self,
@@ -462,14 +513,13 @@ class CatGraphBuilder(GraphBuilder):
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
-        ideal: bool = False,
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
         for node in init_nodes:
             edge_qubit_reset = PropagatorEdge(
                 f"qubit_reset ({step})",
-                (self._qubit_reset_map_real if not ideal 
+                (self._qubit_reset_map_real if not self.qubit_reset_is_ideal 
                     else self._kraus_to_super(self._qubit_reset_map_ideal)),
                 self._qubit_reset_map_ideal,
             )
@@ -487,7 +537,7 @@ class CatGraphBuilder(GraphBuilder):
 
 
     # overall generation ###############################################
-    def _build_all_processes(
+    def build_all_processes(
         self,
     ):
         self._build_idling_process()
@@ -520,32 +570,26 @@ class CatGraphBuilder(GraphBuilder):
         for round in range(QEC_rounds):
             current_ensemble = self.idle(
                 f"{round}.{step_counter}", graph, current_ensemble,
-                ideal=False,
             )
             step_counter += 1
             current_ensemble = self.qubit_gate_1(
                 f"{round}.{step_counter}", graph, current_ensemble,
-                ideal=True,
             )
             step_counter += 1
             current_ensemble = self.parity_mapping(
                 f"{round}.{step_counter}", graph, current_ensemble,
-                ideal=True,
             )
             step_counter += 1
             current_ensemble = self.qubit_gate_2(
                 f"{round}.{step_counter}", graph, current_ensemble,
-                ideal=True,
             )
             step_counter += 1
             current_ensemble = self.qubit_measurement(
                 f"{round}.{step_counter}", graph, current_ensemble,
-                ideal=True,
             )
             step_counter += 1
             current_ensemble = self.qubit_reset(
                 f"{round}.{step_counter}", graph, current_ensemble,
-                ideal=True,
             )
             step_counter += 1
 

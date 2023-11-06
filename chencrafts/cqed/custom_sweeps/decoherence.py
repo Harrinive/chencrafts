@@ -60,7 +60,8 @@ def sweep_gamma_1(
         ps, paramindex_tuple, paramvals_tuple, rate_func, kwargs,
         ignore_kwargs=[
             "i", "j", "A_noise", "total", "esys", "get_rate", 
-            "Y_qp", "Delta"         # for t1_quasiparticle_tunneling
+            "Y_qp", "Delta",         # for t1_quasiparticle_tunneling
+            "noise_op", "branch_params"        # appear when circuit module updated
         ],
     )
 
