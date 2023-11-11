@@ -43,7 +43,7 @@ def ket_in_basis(
     length = len(states)
 
     # dimension check
-    assert ket.shape[1] == states[0].shape[1], "Dimension mismatch."
+    assert ket.shape[1] == states[0].shape[0], "Dimension mismatch."
 
     # go through all states and oprt, to find a dimension 
     if isinstance(ket, qt.Qobj):
@@ -77,7 +77,7 @@ def oprt_in_basis(
     length = len(states)
 
     # dimension check
-    assert oprt.shape[0] == states[0].shape[1], "Dimension mismatch."
+    assert oprt.shape[0] == states[0].shape[0], "Dimension mismatch."
 
     # go through all states and oprt, to find a dimension 
     if isinstance(oprt, qt.Qobj):
@@ -119,7 +119,7 @@ def superop_in_basis(
     length = len(states)
 
     # dimension check
-    assert superop.shape[1] == states[0].shape[1]**2, "Dimension mismatch."
+    assert superop.shape[1] == states[0].shape[0]**2, "Dimension mismatch."
 
     # go through all states and oprt, to find a dimension
     if isinstance(superop, qt.Qobj):
