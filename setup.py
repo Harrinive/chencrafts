@@ -1,7 +1,7 @@
 import setuptools
 import os
 
-VERSION = 0.2
+VERSION = 0.3
 # when changed, remember to change chencrafts/__init__.py
 PACKAGES = [
     'chencrafts',
@@ -26,6 +26,7 @@ setuptools.setup(name='chencrafts',
     packages=PACKAGES,
     zip_safe=False,
     install_requires=INSTALL_REQUIRES,
+    python_requires='>=3.10',
 )
 
 def write_version_py(filename="chencrafts/version.py"):
