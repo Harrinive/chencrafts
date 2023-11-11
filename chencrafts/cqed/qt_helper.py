@@ -42,6 +42,9 @@ def ket_in_basis(
     """
     length = len(states)
 
+    # dimension check
+    assert ket.shape[1] == states[0].shape[1], "Dimension mismatch."
+
     # go through all states and oprt, to find a dimension 
     if isinstance(ket, qt.Qobj):
         dim = ket.dims[0]
@@ -72,6 +75,9 @@ def oprt_in_basis(
     will be projected onto the subspace spanned by the basis.
     """
     length = len(states)
+
+    # dimension check
+    assert oprt.shape[0] == states[0].shape[1], "Dimension mismatch."
 
     # go through all states and oprt, to find a dimension 
     if isinstance(oprt, qt.Qobj):
@@ -111,6 +117,9 @@ def superop_in_basis(
     superoperator will be projected onto the subspace spanned by the basis.
     """
     length = len(states)
+
+    # dimension check
+    assert superop.shape[1] == states[0].shape[1]**2, "Dimension mismatch."
 
     # go through all states and oprt, to find a dimension
     if isinstance(superop, qt.Qobj):
