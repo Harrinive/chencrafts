@@ -1013,7 +1013,7 @@ class Optimization():
             "bounds": [[0.0, 1.0]] * len(self.free_name_list),
             "callback": opt_call_back,
         }
-        tol = self.opt_options.get("tol", 1e-10)
+        tol = self.opt_options.pop("tol", 1e-10)
 
         # run the scipy optimizer
         if self.optimizer in ("L-BFGS-B", "Nelder-Mead", "Powell", "TNC", "SLSQP"):
