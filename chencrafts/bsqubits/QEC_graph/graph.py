@@ -158,3 +158,15 @@ class EvolutionTree(EvolutionGraph):
     def evolve_all(self):
         return self.evolve(StateEnsemble([self.nodes[0]]), 9999)
     
+    def fidelity_by_step(self):
+        fid_by_stp = []
+        current_se = self.ensemble_at_step(0)
+
+        while True:
+            fid_by_stp.append(current_se.fidelity)
+            try:
+                current_se = self.ensemble_at_next_step(current_se)
+            except RuntimeError:
+                break
+            
+        return fid_by_stp

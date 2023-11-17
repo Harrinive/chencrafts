@@ -9,7 +9,7 @@ from chencrafts.cqed.qt_helper import (
     normalization_factor,
 )
 
-from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable
+from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, Literal
 
 if TYPE_CHECKING:
     from chencrafts.bsqubits.QEC_graph.edge import Edge
@@ -19,7 +19,8 @@ MeasurementRecord = List[Tuple[int, ...]]
 class StateNode:
 
     # options:
-    OTHOGONALIZE_LOGICAL_STATES = True
+    ORTHOGONALIZE_LOGICAL_STATES = True
+    ORTHOGONALIZE_METHOD: Literal["GS", "symm"] = "GS"
 
     meas_record: MeasurementRecord
 
@@ -66,6 +67,18 @@ class StateNode:
         self.ideal_logical_states = ideal_logical_states
 
     @staticmethod
+    def _GS_orthogonalize(state_0, state_1):
+        """
+        Gram-Schmidt orthogonalization
+        """
+        new_state_0 = state_0.unit()
+        new_state_1 = (
+            state_1 - state_1.overlap(new_state_0) * new_state_0
+        ).unit()
+        
+        return new_state_0, new_state_1
+
+    @staticmethod
     def _symmtrized_orthogonalize(state_0, state_1):
         """
         A little bit more generalized version of Gram-Schmidt orthogonalization?
@@ -88,15 +101,23 @@ class StateNode:
         return new_state_0, new_state_1 * np.exp(-1j * theta)
     
     @staticmethod
-    def _orthogonalize(state_arr: np.ndarray[qt.Qobj]) -> np.ndarray[qt.Qobj]:
+    def _orthogonalize(
+        state_arr: np.ndarray[qt.Qobj],
+    ) -> np.ndarray[qt.Qobj]:
         """
         Orthogonalize the states in the N*2 array, return a N*2 array
         """
+        if StateNode.ORTHOGONALIZE_METHOD == "GS":
+            func = StateNode._GS_orthogonalize
+        elif StateNode.ORTHOGONALIZE_METHOD == "symm":
+            func = StateNode._symmtrized_orthogonalize
+
+
         new_state_arr = np.empty_like(state_arr)
         for i in range(len(state_arr)):
             (
                 new_state_arr[i, 0], new_state_arr[i, 1]
-            ) = StateNode._symmtrized_orthogonalize(
+            ) = func(
                 *state_arr[i]
             )
         
@@ -124,7 +145,7 @@ class StateNode:
         
         # need to be modified as the logical states are not necessarily
         # orthogonal
-        if self.OTHOGONALIZE_LOGICAL_STATES:
+        if self.ORTHOGONALIZE_LOGICAL_STATES:
             othogonalized_states = self._orthogonalize(self.ideal_logical_states)
             return (
                 self.prob_amp_01[0] * othogonalized_states[:, 0]
@@ -178,7 +199,7 @@ class StateNode:
 
         # need to be modified as the logical states are not necessarily
         # orthogonal
-        if cls.OTHOGONALIZE_LOGICAL_STATES:
+        if cls.ORTHOGONALIZE_LOGICAL_STATES:
             othogonalized_states = cls._orthogonalize(logical_state_arr)
             state = (
                 init_prob_amp_01[0] * othogonalized_states[0, 0]

@@ -303,9 +303,16 @@ def batched_sweep_pulse(
     # some parameters for use
     params = sweep.parameters.meshgrid_by_name() | kwargs
 
-    min_sigma = 1
-    sigma = np.abs(params["sigma_2_K_a"] / sweep["non_lin"])
-    sigma[sigma < min_sigma] = min_sigma
+    # find sigma based on:
+    # 1. should be larger than (1 / non_lin) to reduce leakage
+    # 2. should be larger than (1 / freq) to reduce non-RWA error
+    # 3. should be larger than a minimum value (2) empirically
+    min_sigma_by_nonlin = np.abs(params["sigma_2_K_a"] / sweep["non_lin"])
+    min_sigma_by_freq = np.abs(params["sigma_omega"] / sweep["omega_a_GHz"] / np.pi / 2)
+    min_sigma = np.ones_like(sweep["omega_a_GHz"]) * 2.0
+    sigma = np.max([
+        min_sigma, min_sigma_by_nonlin, min_sigma_by_freq
+    ], axis=0)
     sweep.store_data(
         sigma = sigma,
     )

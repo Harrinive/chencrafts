@@ -314,5 +314,3 @@ def qubit_projectors(
         
     return measurement_ops
     
-
-    
