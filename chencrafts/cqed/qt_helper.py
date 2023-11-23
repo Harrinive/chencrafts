@@ -1,6 +1,7 @@
 import numpy as np
 import qutip as qt
 from scipy.sparse import csc_matrix
+import functools
 
 from typing import Literal, Callable, List, Tuple, overload
 
@@ -178,6 +179,58 @@ def projected_superop(
         # calculate the matrix elements of the superoperator in the new basis
         return superop_in_basis(superop, subspace_basis)
 
+# ##############################################################################
+def normalization_factor(ket_or_dm: qt.Qobj):
+    """
+    Return the normalization factor (N) of a ket or a density matrix (Qobj).
+    Such factor makes Qobj / N normalized.
+    """
+    if qt.isket(ket_or_dm):
+        return np.sqrt(((ket_or_dm.dag() * ket_or_dm).tr()).real)
+    elif qt.isoper(ket_or_dm):
+        return (ket_or_dm.tr()).real
+    
+# ##############################################################################
+# direct sum
+def _direct_sum_ket(ket1: qt.Qobj, ket2: qt.Qobj) -> qt.Qobj:
+    return qt.Qobj(np.concatenate((ket1.full(), ket2.full())))
+
+def _direct_sum_op(A: qt.Qobj, B: qt.Qobj) -> qt.Qobj:
+    shape_A = np.array(A.shape)
+    shape_B = np.array(B.shape)
+
+    A = np.pad(A, ((0, shape_B[0]), (0, shape_B[1])), mode="constant")
+    B = np.pad(B, ((shape_A[0], 0), (shape_A[1], 0)), mode="constant")
+
+    return qt.Qobj(A + B)
+
+def _direct_sum_superop(A: qt.Qobj, B: qt.Qobj) -> qt.Qobj:
+    raise NotImplementedError(
+        "It seems that there is no general way to direct sum two superoperators."
+        "For two subsystem's evolution, their noises may be correlated, and a simple"
+        "direct-sum-like operation may not know the information and thus"
+        "is impossible to find a correct outcome."
+    )
+
+def direct_sum(*args: qt.Qobj) -> qt.Qobj:
+    """
+    Given a few operators (Qobj), return their direct sum.
+    """
+    if len(args) == 0:
+        raise ValueError("No operator is given.")
+    elif len(args) == 1:
+        return args[0]
+    
+    if args[0].type == "ket":
+        return functools.reduce(_direct_sum_ket, args)
+    elif args[0].type == "oper":
+        return functools.reduce(_direct_sum_op, args)
+    elif args[0].type == "super":
+        return functools.reduce(_direct_sum_superop, args)
+
+
+# ##############################################################################
+# fidelity conversion
 def process_fidelity(
     super_propagator_1: qt.Qobj, super_propagator_2: qt.Qobj, 
     subspace_basis: List[qt.Qobj] | None = None,
@@ -205,14 +258,54 @@ def process_fidelity(
         qt.to_choi(super_propagator_2) / subspace_dim
     )**2
 
+def ave_fid_2_proc_fid(ave_fid, d):
+    """
+    Convert average gate fidelity to process fidelity using the formula:
+        proc_fid = (ave_fid * (d + 1) - 1) / d
+    """
+    return (ave_fid * (d + 1) - 1) / d
 
-# ##############################################################################
-def normalization_factor(ket_or_dm: qt.Qobj):
+def proc_fid_2_ave_fid(proc_fid, d):
     """
-    Return the normalization factor (N) of a ket or a density matrix (Qobj).
-    Such factor makes Qobj / N normalized.
+    Convert process fidelity to average gate fidelity using the formula:
+        ave_fid = (proc_fid * d + 1) / (d + 1)
     """
-    if qt.isket(ket_or_dm):
-        return np.sqrt(((ket_or_dm.dag() * ket_or_dm).tr()).real)
-    elif qt.isoper(ket_or_dm):
-        return (ket_or_dm.tr()).real
+    return (proc_fid * d + 1) / (d + 1)
+
+def fid_in_dim(fid, d0, d1, type="ave"):
+    """
+    Convert a fidelity calculated with operators in (truncated) hilbert space dimension d0
+    to a number in hilbert space dimension d1.
+
+    Parameters
+    ----------
+    fid : float
+        fidelity, either average gate fidelity or process fidelity, specified by type
+    d0 : int
+        dimension of the Hilbert space of the original fidelity
+    d1 : int
+        dimension of the Hilbert space of the new fidelity
+    type : str, optional
+        type of the fidelity, by default "ave"
+
+    Returns
+    -------
+    float
+        fidelity in the new Hilbert space dimension
+    """
+    if type == "ave":
+        proc_fid = ave_fid_2_proc_fid(fid, d0)
+    elif type == "proc":
+        proc_fid = fid
+    else:
+        raise ValueError("type should be 'ave' or 'proc'")
+    
+    # this one is only valid for process fidelity
+    proc_fid *= (d0 / d1)**2
+
+    if type == "ave":
+        fid = proc_fid_2_ave_fid(proc_fid, d1)
+    elif type == "proc":
+        fid = proc_fid
+
+    return fid

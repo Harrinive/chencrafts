@@ -17,7 +17,13 @@ from chencrafts.cqed.qt_helper import (
     basis_of_projector,
     superop_evolve,
     projected_superop,
+
+    direct_sum,
+
     process_fidelity,
+    ave_fid_2_proc_fid,
+    proc_fid_2_ave_fid,
+    fid_in_dim,
 )
 
 from chencrafts.cqed.custom_sweeps import (
@@ -88,7 +94,12 @@ __all__ = [
     "basis_of_projector",
     "superop_evolve",
     "projected_superop",
+
+    "direct_sum",
     "process_fidelity",
+    "ave_fid_2_proc_fid",
+    "proc_fid_2_ave_fid",
+    "fid_in_dim",
 
     "n_crit_by_diag",
     "sweep_n_crit_by_diag",
