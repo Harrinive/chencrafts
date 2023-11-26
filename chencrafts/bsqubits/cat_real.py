@@ -1,6 +1,6 @@
 import numpy as np
 import qutip as qt
-
+from multiprocess import Pool
 import copy
 
 import scqubits as scq
@@ -9,7 +9,8 @@ from scqubits.core.param_sweep import ParameterSweep
 from scqubits.core.namedslots_array import NamedSlotsNdarray
 
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
-from chencrafts.cqed.qt_helper import oprt_in_basis
+from chencrafts.cqed.qt_helper import oprt_in_basis, direct_sum
+from chencrafts.cqed.pulses import DRAGGaussian, Gaussian
 
 from typing import Dict, List, Tuple, Callable, Any, Literal
 import warnings
@@ -168,8 +169,15 @@ def cavity_ancilla_me_ingredients(
 
     Returns
     -------
-    hamiltonian, c_ops: qt.Qobj, List[qt.Qobj]
-        The hamiltonian and collapse operators in the truncated basis. They have dims=[[res_dim, qubit_dim], [res_dim, qubit_dim]].
+    hamiltonian
+        The hamiltonian in the truncated basis. It has dims=[[res_dim, qubit_dim], [res_dim, qubit_dim]].
+    c_ops: qt.Qobj, List[qt.Qobj]
+        The collapse operators in the truncated basis. 
+    eigensys: Tuple[np.ndarray, np.ndarray]
+        The eigenenergies and eigenstates of the truncated basis.
+    frame_hamiltonian: qt.Qobj
+        The hamiltonian that defines a rotating frame transformation the hamiltonian TO the 
+        current frame. H_new_frame = H_old_frame - frame_hamiltonian
     """
     # prepare
     hilbertspace = copy.deepcopy(hilbertspace)
@@ -208,8 +216,10 @@ def cavity_ancilla_me_ingredients(
             qt.tensor(res_freq * qt.num(truncated_dims[0]), qt.qeye(qubit_truncated_dim))
             + qt.tensor(qt.qeye(truncated_dims[0]), qubit_freq * qt.num(qubit_truncated_dim))
         )
+    else:
+        rot_hamiltonian = qt.Qobj(np.zeros_like(hamiltonian.data), dims=hamiltonian.dims)
 
-        hamiltonian -= rot_hamiltonian
+    hamiltonian -= rot_hamiltonian
 
     # Construct the collapse operators in this basis
     res_collapse_parameters = {
@@ -231,7 +241,12 @@ def cavity_ancilla_me_ingredients(
         for op in res_collapse_operators + qubit_collapse_operators
     ]       # change the dims of the collapse operators
     
-    return hamiltonian, c_ops, (truncated_evals.ravel(), truncated_evecs.ravel())
+    return (
+        hamiltonian, 
+        c_ops, 
+        (truncated_evals.ravel(), truncated_evecs.ravel()),
+        rot_hamiltonian,
+    )
 
 def idling_propagator(
     hamiltonian: qt.Qobj, 
@@ -257,7 +272,6 @@ def idling_propagator(
     liouv = qt.liouvillian(hamiltonian, c_ops)
 
     return (liouv * time).expm()
-
 
 from chencrafts.bsqubits.cat_ideal import qubit_projectors as ideal_qubit_projectors
 def qubit_projectors(
@@ -297,6 +311,11 @@ def qubit_projectors(
             raise ValueError("Each row of the confusion matrix should be "
                              "normalized to 1.")
         
+        # check the dimension of the confusion matrix
+        if confusion_matrix.shape != (qubit_dim, qubit_dim):
+            raise ValueError("The confusion matrix should be a square matrix "
+                             "with dimension qubit_dim.")
+        
     # construct the measurement operators
     measurement_ops = np.empty_like(confusion_matrix, dtype=object)
     for idx, prob in np.ndenumerate(confusion_matrix):
@@ -314,3 +333,125 @@ def qubit_projectors(
         
     return measurement_ops
     
+def qubit_gate(
+    hilbertspace: HilbertSpace,
+    res_mode_idx: int, qubit_mode_idx: int,
+    res_truncated_dim: int | None = None, qubit_truncated_dim: int = 2,
+    dressed_indices: np.ndarray | None = None, eigensys = None,
+    rotation_angle: float = np.pi / 2,
+    gate_params: Dict[str, Any] = {},
+):
+    """
+    qubit gate propagator. 
+
+    Parameters
+    ----------
+    hilbertspace: HilbertSpace
+        scq.HilbertSpace object that contains a qubit and a resonator
+    res_mode_idx, qubit_mode_idx: int
+        The index of the resonator / qubit mode in the HilbertSpace
+    res_truncated_dim: int | None
+        The truncated dimension of the resonator mode. If None, the resonator mode will not be truncated unless a nan eigenvalue is found.
+    """
+    qubit = hilbertspace.subsystem_list[qubit_mode_idx]
+    qubit_type = qubit.__class__.__name__
+
+    # hamiltonian
+    H0 = hilbertspace.hamiltonian() * np.pi * 2
+    if qubit_type == "Transmon":
+        H1 = scq.identity_wrap(
+            qubit.n_operator(), 
+            qubit, 
+            hilbertspace.subsystem_list
+        ) * np.pi * 2
+    elif qubit_type == "Fluxonium":
+        H1 = scq.identity_wrap(
+            qubit.phi_operator(), 
+            qubit, 
+            hilbertspace.subsystem_list
+        ) * np.pi * 2
+    else:
+        raise ValueError(f"Unknown qubit type {qubit_type}")
+
+    # gate params
+    res_n_bar = np.round(gate_params["disp"]**2).astype(int)
+    evals, evec_arr = two_mode_dressed_esys(
+        hilbertspace, 
+        res_mode_idx, qubit_mode_idx, 
+        state_label=(0, 0),
+        res_truncated_dim=res_truncated_dim,
+        qubit_truncated_dim=qubit_truncated_dim,
+        dressed_indices=dressed_indices, eigensys=eigensys,
+    )
+
+    evals = evals * np.pi * 2
+    bare_angular_freq = (evals[res_n_bar, 1] - evals[res_n_bar, 0])
+    non_lin = (evals[res_n_bar, 2] - 2*evals[res_n_bar, 1] + evals[res_n_bar, 0])
+
+    gate_in_subspace = oprt_in_basis(
+        H1, evec_arr[res_n_bar, 0:qubit_truncated_dim]
+    )
+    tgt_mat_elem = gate_in_subspace[0, 1]
+    leaking_mat_elem = gate_in_subspace[0, 2]
+
+    sigma = gate_params["sigma"] * rotation_angle / (np.pi / 2)
+    duration = gate_params["tau_p_eff"] * rotation_angle / (np.pi / 2)
+
+    if qubit_type == "Transmon":
+        pulse = DRAGGaussian(
+            base_angular_freq = bare_angular_freq,
+            duration = duration,
+            sigma = sigma, 
+            non_lin = non_lin,
+            order = 2, 
+            rotation_angle = rotation_angle, 
+            tgt_mat_elem = tgt_mat_elem,
+            leaking_mat_elem = leaking_mat_elem,
+            dynamic_drive_freq=False,
+        )
+    elif qubit_type == "Fluxonium":
+        pulse = Gaussian(
+            base_angular_freq = bare_angular_freq,
+            duration = duration,
+            sigma = sigma, 
+            rotation_angle = rotation_angle, 
+            tgt_mat_elem = tgt_mat_elem,
+        )
+
+    # simulate subspace by subspace
+    def calculate_prop(basis):
+        H0_ss = oprt_in_basis(H0, basis)
+        H1_ss = oprt_in_basis(H1, basis)
+
+        # global phase -> global phase % (2 * np.pi)
+        phase_quantum = np.pi * 2 / pulse.duration
+        cycle_num = np.round(H0_ss[1, 1] / phase_quantum)
+        H0_ss = H0_ss - phase_quantum * cycle_num
+
+        try:
+            pulse.reset()
+        except AttributeError:
+            pass
+
+        prop = qt.propagator(
+            H = lambda t, args: H0_ss + H1_ss * pulse(t),
+            t = pulse.duration,
+            options = qt.Options(
+                nsteps=1000000,
+                atol=1e-10,
+            ),
+        )
+
+        return prop
+    
+    with Pool(8) as pool:
+        prop_list = list(pool.map(
+            calculate_prop, evec_arr
+        ))
+    prop_ds = direct_sum(*prop_list)
+
+    # may not be correct - two_mode_dressed_esys function may return a 
+    # partial baiss
+    prop_ds.dims = [[res_truncated_dim, qubit_truncated_dim], [res_truncated_dim, qubit_truncated_dim]]
+
+    return prop_ds
