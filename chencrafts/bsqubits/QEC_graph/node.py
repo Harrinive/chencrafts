@@ -10,31 +10,16 @@ from chencrafts.cqed.qt_helper import (
 )
 
 from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, Literal
+from abc import ABC, abstractmethod, abstractproperty
 
 if TYPE_CHECKING:
     from chencrafts.bsqubits.QEC_graph.edge import Edge
 
 MeasurementRecord = List[Tuple[int, ...]]
 
-class StateNode:
-
-    # options:
-    ORTHOGONALIZE_LOGICAL_STATES = True
-    ORTHOGONALIZE_METHOD: Literal["GS", "symm"] = "GS"
-
-    meas_record: MeasurementRecord
-
+class NodeBase(ABC):
     # current state as a density matrix
     state: qt.Qobj
-
-    # probability amplitude of |0> and |1>
-    prob_amp_01: Tuple[float, float]
-
-    # ideal states, organized in an ndarray, with dimension n*3
-    # the first dimension counts the number of correctable errors
-    # the second dimension enumerates: logical state 0 and logical state 1
-    ideal_logical_states: np.ndarray[qt.Qobj]
-    
     index: int
 
     def __init__(
@@ -45,8 +30,92 @@ class StateNode:
         """
         self.out_edges: List["Edge"] = []
 
+    @abstractproperty
+    def fidelity(self) -> float:
+        """
+        Calculate the fidelity of the state
+        """
+        pass
+    
+    def assign_index(self, index: int):
+        self.index = index
+
+    def to_nx(self) -> Tuple[int, Dict[str, Any]]:
+        """
+        Convert to a networkx node
+        """
+        return (
+            self.index,
+            {
+                "state": self,
+            }
+        )
+
+    @abstractmethod
+    def deepcopy(self):
+        """
+        1. Not storing the edge information and avoiding circular reference
+        2. deepcopy the Qobj
+        """
+        pass
+
+    @abstractmethod
+    def __str__(self) -> str:
+        pass
+
+    @abstractmethod
+    def __repr__(self) -> str:
+        pass
+
     def add_out_edges(self, edge):
         self.out_edges.append(edge)
+
+    @abstractmethod
+    def clear_evolution_data(self):
+        pass
+
+    def expect(self, op: qt.Qobj) -> float:
+        """
+        Calculate the expectation value of the operator
+        """
+        return self.state.expect(op)
+    
+    @abstractmethod
+    def accept(self, **kwargs):
+        """
+        Accept the evolution data from the edge and overwrite the current state
+        (if exists). It's useful for a node in a tree structure.
+        """
+        pass
+
+    @abstractmethod
+    def join(self, **kwargs):
+        """
+        Accpet the evolution data from the edges and add them to the current
+        state (if exists)
+        """
+        pass
+
+    
+class StateNode(NodeBase):
+    """
+    State node that keep track of the ideal states and the measurement record
+    """
+    # options:
+    ORTHOGONALIZE_LOGICAL_STATES = True
+    ORTHOGONALIZE_METHOD: Literal["GS", "symm"] = "GS"
+
+    # measurement record
+    meas_record: MeasurementRecord
+
+    # probability amplitude of |0> and |1>
+    prob_amp_01: Tuple[float, float]
+
+    # ideal states, organized in an ndarray, with dimension n*3
+    # the first dimension counts the number of correctable errors
+    # the second dimension enumerates: logical state 0 and logical state 1
+    ideal_logical_states: np.ndarray[qt.Qobj]
+    failure: bool = False
 
     def accept(
         self, 
@@ -54,7 +123,18 @@ class StateNode:
         state: qt.Qobj,
         prob_amp_01: Tuple[float, float],
         ideal_logical_states: np.ndarray[qt.Qobj],
+        **kwargs,
     ):
+        """
+        Accept the evolution data from the edge and overwrite the current state. 
+        It's useful for a node in a tree structure.
+
+        For StateNode, it takes the following arguments:
+        - meas_record: the measurement record
+        - state: the state after the evolution
+        - prob_amp_01: the probability amplitude of |0> and |1>
+        - ideal_logical_states: the ideal logical states
+        """
         # basic type checks:
         for ideal_state in ideal_logical_states.ravel():
             assert ideal_state.type == "ket"
@@ -65,6 +145,9 @@ class StateNode:
         self.state = state
         self.prob_amp_01 = prob_amp_01
         self.ideal_logical_states = ideal_logical_states
+
+    def join(self, **kwargs):
+        raise NotImplementedError("StateNode does not support join method.")
 
     @staticmethod
     def _GS_orthogonalize(state_0, state_1):
@@ -166,13 +249,18 @@ class StateNode:
 
     @property
     def fidelity(self) -> float:
-        return ((self.state * self.ideal_projector).tr()).real
+        fid = ((self.state * self.ideal_projector).tr()).real
+
+        if self.failure and fid > 1e-13:
+            warn("Failure branch [{self}] has a total fidelity larger than 0.")
+
+        return fid
     
     @property
     def probability(self) -> float:
         return (self.state.tr()).real
 
-    def deepcopy(self):
+    def deepcopy(self) -> "StateNode":
         """
         1. Not storing the edge information and avoiding circular reference
         2. deepcopy the Qobj
@@ -220,9 +308,6 @@ class StateNode:
         )
 
         return init_node
-    
-    def assign_index(self, index: int):
-        self.index = index
 
     def to_nx(self) -> Tuple[int, Dict[str, Any]]:
         """
@@ -251,8 +336,9 @@ class StateNode:
             idx = "No Index"
             
         try:
+            fail = ", FAIL" if self.failure else ""
             return (
-                f"StateNode ({idx}), record {self.meas_record}, "
+                f"StateNode ({idx}){fail}, record {self.meas_record}, "
                 + f"prob {self.probability:.3f}, fid {self.fidelity:.3f}"
             )
         except AttributeError:
@@ -260,32 +346,85 @@ class StateNode:
     
     def __repr__(self) -> str:
         return self.__str__()
+
     
-    def expect(self, op: qt.Qobj) -> float:
+class TrashNode(NodeBase):
+    """
+    State node that tracks nothing and always connect to itself. 
+    """
+    def join(
+        self, 
+        state: qt.Qobj, 
+        **kwargs,
+    ):
         """
-        Calculate the expectation value of the operator
+        Join the evolution data from the edges and add them to the current
+        state (if exists)
+
+        For TrashNode, it takes the following arguments:
+        - state: the state after the evolution
         """
-        return self.state.expect(op)
+        try:
+            # add the state to the current state
+            self.state = self.state + state
+        except AttributeError:
+            self.state = state
+
+    def accept(
+        self, 
+        state: qt.Qobj,
+        **kwargs,
+    ):
+        """
+        Accept the evolution data from the edge and overwrite the current state.
+        It's useful for a node in a tree structure.
+
+        For TrashNode, it takes the following arguments:
+        - state: the state after the evolution
+        """
+        self.state = state
+
+    @property
+    def fidelity(self) -> float:
+        return 0
+    
+    @property
+    def probability(self) -> float:
+        return (self.state.tr()).real
+
+    def deepcopy(self) -> "TrashNode":
+        """
+        1. Not storing the edge information and avoiding circular reference
+        2. deepcopy the Qobj
+        """
+            
+        copied_node = TrashNode()
+        copied_node.state = deepcopy(self.state)
+
+        return copied_node
+
+    def __str__(self) -> str:
+        try:
+            idx = self.index
+        except AttributeError:
+            idx = "No Index"
+
+        try:
+            return f"TrashNode ({idx}), prob {self.probability:.3f}"
+        except AttributeError:
+            return f"TrashNode ({idx})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+    
+    def clear_evolution_data(self):
+        try:
+            del self.state
+        except AttributeError:
+            pass
 
 
-# class CatNode(StateNode):
-#     state_vector: List[complex]
-#     logical_states: List[qt.Qobj]
-
-#     def accept(
-#         self, 
-#         meas_record: MeasurementRecord, 
-#         state: qt.Qobj, 
-#         state_vector: List[complex],
-#         logical_states: List[qt.Qobj],
-#     ):
-#         self.state_vector = state_vector
-#         self.logical_states = logical_states
-
-#         ideal_state
-#         ideal_projector = qt.ket2dm(state)
-        
-#         super().accept(meas_record, state, ideal_projector)
+Node = StateNode | TrashNode
 
 
 class StateEnsemble:
@@ -315,6 +454,8 @@ class StateEnsemble:
         return no_further_evolution
 
     def append(self, node: StateNode):
+        if node in self:
+            raise ValueError("The node is already in the ensemble.")
         self.nodes.append(node)
 
     def is_trace_1(self) -> bool:

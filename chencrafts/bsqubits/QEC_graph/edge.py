@@ -1,7 +1,9 @@
 import copy
 import qutip as qt
 import numpy as np
-from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict
+from warnings import warn
+from abc import ABC, abstractmethod
+from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict, overload
 
 from chencrafts.cqed.qt_helper import (
     superop_evolve,
@@ -10,21 +12,105 @@ from chencrafts.cqed.qt_helper import (
 
 if TYPE_CHECKING:
     from chencrafts.bsqubits.QEC_graph.node import (
-        StateNode, 
+        Node,
+        TrashNode,
         MeasurementRecord,
     )
 
-class EdgeBase:
-    init_state: "StateNode"
-    final_state: "StateNode"
+
+class EdgeBase(ABC):
+    name: str
+    
+    init_state: "Node"
+    final_state: "Node"
 
     index: int
+
+    # if the evolved states are added to an ensemble (for example, trash bin)
+    # represents an ensemble (for example, trash bin)
+    # it should be True
+    to_ensemble: bool
+
+    def connect(self, init_state: "Node", final_state: "Node"):
+        """
+        Connect the edge to the initial state and the final state
+        """
+        self.init_state = init_state
+        self.final_state = final_state
+
+    def assign_index(self, index: int):
+        self.index = index
+
+    @abstractmethod
+    def evolve(self):
+        """
+        Evolve the initial state to the final state
+        """
+        pass
+
+    def to_nx(self) -> Tuple[int, int, Dict[str, Any]]:
+        """
+        Convert to a networkx edge
+        """
+        return (
+            self.init_state.index,
+            self.final_state.index,
+            {
+                "name": self.name,
+                "type": type(self).__name__,
+                "process": self,
+            }
+        )       
+    
+
+
+class TrashEdge(EdgeBase):
+    init_state: "TrashNode"
+    final_state: "TrashNode"
+
+    def __init__(
+        self, 
+        name: str,
+        to_ensemble: bool = False,
+    ):
+        """
+        To "evolve" states in the TrashNode, we just need to copy and paste
+        the states
+        """
+        self.name = name
+        self.to_ensemble = to_ensemble
+
+    def evolve(self):
+        """
+        Copy and paste the states from the initial state to the final state.
+
+        It make sure that the trash node is still in the graph afte a 
+        step of evolution. It's also order insensitive - the other nodes
+        can throw states to the trash node before or after this evolve
+        method is called.
+        """
+        final_state = copy.deepcopy(self.init_state.state)
+
+        if not self.to_ensemble:
+            self.final_state.accept(state = final_state)
+        else:
+            self.final_state.join(state = final_state)
+
+    def __str__(self) -> str:
+        return f"{self.name}"
+    
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class EvolutionEdge(EdgeBase):
 
     def __init__(
         self, 
         name: str,
         real_map: qt.Qobj | Callable[["MeasurementRecord"], qt.Qobj],
         ideal_maps: List[qt.Qobj] | Callable[["MeasurementRecord"], List[qt.Qobj]],
+        to_ensemble: bool = False,
     ):
         """
         Edge that connects two StateNodes.
@@ -46,13 +132,8 @@ class EdgeBase:
         self.name = name
         self.real_map = real_map
         self.ideal_maps = ideal_maps
-
-    def connect(self, init_state: "StateNode", final_state: "StateNode"):
-        """
-        Connect the edge to the initial state and the final state
-        """
-        self.init_state = init_state
-        self.final_state = final_state
+        
+        self.to_ensemble = to_ensemble
 
     def evolve(self):
         """
@@ -105,11 +186,14 @@ class EdgeBase:
                         [new_logical_0 / norm_0, new_logical_1 / norm_1]
                     )
         
-        # no any ideal state component, usually means the state is in it's 
-        # steady state - no single photon loss anymore
+        # no any ideal state component, usually because: 
+        # 1. the state is in it's steady state - no single photon loss anymore
+        # 2. the state is in a branch where talking about ideal state is not
+        #    meaningful anymore (failures like leakage)
         if len(new_ideal_logical_states) == 0:
-            raise ValueError("No ideal state component left. "
-                             "The state is likely in it's steady state.")
+            warn("Can't find ideal logical states. Use the previous ideal logical states.")
+            new_ideal_logical_states = copy.deepcopy(self.init_state.ideal_logical_states)
+            self.final_state.failure = True
 
         # convert to ndarray
         new_ideal_logical_state_array = np.empty(
@@ -118,52 +202,45 @@ class EdgeBase:
         new_ideal_logical_state_array[:] = new_ideal_logical_states
 
         # feed the result to the final state
-        self.final_state.accept(
-            copy.copy(self.init_state.meas_record), 
-            final_state, 
-            copy.copy(self.init_state.prob_amp_01),
-            new_ideal_logical_state_array,
-        )
+        if not self.to_ensemble:
+            self.final_state.accept(
+                meas_record = copy.copy(self.init_state.meas_record), 
+                state = final_state, 
+                prob_amp_01 = copy.copy(self.init_state.prob_amp_01),
+                ideal_logical_states = new_ideal_logical_state_array,
+            )
+        else:
+            self.final_state.join(
+                meas_record = copy.copy(self.init_state.meas_record), 
+                state = final_state, 
+                prob_amp_01 = copy.copy(self.init_state.prob_amp_01),
+                ideal_logical_states = new_ideal_logical_state_array,
+            )
 
-    def assign_index(self, index: int):
-        self.index = index
-
-    def to_nx(self) -> Tuple[int, int, Dict[str, Any]]:
-        """
-        Convert to a networkx edge
-        """
-        return (
-            self.init_state.index,
-            self.final_state.index,
-            {
-                "name": self.name,
-                "type": "propagator" if isinstance(self, PropagatorEdge) else "measurement",
-                "process": self,
-            }
-        )       
-    
     def __str__(self) -> str:
         return f"{self.name}"
     
     def __repr__(self) -> str:
         return self.__str__()
 
-class PropagatorEdge(EdgeBase):
+
+class PropagatorEdge(EvolutionEdge):
     pass
 
 
-class MeasurementEdge(EdgeBase):
+class MeasurementEdge(EvolutionEdge):
     def __init__(
         self, 
         name: str,
         outcome: float,
         real_map: qt.Qobj | Callable[["MeasurementRecord"], qt.Qobj],
         ideal_map: List[qt.Qobj] | Callable[["MeasurementRecord"], List[qt.Qobj]],
+        to_ensemble: bool = False,
     ):
         """
         One of the measurement outcomes and projections
         """
-        super().__init__(name, real_map, ideal_map)
+        super().__init__(name, real_map, ideal_map, to_ensemble)
 
         self.outcome = outcome
 
@@ -178,8 +255,6 @@ class MeasurementEdge(EdgeBase):
 
     def __str__(self) -> str:
         return super().__str__() + f" ({self.outcome})"
-
-    
 
 
 Edge = PropagatorEdge | MeasurementEdge
