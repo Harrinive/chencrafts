@@ -1,21 +1,24 @@
 import qutip as qt
 import networkx as nx
 
-from chencrafts.bsqubits.QEC_graph.node import StateNode, StateEnsemble
-from chencrafts.bsqubits.QEC_graph.edge import PropagatorEdge, MeasurementEdge, Edge
+from chencrafts.bsqubits.QEC_graph.node import StateEnsemble
 
-from typing import List    
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from chencrafts.bsqubits.QEC_graph.node import Node
+    from chencrafts.bsqubits.QEC_graph.edge import Edge
 
 class EvolutionGraph:
     def __init__(self):
-        self.nodes: List[StateNode] = []
-        self.edges: List[Edge] = []
+        self.nodes: List["Node"] = []
+        self.edges: List["Edge"] = []
 
-    def add_node(self, node: StateNode):
+    def add_node(self, node: "Node"):
         node.assign_index(self.node_num)
         self.nodes.append(node)
 
-    def add_edge_connect(self, edge: Edge, init_node: StateNode, final_node: StateNode):
+    def add_edge_connect(self, edge: "Edge", init_node: "Node", final_node: "Node"):
         """
         Add an edge and connect it to the initial node and the final node,
         which are already in the graph.
@@ -49,7 +52,7 @@ class EvolutionGraph:
     
     def clear_evolution_data(
         self, 
-        exclude: List[StateNode] = [],
+        exclude: List["Node"] = [],
     ):
         for node in self.nodes:
             if node not in exclude:
@@ -60,9 +63,6 @@ class EvolutionTree(EvolutionGraph):
     """
     If it's a tree, then the final states are always the new nodes that 
     have not been traversed.
-
-    Note: when the trash node is added, my cat tree is not a tree anymore.
-    But now let's just keep the name.
     """
 
     def _traverse_single_step(
@@ -79,10 +79,18 @@ class EvolutionTree(EvolutionGraph):
 
         # evolve
         for node in initial_ensemble:
+            if node.terminated:
+                # a manually terminated node will not be evolved and it
+                # will always be in the final ensemble, unchanged
+                final_ensemble.append(node)
+                continue
+
             if node.out_edges == []:
-                # this node has no out edges, usually because the occupation 
+                # this node has no out edges (and not terminated),
+                # usually because the occupation 
                 # of the state (normalization factor) is very small
                 continue
+
             for edge in node.out_edges:
                 if evolve:
                     edge.evolve()

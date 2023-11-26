@@ -5,8 +5,8 @@ import scqubits as scq
 
 from chencrafts.cqed import FlexibleSweep, superop_evolve
 
-from chencrafts.bsqubits.QEC_graph.node import StateNode, TrashNode, StateEnsemble, MeasurementRecord
-from chencrafts.bsqubits.QEC_graph.edge import PropagatorEdge, MeasurementEdge, Edge, TrashEdge
+from chencrafts.bsqubits.QEC_graph.node import StateNode, StateEnsemble, MeasurementRecord
+from chencrafts.bsqubits.QEC_graph.edge import PropagatorEdge, MeasurementEdge, Edge
 from chencrafts.bsqubits.QEC_graph.graph import EvolutionGraph, EvolutionTree
 
 import chencrafts.bsqubits.cat_ideal as cat_ideal
@@ -235,7 +235,7 @@ class CatGraphBuilder(GraphBuilder):
 
         final_nodes = StateEnsemble()
 
-        for node in init_nodes:
+        for node in init_nodes.active_nodes():
             edge_idling = PropagatorEdge(
                 f"idling ({step})",
                 self._idling_real,  # when ideal, time=0, it's already the identity, no need to change
@@ -351,7 +351,7 @@ class CatGraphBuilder(GraphBuilder):
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
-        for node in init_nodes:
+        for node in init_nodes.active_nodes():
             edge_qubit_gate = PropagatorEdge(
                 f"qubit_gate_1 ({step})",
                 (self._qubit_gate_p_real if not self.gate_1_is_ideal 
@@ -378,7 +378,7 @@ class CatGraphBuilder(GraphBuilder):
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
-        for node in init_nodes:
+        for node in init_nodes.active_nodes():
             edge_qubit_gate = PropagatorEdge(
                 f"qubit_gate_2 ({step})",
                 (self._qubit_gate_2_map_real if not self.gate_2_is_ideal 
@@ -417,8 +417,14 @@ class CatGraphBuilder(GraphBuilder):
         """
         Either real or ideal, the parity mapping takes the same amount of time.
         """
+        n_bar = np.abs(self.fsweep["disp"])**2  # TODO: is actually time-dependent
+        ave_interaction = (
+            self.fsweep["chi_sa"] 
+            + (2 * n_bar - 1) * self.fsweep["chi_prime"]
+        )
+
         t = (
-            float(np.abs(np.pi / self.fsweep["chi_sa"]))
+            float(np.abs(np.pi / ave_interaction))
             # half of the qubit gate time is used for parity mapping
             - self._qubit_gate_1_time / 2
             - self._qubit_gate_2_time / 2
@@ -439,7 +445,7 @@ class CatGraphBuilder(GraphBuilder):
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
-        for node in init_nodes:
+        for node in init_nodes.active_nodes():
             edge_parity_mapping = PropagatorEdge(
                 name = f"parity_mapping ({step})",
                 real_map = (self._parity_mapping_real
@@ -520,15 +526,10 @@ class CatGraphBuilder(GraphBuilder):
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
-        trash_node: TrashNode,
     ) -> StateEnsemble:
-        """
-        Special case: when the measurement is not accepted, the init node is 
-        then connected to a trash node.
-        """
         final_nodes = StateEnsemble()
 
-        for node in init_nodes:
+        for node in init_nodes.active_nodes():
             for idx in range(len(self._qubit_projs_ideal)):
                 # final_node is trash if not accepted
                 trashed = idx >= len(self._accepted_measurement_outcome_pool)
@@ -540,18 +541,11 @@ class CatGraphBuilder(GraphBuilder):
                         self._qubit_projs_real[idx] if not self.qubit_measurement_is_ideal 
                         else qt.to_super(self._qubit_projs_ideal[idx])),
                     ideal_map = [self._qubit_projs_ideal[idx]],
-                    to_ensemble = trashed,     
                 )                    
 
-                if trashed:
-                    final_node = trash_node
-                    # we don't add the trash node to the final_nodes,
-                    # because it will not be evolved anymore (it has its
-                    # own out edge, already connected to itself)
-                else:
-                    final_node = StateNode()
-                    final_nodes.append(final_node)
-
+                final_node = StateNode()
+                final_node.terminated = trashed
+                final_nodes.append(final_node)
                 graph.add_node(final_node)
 
                 graph.add_edge_connect(
@@ -619,7 +613,7 @@ class CatGraphBuilder(GraphBuilder):
     ) -> StateEnsemble:
         final_nodes = StateEnsemble()
 
-        for node in init_nodes:
+        for node in init_nodes.active_nodes():
             edge_qubit_reset = PropagatorEdge(
                 f"qubit_reset ({step})",
                 (self._qubit_reset_map_real if not self.qubit_reset_is_ideal 
@@ -666,19 +660,11 @@ class CatGraphBuilder(GraphBuilder):
         """
         graph = EvolutionTree()
 
-        # add some important nodes
+        # initial node
         init_state_node = StateNode.initial_note(
             init_prob_amp_01, logical_0, logical_1,
         )
         graph.add_node(init_state_node)
-        trash_node = TrashNode()
-        trash_edge = TrashEdge("Trash - Trash", to_ensemble=False)
-        graph.add_node(trash_node)
-        graph.add_edge_connect(
-            trash_edge,
-            trash_node,
-            trash_node,
-        )
 
         # current ensemble
         current_ensemble = StateEnsemble([init_state_node])
@@ -704,7 +690,6 @@ class CatGraphBuilder(GraphBuilder):
             step_counter += 1
             current_ensemble = self.qubit_measurement(
                 f"{round}.{step_counter}", graph, current_ensemble,
-                trash_node,
             )
             step_counter += 1
             current_ensemble = self.qubit_reset(
@@ -714,41 +699,3 @@ class CatGraphBuilder(GraphBuilder):
 
         return graph
 
-    # def generate_tree_wo_QEC(
-    #     self,
-    #     init_prob_amp_01: Tuple[float, float],
-    #     logical_0: qt.Qobj,
-    #     logical_1: qt.Qobj,
-    #     QEC_rounds: int = 1,
-    # ) -> EvolutionTree:
-    #     """
-    #     Currently, it only contains the idling process.
-    #     """
-    #     graph = EvolutionTree()
-
-    #     # add some important nodes
-    #     init_state_node = StateNode.initial_note(
-    #         init_prob_amp_01, logical_0, logical_1,
-    #     )
-    #     graph.add_node(init_state_node)
-    #     trash_node = TrashNode()
-    #     trash_edge = TrashEdge("Trash - Trash", to_ensemble=False)
-    #     graph.add_node(trash_node)
-    #     graph.add_edge_connect(
-    #         trash_edge,
-    #         trash_node,
-    #         trash_node,
-    #     )
-
-    #     # current ensemble
-    #     current_ensemble = StateEnsemble([init_state_node])
-
-    #     # add the idling edge
-    #     step_counter = 0
-    #     for round in range(QEC_rounds):
-    #         current_ensemble = self.idle(
-    #             f"{round}.{step_counter}", graph, current_ensemble,
-    #         )
-    #         step_counter += 1
-
-    #     return graph

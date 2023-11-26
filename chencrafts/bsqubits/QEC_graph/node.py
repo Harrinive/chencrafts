@@ -115,7 +115,11 @@ class StateNode(NodeBase):
     # the first dimension counts the number of correctable errors
     # the second dimension enumerates: logical state 0 and logical state 1
     ideal_logical_states: np.ndarray[qt.Qobj]
-    failure: bool = False
+
+    # mark that the node will not be further evolved and reduce the compu
+    # time. It does not mean that the node is a final state in the diagram,
+    # but a state that will stay in the ensemble forever.
+    terminated: bool = False
 
     def accept(
         self, 
@@ -147,7 +151,13 @@ class StateNode(NodeBase):
         self.ideal_logical_states = ideal_logical_states
 
     def join(self, **kwargs):
-        raise NotImplementedError("StateNode does not support join method.")
+        raise ValueError("StateNode does not support join method.")
+    
+    def add_out_edges(self, edge):
+        if self.terminated:
+            raise ValueError("The node is terminated and cannot have out edges.")
+        
+        super().add_out_edges(edge)
 
     @staticmethod
     def _GS_orthogonalize(state_0, state_1):
@@ -251,8 +261,8 @@ class StateNode(NodeBase):
     def fidelity(self) -> float:
         fid = ((self.state * self.ideal_projector).tr()).real
 
-        if self.failure and fid > 1e-13:
-            warn("Failure branch [{self}] has a total fidelity larger than 0.")
+        if self.terminated and fid > 1e-13:
+            warn("Terminated branch [{self}] has a total fidelity larger than 0.")
 
         return fid
     
@@ -336,7 +346,7 @@ class StateNode(NodeBase):
             idx = "No Index"
             
         try:
-            fail = ", FAIL" if self.failure else ""
+            fail = ", Terminated" if self.terminated else ""
             return (
                 f"StateNode ({idx}){fail}, record {self.meas_record}, "
                 + f"prob {self.probability:.3f}, fid {self.fidelity:.3f}"
@@ -346,85 +356,9 @@ class StateNode(NodeBase):
     
     def __repr__(self) -> str:
         return self.__str__()
-
     
-class TrashNode(NodeBase):
-    """
-    State node that tracks nothing and always connect to itself. 
-    """
-    def join(
-        self, 
-        state: qt.Qobj, 
-        **kwargs,
-    ):
-        """
-        Join the evolution data from the edges and add them to the current
-        state (if exists)
 
-        For TrashNode, it takes the following arguments:
-        - state: the state after the evolution
-        """
-        try:
-            # add the state to the current state
-            self.state = self.state + state
-        except AttributeError:
-            self.state = state
-
-    def accept(
-        self, 
-        state: qt.Qobj,
-        **kwargs,
-    ):
-        """
-        Accept the evolution data from the edge and overwrite the current state.
-        It's useful for a node in a tree structure.
-
-        For TrashNode, it takes the following arguments:
-        - state: the state after the evolution
-        """
-        self.state = state
-
-    @property
-    def fidelity(self) -> float:
-        return 0
-    
-    @property
-    def probability(self) -> float:
-        return (self.state.tr()).real
-
-    def deepcopy(self) -> "TrashNode":
-        """
-        1. Not storing the edge information and avoiding circular reference
-        2. deepcopy the Qobj
-        """
-            
-        copied_node = TrashNode()
-        copied_node.state = deepcopy(self.state)
-
-        return copied_node
-
-    def __str__(self) -> str:
-        try:
-            idx = self.index
-        except AttributeError:
-            idx = "No Index"
-
-        try:
-            return f"TrashNode ({idx}), prob {self.probability:.3f}"
-        except AttributeError:
-            return f"TrashNode ({idx})"
-
-    def __repr__(self) -> str:
-        return self.__str__()
-    
-    def clear_evolution_data(self):
-        try:
-            del self.state
-        except AttributeError:
-            pass
-
-
-Node = StateNode | TrashNode
+Node = StateNode    # for now, the only node type is StateNode
 
 
 class StateEnsemble:
@@ -548,3 +482,19 @@ class StateEnsemble:
     
     def __repr__(self) -> str:
         return self.__str__()
+    
+    def active_nodes(self) -> "StateEnsemble":
+        """
+        Return the nodes that are not terminated
+        """
+        return StateEnsemble([
+            node for node in self.nodes if not node.terminated
+        ])
+    
+    def terminated_nodes(self) -> "StateEnsemble":
+        """
+        Return the nodes that are terminated
+        """
+        return StateEnsemble([
+            node for node in self.nodes if node.terminated
+        ])

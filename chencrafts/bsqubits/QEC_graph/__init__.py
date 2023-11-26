@@ -17,6 +17,10 @@ from chencrafts.bsqubits.QEC_graph.cat_tree import (
     CatGraphBuilder,
 )
 
+from chencrafts.bsqubits.QEC_graph.settings import (
+    IDEAL_STATE_THRESHOLD_0,
+    IDEAL_STATE_THRESHOLD_1,
+)
 
 __all__ = [
     'StateNode', 
