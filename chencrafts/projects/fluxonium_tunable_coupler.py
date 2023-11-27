@@ -884,7 +884,7 @@ class FluxoniumTunableCouplerFloating(base.QubitBaseClass, serializers.Serializa
         if not (np.abs(result.fun) < 0.001):
             print(
                 warnings.warn(
-                    f"off value of J is {result.fun}", Warning
+                    f"off value of J is {result.fun}\n", Warning
                 )
             )
         return result.x[0]
@@ -1515,7 +1515,7 @@ class ConstructFullPulse(serializers.Serializable):
             print(optimized_amp)
             print(
                 warnings.warn(
-                    "optimization of the qubit pulses did not succeed", Warning
+                    "optimization of the qubit pulses did not succeed\n", Warning
                 )
             )
             amp = amp_0

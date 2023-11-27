@@ -115,7 +115,7 @@ def spec_poly_fit(
     elif fit_truncated_dim > len(evals):
         fit_truncated_dim = len(evals)
         warnings.warn(f"fit_truncated_dim must be smaller than or equal to "
-                      f"available resonator dimension {len(evals)}.")
+                      f"available resonator dimension {len(evals)}.\n")
 
     evals = evals[:fit_truncated_dim]
 

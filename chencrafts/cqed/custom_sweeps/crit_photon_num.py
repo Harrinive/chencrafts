@@ -45,7 +45,7 @@ def sweep_n_crit_by_diag(
     if ps._evals_count < ps.hilbertspace.dimension - 1:
         warnings.warn("The n_crit may not reach the max possible number (oscillator."
                       "truncated_dim), because only "
-                      f"{ps._evals_count} eigenstates are calculated.", Warning)
+                      f"{ps._evals_count} eigenstates are calculated.\n", Warning)
 
     dressed_indices = ps["dressed_indices"][paramindex_tuple]
     

@@ -432,7 +432,7 @@ class CatGraphBuilder(GraphBuilder):
 
         if t > self.fsweep["T_W"]:
             # usually because a unreasonable parameter is set, making the chi_sa too small
-            warn("The parity mapping time is longer than the waiting time. Set the time to be the waiting time.")
+            warn("The parity mapping time is longer than the waiting time. Set the time to be the waiting time.\n")
             t = self.fsweep["T_W"]
 
         return t
@@ -511,7 +511,7 @@ class CatGraphBuilder(GraphBuilder):
                 raise ValueError("The measurement outcome pool should not contain duplicate values.")
             else:
                 warn("The number of accepted measurement outcomes is not equal to"
-                    f"defined projectors, use {self._measurement_outcome_pool} instead.")
+                    f"defined projectors, use {self._measurement_outcome_pool} instead.\n")
         else:
             self._measurement_outcome_pool = self._accepted_measurement_outcome_pool
 

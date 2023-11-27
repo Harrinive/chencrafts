@@ -104,7 +104,7 @@ class PulseBase:
     @exp_only.setter
     def exp_only(self, value: bool):
         warn("When called, this pulse object will return a complex exponential function."
-              "pulse(t) + pulse(t).conj() will give the full pulse.")
+              "pulse(t) + pulse(t).conj() will give the full pulse.\n")
         self._exp_only = value
 
     def __call__(self, t, *args) -> float:

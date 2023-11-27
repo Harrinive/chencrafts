@@ -665,7 +665,7 @@ class Optimization():
         if len(var_to_remove) > 0:
             warnings.warn(
                 f"There are some overlaps between free and fixed variables. "
-                f"Those variables are set to be freed: {var_to_remove}"
+                f"Those variables are set to be freed: {var_to_remove}\n"
             )
         for var in var_to_remove:
             del self.fixed_variables[var]
@@ -1066,7 +1066,7 @@ class Optimization():
             result.save(file_name, fixed_para_file_name)
 
         if not scipy_res.success:
-            warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x_combined}")
+            warnings.warn(f"The optimization fails with fixed parameter {self.fixed_variables}, initial parameter {init_x_combined}\n")
 
         result.store_optimizer_result(scipy_res)
 

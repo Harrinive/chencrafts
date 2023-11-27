@@ -187,7 +187,7 @@ def cavity_ancilla_me_ingredients(
                       "smart for more than 2 subsystems. It can't determine when to "
                       "truncate for other subsystems and keep the ground state for the mode "
                       "only. It's also not tested."
-                      "Please specify the truncation when initialize the HilbertSpace obj.")
+                      "Please specify the truncation when initialize the HilbertSpace obj.\n")
 
     # truncate the basis
     # 1. for qubit mode, keep up to the next excited state of the qubit initial state

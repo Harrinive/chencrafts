@@ -262,7 +262,7 @@ class StateNode(NodeBase):
         fid = ((self.state * self.ideal_projector).tr()).real
 
         if self.terminated and fid > 1e-13:
-            warn("Terminated branch [{self}] has a total fidelity larger than 0.")
+            warn("Terminated branch [{self}] has a total fidelity larger than 0.\n")
 
         return fid
     
@@ -412,7 +412,7 @@ class StateEnsemble:
         """
         if not self.is_trace_1():
             warn("The total trace is not 1. The averaged state is not"
-                 " physical. ")
+                 " physical. \n")
         return sum([node.state for node in self.nodes])
 
     @property

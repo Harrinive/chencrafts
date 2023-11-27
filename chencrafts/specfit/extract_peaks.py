@@ -217,7 +217,7 @@ def polish_peaks(x_list, y_list, data, peak_tuple, index_range_tuple) -> Tuple[i
         (x, y), new peak
     """
     if index_range_tuple[0] == 1 and index_range_tuple[1] <= 4:
-        warn("Warning: the index_range_tuple is too small, the peak will be set to be che closest grid point.")
+        warn("Warning: the index_range_tuple is too small, the peak will be set to be che closest grid point.\n")
         x_idx, y_idx = _find_xy_index_w_value(
             x_list, y_list, peak_tuple[0], peak_tuple[1])
         return x_list[x_idx], y_list[y_idx]

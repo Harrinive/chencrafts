@@ -304,7 +304,7 @@ def dressed_state_component(
         # keyword argument 'dressed_esys'
         # meaning that it's not in danyang branch
         warn("Not in danyang's branch of scqubits. Generate lookup without "
-             "the eigensys if given.")
+             "the eigensys if given.\n")
         hilbertspace.generate_lookup()
 
     if isinstance(state_label, tuple | list): 
