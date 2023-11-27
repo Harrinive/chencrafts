@@ -100,56 +100,25 @@ class EvolutionTree(EvolutionGraph):
                     final_ensemble.append(edge.final_state)
 
         return final_ensemble
-
-    def ensemble_at_step(self, step: int) -> StateEnsemble:
-        """
-        In the tree, the node will not be traversed twice when evolving.
-        By moving on the tree, the evolution data can be retrieved.
-        This function return the ensemble at the next step at the given step
-        """
-        current_ensemble = StateEnsemble([self.nodes[0]])
-
-        for stp in range(step):
-            current_ensemble = self._traverse_single_step(
-                current_ensemble, evolve=False
-            )
-            if current_ensemble.no_further_evolution:
-                print(f"The evolution stops at step {stp}")
-                break
-
-        return current_ensemble
-        
-    def evolve(
+    
+    def traverse(
         self,
         steps: int,
-    ) -> StateEnsemble:
-        """
-        Evolve the initial ensemble for a number of steps
-
-        Parameters
-        ----------
-        initial_ensemble : StateEnsemble
-            The initial ensemble
-        steps : int
-            Number of steps to evolve
-
-        Returns
-        -------
-        final_ensemble : StateEnsemble
-            The final ensemble after evolution
-        """
-        initial_ensemble = StateEnsemble([self.nodes[0]])
-
-        self.clear_evolution_data(exclude=initial_ensemble)
-        
-        current_ensemble = initial_ensemble
+        initial_ensemble: StateEnsemble = None,
+        evolve: bool = True,
+    ):
+        if initial_ensemble is None:
+            current_ensemble = StateEnsemble([self.nodes[0]])
+        else:
+            current_ensemble = initial_ensemble
 
         for stp in range(steps):
             current_ensemble = self._traverse_single_step(
-                current_ensemble, evolve=True
+                current_ensemble, evolve=evolve
             )
             if current_ensemble.no_further_evolution:
-                print(f"The evolution stops at step {stp}")
+                if stp+1 < steps:
+                    print(f"The evolution stops earlier at step {stp+1}")
                 break
 
         return current_ensemble
@@ -158,14 +127,14 @@ class EvolutionTree(EvolutionGraph):
         """
         Return the fidelity of the final state at each step
         """
-        fid_by_stp = []
-        current_ensemble = self.ensemble_at_step(0)
+        current_ensemble = StateEnsemble([self.nodes[0]])
+        fid_by_stp = [current_ensemble.fidelity]
 
         while True:
-            fid_by_stp.append(current_ensemble.fidelity)
             current_ensemble = self._traverse_single_step(
                 current_ensemble, evolve=False
             )
+            fid_by_stp.append(current_ensemble.fidelity)
             if current_ensemble.no_further_evolution:
                 break
             
