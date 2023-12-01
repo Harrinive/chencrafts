@@ -30,4 +30,7 @@ __all__ = [
     'EvolutionGraph',
     'EvolutionTree',
     'CatGraphBuilder',
+
+    'IDEAL_STATE_THRESHOLD_0',
+    'IDEAL_STATE_THRESHOLD_1',
 ]

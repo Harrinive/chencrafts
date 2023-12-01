@@ -13,7 +13,7 @@ import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.cat_real as cat_real
 
 from tqdm.notebook import tqdm
-from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, overload
+from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, overload, Literal
 from warnings import warn
 
 
@@ -108,6 +108,7 @@ class CatGraphBuilder(GraphBuilder):
 
         # change unit from GHz to rad / ns
         self.static_hamiltonian = self.static_hamiltonian * np.pi * 2
+        self.frame_hamiltonian = self.frame_hamiltonian * np.pi * 2
 
     def _find_sim_param(
         self,
@@ -130,6 +131,16 @@ class CatGraphBuilder(GraphBuilder):
         # determine the truncated dimension
         self.res_dim = self.sim_para["res_dim"]
         self.qubit_dim = self.sim_para["qubit_dim"]
+
+        # which qubit gate is used
+        # qubit = self.fsweep.hilbertspace.subsystem_list[self._qubit_mode_idx]
+        # if type(qubit) == scq.Transmon:
+        #     self._gate_axis = "x"
+        # elif type(qubit) == scq.Fluxonium:
+        #     self._gate_axis = "x"
+        # else:
+        #     raise ValueError("Unknown qubit type.")
+        self._gate_axis = "x"
 
     # utils ############################################################
     @staticmethod
@@ -159,6 +170,10 @@ class CatGraphBuilder(GraphBuilder):
         Convert a list of Kraus operators to a superoperator. It also works
         for a function that returns a list of Kraus operators.
         """
+        if isinstance(qobj_list, qt.Qobj):
+            # Qobj is callable and we should detect it before checking callable
+            raise TypeError("The input should be a list of Qobj or a function.")
+        
         if isinstance(qobj_list, list):
             return sum([qt.to_super(qobj) for qobj in qobj_list])
         elif callable(qobj_list):
@@ -226,20 +241,25 @@ class CatGraphBuilder(GraphBuilder):
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
+        correctable_single_photon_loss: bool = True,
     ) -> StateEnsemble:
         """
         Idling process.
 
         Add one idling edge to every node in the initial ensemble.
         """
-
         final_nodes = StateEnsemble()
+
+        if correctable_single_photon_loss:
+            accepted_states_num = 2
+        else:
+            accepted_states_num = 1
 
         for node in init_nodes.active_nodes():
             edge_idling = PropagatorEdge(
                 f"idling ({step})",
                 self._idling_real,  # when ideal, time=0, it's already the identity, no need to change
-                self._idling_ideal,
+                self._idling_ideal[:accepted_states_num],
             )
             final_nodes.append(StateNode())
 
@@ -258,48 +278,92 @@ class CatGraphBuilder(GraphBuilder):
         self,
         propagator: qt.Qobj,
         time: float,
+        type: Literal[
+            "rot2current", 
+            "current2rot", 
+            "lab2current",
+            "current2lab",
+            "lab2rot",
+            "rot2lab",
+        ],
     ) -> qt.Qobj:
         """
         Transform the propagator to the rotating frame.
+
+        There are three frames that we need to consider:
+        1. [lab] The lab frame.
+        2. [rot] The rotating frame, basically all of the natural frequencies are set to 0.
+        3. [current] The current frame, linear part of the natural frequencies are removed.
         """
-        prop_free = lambda t: (-1j * self.frame_hamiltonian * t).expm()
-        return prop_free(time) * propagator * prop_free(0)
+        init, final = type.split("2")
+
+        if init == "rot":
+            init_ham = 0
+        elif init == "current":
+            init_ham = self.static_hamiltonian
+        elif init == "lab":
+            init_ham = self.frame_hamiltonian + self.static_hamiltonian
+
+        if final == "rot":
+            final_ham = 0
+        elif final == "current":
+            final_ham = self.static_hamiltonian
+        elif final == "lab":
+            final_ham = self.frame_hamiltonian + self.static_hamiltonian
+
+        trans_ham = init_ham - final_ham
+
+        prop_free = lambda t: (-1j * trans_ham * t).expm()
+        return prop_free(time).dag() * propagator * prop_free(0)
     
     def _build_qubit_gate_process(
         self,
+        num_cpus: int = 8,
     ):
-        self._qubit_gate_p_ideal = [cat_ideal.qubit_rot_propagator(
+        gate_p_rot_ideal = cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
-            angle=np.pi/2, axis="x", superop=False,
-        )]   # p stands for angle's sign plus
-        self._qubit_gate_m_ideal = [cat_ideal.qubit_rot_propagator(
+            angle=np.pi/2, axis=self._gate_axis, superop=False,
+        )   # p stands for angle's sign plus
+        self._qubit_gate_p_ideal = [self.frame_transform(
+            gate_p_rot_ideal, self.fsweep["tau_p_eff"], "rot2current"
+        )]  
+        gate_m_rot_ideal = cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
-            angle=-np.pi/2, axis="x", superop=False,
+            angle=-np.pi/2, axis=self._gate_axis, superop=False,
+        )
+        self._qubit_gate_m_ideal = [self.frame_transform(
+            gate_m_rot_ideal, self.fsweep["tau_p_eff"], "rot2current"
         )]
 
-        _gate_p_lab_frame = cat_real.qubit_gate(
+        gate_p_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
             # eigensys = self.esys, # self.esys is not full esys
             rotation_angle = np.pi / 2,
             gate_params = self.fsweep,
+            num_cpus = num_cpus,
         )
         self._qubit_gate_p_real = self._kraus_to_super(
-            self.frame_transform(_gate_p_lab_frame, self.fsweep["tau_p_eff"])
+            [self.frame_transform(
+                gate_p_lab_real, self.fsweep["tau_p_eff"], "lab2current"
+            )]
         )
-        _qubit_gate_m_real = cat_real.qubit_gate(
+        gate_m_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
             # eigensys = self.esys,  # self.esys is not full esys
             rotation_angle = - np.pi / 2,
             gate_params = self.fsweep,
+            num_cpus = num_cpus,
         )
         self._qubit_gate_m_real = self._kraus_to_super(
-            self.frame_transform(_qubit_gate_m_real, self.fsweep["tau_p_eff"])
+            [self.frame_transform(
+                gate_m_lab_real, self.fsweep["tau_p_eff"], "lab2current"
+            )]
         )
 
     # the qubit gate after parity mapping
@@ -560,12 +624,16 @@ class CatGraphBuilder(GraphBuilder):
     def _build_qubit_reset_process(
         self,
     ):
-        self._qubit_reset_ideal = [cat_ideal.qubit_reset_propagator(
+        reset_rot_ideal = cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx, superop=False,
+            res_mode_idx=self._res_mode_idx,
+            angle=np.pi, axis=self._gate_axis, superop=False,
+        )
+        self._qubit_reset_ideal = [self.frame_transform(
+            reset_rot_ideal, self.fsweep["tau_p_eff"] * 2, "rot2current"
         )]
-        # currently the same as the ideal one
-        _qubit_reset_real = cat_real.qubit_gate(
+
+        reset_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
@@ -574,7 +642,9 @@ class CatGraphBuilder(GraphBuilder):
             gate_params = self.fsweep,
         )
         self._qubit_reset_real = self._kraus_to_super(
-            self.frame_transform(_qubit_reset_real, self.fsweep["tau_p_eff"] * 2)
+            [self.frame_transform(
+                reset_lab_real, self.fsweep["tau_p_eff"] * 2, "lab2current"
+            )]
         )
 
     def _qubit_reset_map_real(
@@ -699,3 +769,33 @@ class CatGraphBuilder(GraphBuilder):
 
         return graph
 
+    def generate_wo_QEC(
+        self,
+        init_prob_amp_01: Tuple[float, float],
+        logical_0: qt.Qobj,
+        logical_1: qt.Qobj,
+        QEC_rounds: int = 1,
+    ) -> EvolutionTree:
+        """
+        Currently, it only contains the idling process.
+        """
+        graph = EvolutionTree()
+
+        # initial node
+        init_state_node = StateNode.initial_note(
+            init_prob_amp_01, logical_0, logical_1,
+        )
+        graph.add_node(init_state_node)
+
+        # current ensemble
+        current_ensemble = StateEnsemble([init_state_node])
+
+        # add the idling edge
+        step_counter = 0
+        for round in range(QEC_rounds):
+            current_ensemble = self.idle(
+                f"{round}.{step_counter}", graph, current_ensemble,
+                correctable_single_photon_loss=False,
+            )
+
+        return graph

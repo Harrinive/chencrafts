@@ -123,19 +123,29 @@ class EvolutionTree(EvolutionGraph):
 
         return current_ensemble
     
-    def fidelity_by_step(self):
+    def attr_by_step(self, attr: str, *args, **kwargs) -> List:
         """
-        Return the fidelity of the final state at each step
+        Return the attribute of the final state at each step. If callable,
+        then the attribute is the result of calling the method with 
+        *args and **kwargs.
         """
+        def _get_attr(ensemble: "StateEnsemble"):
+            current_attr = getattr(ensemble, attr)
+
+            if callable(current_attr):
+                return current_attr(*args, **kwargs)
+            else:
+                return current_attr
+
         current_ensemble = StateEnsemble([self.nodes[0]])
-        fid_by_stp = [current_ensemble.fidelity]
+        attr_by_stp = [_get_attr(current_ensemble)]
 
         while True:
             current_ensemble = self._traverse_single_step(
                 current_ensemble, evolve=False
             )
-            fid_by_stp.append(current_ensemble.fidelity)
+            attr_by_stp.append(_get_attr(current_ensemble))
             if current_ensemble.no_further_evolution:
                 break
             
-        return fid_by_stp
+        return attr_by_stp

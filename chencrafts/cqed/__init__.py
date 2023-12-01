@@ -17,6 +17,7 @@ from chencrafts.cqed.qt_helper import (
     basis_of_projector,
     superop_evolve,
     projected_superop,
+    evecs_2_transformation,
 
     direct_sum,
 
@@ -94,6 +95,7 @@ __all__ = [
     "basis_of_projector",
     "superop_evolve",
     "projected_superop",
+    "evecs_2_transformation",
 
     "direct_sum",
     "process_fidelity",

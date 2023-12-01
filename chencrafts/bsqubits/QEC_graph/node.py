@@ -7,6 +7,7 @@ from warnings import warn
 from chencrafts.cqed.qt_helper import (
     projector_w_basis,
     normalization_factor,
+    evecs_2_transformation,
 )
 
 from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, Literal
@@ -78,7 +79,7 @@ class NodeBase(ABC):
         """
         Calculate the expectation value of the operator
         """
-        return self.state.expect(op)
+        return qt.expect(op, self.state)
     
     @abstractmethod
     def accept(self, **kwargs):
@@ -109,7 +110,7 @@ class StateNode(NodeBase):
     meas_record: MeasurementRecord
 
     # probability amplitude of |0> and |1>
-    prob_amp_01: Tuple[float, float]
+    _prob_amp_01: Tuple[float, float]
 
     # ideal states, organized in an ndarray, with dimension n*3
     # the first dimension counts the number of correctable errors
@@ -147,8 +148,46 @@ class StateNode(NodeBase):
 
         self.meas_record = meas_record
         self.state = state
-        self.prob_amp_01 = prob_amp_01
+        self._prob_amp_01 = prob_amp_01
         self.ideal_logical_states = ideal_logical_states
+
+    @property
+    def prob_amp_01(self) -> Tuple[float, float]:
+        return self._prob_amp_01
+    
+    @prob_amp_01.setter
+    def prob_amp_01(self, prob_amp_01: Tuple[float, float]):
+        """
+        Reset the probability amplitude of |0> and |1> and automatically
+        set a new state
+        """
+        self._prob_amp_01 = prob_amp_01 / np.sqrt(np.sum(np.abs(prob_amp_01)**2))
+
+        if self.terminated:
+            warn("The probability amplitude of |0> and |1> is reset manually. "
+                 "Usually it's not allowed for a terminated node. \n")
+            return
+        elif self.ideal_logical_states.shape[0] > 1:
+            warn("The probability amplitude of |0> and |1> is reset manually. "
+                 "While the state is not reset as the ideal logical states are "
+                 "not unique. \n")
+            return
+        elif self.ideal_logical_states.shape[0] == 1:
+            warn("The probability amplitude of |0> and |1> and the state are "
+                 "reset manually. \n")
+            if self.ORTHOGONALIZE_LOGICAL_STATES:
+                logical_states = self._orthogonalize(self.ideal_logical_states)
+            else:
+                logical_states = self.ideal_logical_states
+
+            self.state = qt.ket2dm(
+                self._prob_amp_01[0] * logical_states[0, 0] 
+                + self._prob_amp_01[1] * logical_states[0, 1]
+            ).unit()
+        else:
+            warn("The probability amplitude of |0> and |1> is reset manually, "
+                 "but the situation is not expected. \n")
+            return 
 
     def join(self, **kwargs):
         raise ValueError("StateNode does not support join method.")
@@ -241,16 +280,16 @@ class StateNode(NodeBase):
         if self.ORTHOGONALIZE_LOGICAL_STATES:
             othogonalized_states = self._orthogonalize(self.ideal_logical_states)
             return (
-                self.prob_amp_01[0] * othogonalized_states[:, 0]
-                + self.prob_amp_01[1] * othogonalized_states[:, 1]
+                self._prob_amp_01[0] * othogonalized_states[:, 0]
+                + self._prob_amp_01[1] * othogonalized_states[:, 1]
             )
         else:
             qobj_array_unit = np.vectorize(
                 self._qobj_unit, otypes = [qt.Qobj]
-            )
+            )   # apply qobj.unit() to each element in the array
             return qobj_array_unit(
-                self.prob_amp_01[0] * self.ideal_logical_states[:, 0] 
-                + self.prob_amp_01[1] * self.ideal_logical_states[:, 1]
+                self._prob_amp_01[0] * self.ideal_logical_states[:, 0] 
+                + self._prob_amp_01[1] * self.ideal_logical_states[:, 1]
             )
     
     @property
@@ -357,6 +396,38 @@ class StateNode(NodeBase):
     def __repr__(self) -> str:
         return self.__str__()
     
+    def bloch_vector(self) -> np.ndarray:
+        """
+        Calculate the bloch vector of the state
+        """
+        if self.terminated:
+            return np.zeros(4)
+
+        if self.ideal_logical_states.shape[0] > 1:
+            warn("The ideal logical states are not unique. Returned nan.\n")
+            return np.nan * np.ones(4)
+        
+        if self.ORTHOGONALIZE_LOGICAL_STATES:
+            logical_states = self._orthogonalize(self.ideal_logical_states)
+        else:
+            logical_states = self.ideal_logical_states
+        
+        trans = evecs_2_transformation(logical_states[0])
+
+        X = trans * qt.sigmax() * trans.dag()
+        Y = trans * qt.sigmay() * trans.dag()
+        Z = trans * qt.sigmaz() * trans.dag()
+        I = trans * qt.qeye(2) * trans.dag()
+        op_list: List[qt.Qobj] = [X, Y, Z, I]
+
+        dims = self.state.dims[0]
+        for op in op_list:
+            op.dims = [dims, dims]
+
+        return np.array([
+            self.expect(op) for op in op_list
+        ])
+    
 
 Node = StateNode    # for now, the only node type is StateNode
 
@@ -400,7 +471,7 @@ class StateEnsemble:
             try: 
                 node.state
             except AttributeError:
-                return False
+                raise RuntimeError("A node has not been evolved.")
 
         trace = sum([node.state.tr() for node in self.nodes])
         return np.abs(trace - 1) < 1e-8
@@ -411,8 +482,8 @@ class StateEnsemble:
         Calculate the total state
         """
         if not self.is_trace_1():
-            warn("The total trace is not 1. The averaged state is not"
-                 " physical. \n")
+            warn("The total trace is not 1. The averaged state is not "
+                 "physical. \n")
         return sum([node.state for node in self.nodes])
 
     @property
@@ -498,3 +569,11 @@ class StateEnsemble:
         return StateEnsemble([
             node for node in self.nodes if node.terminated
         ])
+    
+    def bloch_vectors(self) -> np.ndarray:
+        """
+        Calculate the bloch vectors of the states
+        """
+        return np.sum([
+            node.bloch_vector() for node in self.nodes
+        ], axis=0)

@@ -196,12 +196,16 @@ def qubit_rot_propagator(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
     angle: float = np.pi / 2,
-    axis: Literal['x', 'y', 'z'] = 'x',
+    axis: Literal['x', 'y', 'z', '-x', '-y', '-z'] = 'x',
     superop: bool = False,
 ) -> qt.Qobj:
     """
     The ideal qubit rotation propagator.
     """
+    if axis.startswith('-'):
+        angle = -angle
+        axis = axis[1:]
+
     generator = _qubit_pauli(res_dim, qubit_dim, res_mode_idx, axis) / 2
     unitary = (-1j * angle * generator).expm()
 
@@ -296,12 +300,13 @@ def qubit_reset_propagator(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
     superop: bool = False,
+    axis: Literal['x', 'y', 'z'] = 'x',
 ):
     """
     The ideal qubit reset operation (an X gate).
     """
     return qubit_rot_propagator(
-        res_dim, qubit_dim, res_mode_idx, angle=np.pi, axis='x', superop=superop
+        res_dim, qubit_dim, res_mode_idx, angle=np.pi, axis=axis, superop=superop
     )
 
 def identity(

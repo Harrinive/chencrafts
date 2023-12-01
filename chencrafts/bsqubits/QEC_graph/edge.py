@@ -181,14 +181,14 @@ class EvolutionEdge(EdgeBase):
             self.final_state.accept(
                 meas_record = copy.copy(self.init_state.meas_record), 
                 state = final_state, 
-                prob_amp_01 = copy.copy(self.init_state.prob_amp_01),
+                prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
                 ideal_logical_states = new_ideal_logical_state_array,
             )
         else:
             self.final_state.join(
                 meas_record = copy.copy(self.init_state.meas_record), 
                 state = final_state, 
-                prob_amp_01 = copy.copy(self.init_state.prob_amp_01),
+                prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
                 ideal_logical_states = new_ideal_logical_state_array,
             )
 

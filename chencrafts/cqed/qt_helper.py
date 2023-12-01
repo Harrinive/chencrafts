@@ -147,6 +147,19 @@ def superop_in_basis(
 
     return qt.Qobj(data, dims=[[[length]] * 2] * 2,)
 
+def evecs_2_transformation(evecs: List[qt.Qobj]) -> qt.Qobj:
+    """
+    Convert n eigenvectors with length m, convert them to a qobj of size m x n.
+    """
+    length = len(evecs)
+    dim = evecs[0].shape[0]
+
+    data = np.zeros((dim, length), dtype=complex)
+    for j in range(length):
+        data[:, j] = evecs[j].full().squeeze()
+
+    return qt.Qobj(data)
+
 # ##############################################################################
 def superop_evolve(superop: qt.Qobj, state: qt.Qobj) -> qt.Qobj:
     """
@@ -189,6 +202,8 @@ def normalization_factor(ket_or_dm: qt.Qobj):
         return np.sqrt(((ket_or_dm.dag() * ket_or_dm).tr()).real)
     elif qt.isoper(ket_or_dm):
         return (ket_or_dm.tr()).real
+    else:
+        raise ValueError("The object is neither a ket nor a density matrix.")
     
 # ##############################################################################
 # direct sum

@@ -113,8 +113,9 @@ def cavity_ancilla_me_ingredients(
     res_truncated_dim: int | None = None, qubit_truncated_dim: int = 2, 
     dressed_indices: np.ndarray | None = None, eigensys = None,
     collapse_parameters: Dict[str, Any] = {},
+    res_n_bar: int | None = None,
     in_rot_frame: bool = True,
-) -> Tuple[qt.Qobj, List[qt.Qobj], Esys]:
+) -> Tuple[qt.Qobj, List[qt.Qobj], Esys, qt.Qobj]:
     """
     Generate hamiltonian and collapse operators for a cavity-ancilla system. The operators
     will be truncated to two modes only with the specified dimension.
@@ -161,6 +162,9 @@ def cavity_ancilla_me_ingredients(
         - "qubit_dephase": The pure dephasing rate of the qubit. The dict value should be
         a 1D array `arr`, its element `arr[i]` should be the pure dephasing rate for state 
         i. jump operator: |i><i|
+    res_n_bar: int | None
+        The average photon number of the resonator. If provided, the qubit will be 
+        brought into a reference frame that the frequency is shifted by res_n_bar * chi.
     in_rot_frame: bool
         If True, the hamiltonian will be transformed into the rotating frame of the
         resonator and qubit 01 frequency. The collapse operators will be transformed 
@@ -207,9 +211,12 @@ def cavity_ancilla_me_ingredients(
     hamiltonian = qt.Qobj(np.diag(flattend_evals), dims=[truncated_dims, truncated_dims])
 
     if in_rot_frame:
+        if res_n_bar is None:
+            res_n_bar = 0
+
         # in the dispersice regime, the transformation hamiltonian is 
-        # freq * a^dag a * identity_qubit
-        res_freq = truncated_evals[1, 0] - truncated_evals[0, 0]  # -2 stands for the qubit initial state, as we truncatre the qubit mode at init_qubit_state_index + 1
+        # freq * a^dag a * identity_qubit + identity_res * freq_qubit * qubit^dag qubit
+        res_freq = truncated_evals[1, 0] - truncated_evals[0, 0]
         qubit_freq = truncated_evals[0, 1] - truncated_evals[0, 0]
 
         rot_hamiltonian = (
@@ -340,9 +347,10 @@ def qubit_gate(
     dressed_indices: np.ndarray | None = None, eigensys = None,
     rotation_angle: float = np.pi / 2,
     gate_params: Dict[str, Any] = {},
+    num_cpus: int = 8,
 ):
     """
-    qubit gate propagator. 
+    qubit gate propagator in the lab frame.
 
     Parameters
     ----------
@@ -393,9 +401,11 @@ def qubit_gate(
     )
     tgt_mat_elem = gate_in_subspace[0, 1]
     leaking_mat_elem = gate_in_subspace[0, 2]
+    H1 = H1 / (tgt_mat_elem / np.abs(tgt_mat_elem))     # remove phase factor
 
-    sigma = gate_params["sigma"] * rotation_angle / (np.pi / 2)
-    duration = gate_params["tau_p_eff"] * rotation_angle / (np.pi / 2)
+    # scale the pulse duration for different rotation angle
+    sigma = gate_params["sigma"] * np.abs(rotation_angle) / (np.pi / 2)
+    duration = gate_params["tau_p_eff"] * np.abs(rotation_angle) / (np.pi / 2)
 
     if qubit_type == "Transmon":
         pulse = DRAGGaussian(
@@ -407,7 +417,7 @@ def qubit_gate(
             rotation_angle = rotation_angle, 
             tgt_mat_elem = tgt_mat_elem,
             leaking_mat_elem = leaking_mat_elem,
-            dynamic_drive_freq=False,
+            dynamic_drive_freq = False,
         )
     elif qubit_type == "Fluxonium":
         pulse = Gaussian(
@@ -444,12 +454,17 @@ def qubit_gate(
 
         return prop
     
-    with Pool(8) as pool:
-        prop_list = list(pool.map(
+    if num_cpus > 1:
+        with Pool(num_cpus) as pool:
+            prop_list = list(pool.map(
+                calculate_prop, evec_arr
+            ))
+    else:
+        prop_list = list(map(
             calculate_prop, evec_arr
         ))
+    
     prop_ds = direct_sum(*prop_list)
-
     # may not be correct - two_mode_dressed_esys function may return a 
     # partial baiss
     prop_ds.dims = [[res_truncated_dim, qubit_truncated_dim], [res_truncated_dim, qubit_truncated_dim]]
