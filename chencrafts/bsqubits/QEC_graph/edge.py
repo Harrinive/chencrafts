@@ -53,6 +53,11 @@ class EdgeBase(ABC):
         """
         Convert to a networkx edge
         """
+        try:
+            prob = self.branching_probability
+        except AttributeError:
+            prob = np.nan
+
         return (
             self.init_state.index,
             self.final_state.index,
@@ -60,8 +65,16 @@ class EdgeBase(ABC):
                 "name": self.name,
                 "type": type(self).__name__,
                 "process": self,
+                "branching_probability": prob,
             }
-        )       
+        )  
+
+    @property
+    def branching_probability(self) -> float:
+        """
+        The probability of going onto this edge from the initial state
+        """
+        return self.final_state.probability / self.init_state.probability     
 
 
 class EvolutionEdge(EdgeBase):
@@ -233,3 +246,52 @@ class MeasurementEdge(EvolutionEdge):
 
 
 Edge = PropagatorEdge | MeasurementEdge
+
+
+class CheckPointEdge(EdgeBase):
+    def __init__(
+        self, 
+        name: str,
+        success: bool,
+    ):
+        self.name = name
+        self.success = success
+
+    def evolve(self):
+        """
+        Project the initial state onto the logical subspace and store the
+        result in the final state. It gives a first order approximation of the 
+        failure probability.
+        """
+        try:
+            self.init_state
+            self.final_state
+        except AttributeError:
+            raise AttributeError("The initial state and the final state are not connected.")
+        
+        try:
+            self.init_state.state
+            self.init_state.prob_amp_01
+            self.init_state.ideal_logical_states
+        except AttributeError:
+            raise AttributeError("The initial state are not evolved.")
+
+        # project the state onto the logical subspace
+        state = self.init_state.state
+        projector = self.init_state.ideal_projector
+        success_state = projector * state * projector.dag()
+        failure_state = state - success_state
+
+        # feed the result to the final state
+        self.final_state.accept(
+            meas_record = copy.copy(self.init_state.meas_record), 
+            state = success_state if self.success else failure_state, 
+            prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
+            ideal_logical_states = copy.deepcopy(self.init_state.ideal_logical_states),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.name}"
+    
+    def __repr__(self) -> str:
+        return self.__str__()

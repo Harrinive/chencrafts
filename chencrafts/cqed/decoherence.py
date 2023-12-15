@@ -8,11 +8,56 @@ from typing import Tuple, Callable, List
 from chencrafts.cqed.mode_assignment import single_mode_dressed_esys
 
 
-def n_th(freq, temp, n_th_base: float | np.ndarray = 0.0):
-    """freq is in the unit of GHz, temp is in the unit of K"""
+def n_th(
+    freq: float | np.ndarray, 
+    temp: float | np.ndarray, 
+    n_th_base: float | np.ndarray = 0.0
+) -> float | np.ndarray:
+    """
+    Calculate the thermal occupation number of a mode at a given temperature.
+    
+    Parameters
+    ----------
+    freq: float | np.ndarray
+        The frequency of the interested transition, in GHz
+    temp: float | np.ndarray
+        The temperature of the environment, in Kelvin
+    n_th_base: float | np.ndarray
+        Sometimes adding a constant to the thermal occupation number is necessary
+        to fit the experimental data. This parameter is used to do so.
+
+    Returns
+    -------
+    float | np.ndarray
+        Thermal occupation number
+    
+    """
     return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1) + n_th_base
 
-def readout_error(disp, relax_rate, int_time) -> float | np.ndarray:
+def readout_error(
+    disp: float | np.ndarray, 
+    relax_rate: float | np.ndarray,
+    int_time: float | np.ndarray,
+) -> float | np.ndarray:
+    """
+    Calculate the readout error probability of a qubit with a given dispersive shift,
+    relaxation rate and integration time.
+
+    Parameters
+    ----------
+    disp: float | np.ndarray
+        The dispersive shift of the qubit-resonator system, in GHz
+    relax_rate: float | np.ndarray
+        The relaxation rate of the resonator, in GHz
+    int_time: float | np.ndarray
+        The integration time of the readout, in ns
+
+    Returns
+    -------
+    float | np.ndarray
+        Readout error probability
+    """
+
     SNR = 2 * np.abs(disp) * np.sqrt(relax_rate * int_time)
     return 0.5 * erfc(SNR / 2)
 
@@ -31,6 +76,26 @@ def qubit_addi_energy_relax_w_res(
     is coupled with a resonator with some photons in it. 
     
     Qubit natural relaxation rate is NOT included in the returned value.
+
+    Parameters
+    ----------
+    qubit_relax_rate: float | np.ndarray
+        Qubit relaxation rate, in GHz
+    qubit_deph_rate: float | np.ndarray
+        Qubit dephasing rate, in GHz
+    g_over_delta: float | np.ndarray
+        Coupling strength devided by detuning
+    readout_photon_num: float | np.ndarray
+        Number of photons in the resonator
+    n_crit: float | np.ndarray
+        Critical photon number of the resonator
+    res_relax_rate: float | np.ndarray
+        Resonator relaxation rate, in GHz
+
+    Returns
+    -------
+    Tuple[float | np.ndarray, float | np.ndarray]
+        Readout introduced relaxation rate and excitation rate
     """
     # in the Equation (5.7), the "0" should be "1". The change here is to make the expression
     # exclude the qubit natural relaxation rate. 
@@ -43,11 +108,33 @@ def qubit_addi_energy_relax_w_res(
     return k_down_ro, k_up_ro
 
 def qubit_shot_noise_dephasing_w_res(
-        res_relax_rate, chi, n_th_r,
-        drive_strength = 0.0, drive_detuning = 0.0,
-    ) -> float | np.ndarray:
+    res_relax_rate, chi, n_th_r,
+    drive_strength = 0.0, drive_detuning = 0.0,
+) -> float | np.ndarray:
     """
     Follow Clerk and Utami (2007), Equation (43), (44), (66) and (69).
+
+    The returned value is the dephasing rate of a qubit coupled with a resonator
+    when the resonator is excited by a the environment and a drive.
+
+    Parameters
+    ----------
+    res_relax_rate: float | np.ndarray
+        Resonator relaxation rate, in GHz
+    chi: float | np.ndarray
+        Dispersice shift of the qubit-resonator system, in GHz
+    n_th_r: float | np.ndarray  
+        Thermal occupation number of the resonator when not driven
+    drive_strength: float | np.ndarray
+        Drive strength of the resonator, in GHz
+    drive_detuning: float | np.ndarray
+        Drive detuning of the resonator, in GHz
+
+    Returns
+    -------
+    float | np.ndarray
+        Dephasing rate of the qubit
+
     """
     # Equation (44) depahsing rate without drive
     Gamma_phi_th = res_relax_rate / 2 * (np.sqrt(

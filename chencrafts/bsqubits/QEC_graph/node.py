@@ -122,6 +122,10 @@ class StateNode(NodeBase):
     # but a state that will stay in the ensemble forever.
     terminated: bool = False
 
+    # fidelity warning issued when the fidelity is larger than 0 in a 
+    # terminated branch
+    term_fid_warning_issued = False
+
     def accept(
         self, 
         meas_record: MeasurementRecord,
@@ -300,8 +304,12 @@ class StateNode(NodeBase):
     def fidelity(self) -> float:
         fid = ((self.state * self.ideal_projector).tr()).real
 
-        if self.terminated and fid > 1e-13:
-            warn("Terminated branch [{self}] has a total fidelity larger than 0.\n")
+        if not self.term_fid_warning_issued:
+            # term_fid_warning_issued is to avoid infinite fidelity calculation
+            # as print out self requires fidelity calculation as well
+            if self.terminated and fid > 1e-10:
+                self.term_fid_warning_issued = True
+                warn(f"Terminated branch [{self}] has a total fidelity larger than 1e-10.\n")
 
         return fid
     
@@ -362,10 +370,19 @@ class StateNode(NodeBase):
         """
         Convert to a networkx node
         """
+        try:
+            fidelity = self.fidelity
+            probability = self.probability
+        except AttributeError:
+            fidelity = np.nan
+            probability = np.nan
+
         return (
             self.index,
             {
                 "state": self,
+                "fidelity": fidelity,
+                "probability": probability,
             }
         )
 
@@ -451,7 +468,7 @@ class StateEnsemble:
         no node has out edges.
         """
         no_further_evolution = True
-        for node in self:
+        for node in self.active_nodes():
             if node.out_edges != []:
                 no_further_evolution = False
                 break
@@ -467,14 +484,20 @@ class StateEnsemble:
         """
         Check if the total trace is 1
         """
+        return np.abs(self.probability - 1) < 1e-8
+    
+    @property
+    def probability(self) -> float:
+        """
+        Calculate the total probability
+        """
         for node in self.nodes:
             try: 
                 node.state
             except AttributeError:
                 raise RuntimeError("A node has not been evolved.")
-
-        trace = sum([node.state.tr() for node in self.nodes])
-        return np.abs(trace - 1) < 1e-8
+            
+        return sum([node.probability for node in self.nodes])
     
     @property
     def state(self) -> qt.Qobj:

@@ -293,7 +293,13 @@ basic_channels.add_channel(
 basic_channels.add_channel(
     "anc_prepare", 
     lambda T_W, Gamma_up, Gamma_down, T_M, tau_FD, *args, **kwargs: 
-        qubit_g_to_e_prob(Gamma_up, Gamma_down, T_W + tau_FD) / T_M
+        Gamma_up * (T_W + tau_FD) / T_M,
+        # qubit_g_to_e_prob(Gamma_up, Gamma_down, T_W + tau_FD) / T_M
+        # not correctly reveal the physics: the commented expression is the 
+        # probability of the qubit being at the excited state.
+        # While it's not the probability that the qubit is excited (maybe relaxed again).
+        # this probability is more important as each excitation dephases the 
+        # cavity
 )
 basic_channels.add_channel(
     "anc_relax_map", 
@@ -304,6 +310,11 @@ basic_channels.add_channel(
     "anc_dephase_map", 
     lambda Gamma_phi, chi_sa, T_M, *args, **kwargs: 
         np.pi * Gamma_phi / (np.abs(chi_sa) * T_M)
+)
+basic_channels.add_channel(
+    "cav_relax_map", 
+    lambda gamma_down, chi_sa, T_M, *args, **kwargs: 
+        np.pi * gamma_down / (np.abs(chi_sa) * T_M)
 )
 basic_channels.add_channel(
     "anc_relax_ro", 

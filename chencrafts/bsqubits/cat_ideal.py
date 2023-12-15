@@ -216,6 +216,7 @@ def qubit_rot_propagator(
     
 def parity_mapping_propagator(
     res_dim: int, qubit_dim: int,
+    angle: float = np.pi,
     res_mode_idx: Literal[0, 1] = 0,
     superop: bool = False,
 ) -> qt.Qobj:
@@ -223,7 +224,7 @@ def parity_mapping_propagator(
     The ideal parity mapping propagator.
     """
     generator = _res_number(res_dim, qubit_dim, res_mode_idx, qubit_state=1)
-    unitary = (-1j * np.pi * generator).expm()
+    unitary = (-1j * angle * generator).expm()
 
     if superop:
         return qt.to_super(unitary)
