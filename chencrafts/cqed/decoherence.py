@@ -35,7 +35,7 @@ def n_th(
     return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1) + n_th_base
 
 def readout_error(
-    disp: float | np.ndarray, 
+    n: float | np.ndarray, 
     relax_rate: float | np.ndarray,
     int_time: float | np.ndarray,
 ) -> float | np.ndarray:
@@ -45,8 +45,8 @@ def readout_error(
 
     Parameters
     ----------
-    disp: float | np.ndarray
-        The dispersive shift of the qubit-resonator system, in GHz
+    n: float | np.ndarray
+        The average resonator photon number during readout
     relax_rate: float | np.ndarray
         The relaxation rate of the resonator, in GHz
     int_time: float | np.ndarray
@@ -58,7 +58,7 @@ def readout_error(
         Readout error probability
     """
 
-    SNR = 2 * np.abs(disp) * np.sqrt(relax_rate * int_time)
+    SNR = 2 * np.abs(n) * np.sqrt(relax_rate * int_time)
     return 0.5 * erfc(SNR / 2)
 
 def qubit_addi_energy_relax_w_res(

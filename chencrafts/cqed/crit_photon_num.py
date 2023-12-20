@@ -638,6 +638,10 @@ def n_crit_by_diag_subspace_w_hilbertspace(
 
     Parameters
     ----------
+    interaction_idx_list:
+        Assuming the qubits are coupled to the resonator with only one interaction each,
+        interaction_idx_list should be a list of indices of the interactions.
+
     qubit_mode_idx_list:
         Should be a list of qubit mode indices in the hilbertspace.subsystem_list.
         The order of the qubit mode indices should be the same as the order of the
@@ -680,6 +684,10 @@ def n_crit_by_diag_subspace_w_hilbertspace(
 
         res_oprt = interaction.operator_list[res_mode_in_interaction][1]
         qubit_oprt = interaction.operator_list[qubit_idx_in_interaction][1]
+        if callable(qubit_oprt):
+            qubit_oprt = qubit_oprt()
+        if callable(res_oprt):
+            res_oprt = res_oprt()
 
         g = interaction.g_strength * np.abs(np.array(res_oprt)[0, 1])   # absorb resonator operator into g
 
