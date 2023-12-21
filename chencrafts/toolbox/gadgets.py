@@ -113,5 +113,3 @@ def n_zpf_2_Z(n_zpf):
     The relationship between n_zpf and oscillator length is n_zpf = 1 / (sqrt(2) l_zpf).
     """
     return hbar / (n_zpf * 2 * e)**2 / 2
-
-if __name__ == "__main__":
