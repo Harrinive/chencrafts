@@ -77,5 +77,41 @@ def omega_Z_2_EC_EL(freq, Z):
 
     return EC, EL
 
+def Z_2_phi_zpf(Z):
+    """
+    For a resonator, give impedence in ohms, return zero point fluctuation of 
+    flux in the unit of Phi_0 / 2pi. 
+    To convert it to oscillator length, multiply by sqrt(2).
+    """
+    Phi_zpf = np.sqrt(hbar * Z / 2)
+    Phi_0 = h / (2 * e)
+    return Phi_zpf / Phi_0 * 2 * np.pi
 
+def phi_zpf_2_Z(phi_zpf):
+    """
+    For a resonator, give zero point fluctuation of flux in the unit of Phi_0 / 2pi,
+    return impedence in ohms.
+    When you have a oscillator length, divide by sqrt(2) first.
+    """
+    Phi_0 = h / (2 * e)
+    Phi_zpf = phi_zpf * Phi_0 / 2 / np.pi
+    return 2 * Phi_zpf**2 / hbar
 
+def Z_2_n_zpf(Z):
+    """
+    For a resonator, give impedence in ohms, return zero point fluctuation of 
+    charge in the unit of 2e. 
+    The relationship between n_zpf and oscillator length is n_zpf = 1 / (sqrt(2) l_zpf).
+    """
+    Q_zpf = np.sqrt(hbar / 2 / Z)
+    return Q_zpf / 2 / e
+
+def n_zpf_2_Z(n_zpf):
+    """
+    For a resonator, give zero point fluctuation of charge in the unit of 2e,
+    return impedence in ohms.
+    The relationship between n_zpf and oscillator length is n_zpf = 1 / (sqrt(2) l_zpf).
+    """
+    return hbar / (n_zpf * 2 * e)**2 / 2
+
+if __name__ == "__main__":

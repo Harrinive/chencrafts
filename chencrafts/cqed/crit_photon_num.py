@@ -266,7 +266,7 @@ def n_crit_by_diag_subspace_base_single_qubit(
             break
 
         if n_crit > 3000:
-            print(f"n_crit is not found in the when n < 3000")
+            print(f"n_crit is not found when n < 3000")
             break
 
         n_crit += 1
@@ -506,7 +506,7 @@ def n_crit_by_diag_subspace_base(
             break
 
         if n_crit + 1 > max_n_crit:
-            print(f"n_crit is not found in the when n < {max_n_crit}")
+            print(f"n_crit is not found when n < {max_n_crit}")
             break
 
         n_crit += 1
