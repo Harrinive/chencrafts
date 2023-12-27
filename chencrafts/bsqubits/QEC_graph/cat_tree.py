@@ -500,6 +500,8 @@ class CatGraphBuilder(GraphBuilder):
     def _parity_mapping_time(self) -> float:
         """
         Either real or ideal, the parity mapping takes the same amount of time.
+
+        TODO: why is time = time - qubit_gate_time / 2?
         """
         t = (
             float(np.abs(np.pi / self._average_pm_interaction))

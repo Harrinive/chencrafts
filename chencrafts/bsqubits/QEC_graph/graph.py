@@ -123,19 +123,31 @@ class EvolutionTree(EvolutionGraph):
 
         return current_ensemble
     
-    def attr_by_step(self, attr: str, *args, **kwargs) -> List:
+    def attr_by_step(
+        self, 
+        attr: str, 
+        handle_error: bool = True,
+        *args, 
+        **kwargs,
+    ) -> List:
         """
         Return the attribute of the final state at each step. If callable,
         then the attribute is the result of calling the method with 
         *args and **kwargs.
         """
         def _get_attr(ensemble: "StateEnsemble"):
-            current_attr = getattr(ensemble, attr)
-
-            if callable(current_attr):
-                return current_attr(*args, **kwargs)
-            else:
-                return current_attr
+            try:
+                current_attr = getattr(ensemble, attr)
+                if callable(current_attr):
+                    return current_attr(*args, **kwargs)
+                else:
+                    return current_attr
+                
+            except Exception as e:
+                if handle_error:
+                    return None
+                else:
+                    raise e
 
         current_ensemble = StateEnsemble([self.nodes[0]])
         attr_by_stp = [_get_attr(current_ensemble)]
