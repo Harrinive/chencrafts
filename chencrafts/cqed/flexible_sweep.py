@@ -73,20 +73,16 @@ class FlexibleSweep():
             for key, val in swept_para.items()])
         self._check_valid_var_name()
         
-        # Meshgrids and shape of the sweep
-        if swept_para == {}:
-            _parameters = None
-            self._swept_para_meshgrids = {}
-            self.dims = tuple()
-        _parameters = Parameters(self.swept_para)
+        # Parameter setup
+        self._complete_param_dict = self._get_complete_param_dict()
+        _parameters = self._order_swept_para()
         self._swept_para_meshgrids = _parameters.meshgrid_by_name()
         self.dims = _parameters.counts
         self.hilbertspace = hilbertspace
         self._subsys_update_info = self._all_subsys_update_info(subsys_update_info, default_update_info)
+        self._update_hilbertspace_by_keyword = update_hilbertspace_by_keyword
 
         # ParameterSweep
-        self._complete_param_dict = self._get_complete_param_dict()
-        self._update_hilbertspace_by_keyword = update_hilbertspace_by_keyword
         self.sweep = ParameterSweep(
             hilbertspace=self.hilbertspace,
             paramvals_by_name=self._complete_param_dict,
@@ -111,6 +107,23 @@ class FlexibleSweep():
         key_set = set(self.para.keys())
         key_set.update(self.swept_para.keys())
         return list(key_set)
+    
+    def _order_swept_para(self) -> Parameters:
+        # Meshgrids and shape of the sweep
+        if self.swept_para == {}:
+            raise ValueError("No swept parameters are specified.")
+        
+        # order the swept parameters by the order of para
+        ordered_swept_para = {}
+        for key, val in self.para.items():
+            if key in self.swept_para.keys():
+                ordered_swept_para[key] = self.swept_para[key]
+
+        # put the rest of the swept parameters at the end
+        ordered_swept_para.update(self.swept_para)
+        
+        parameters = Parameters(ordered_swept_para)
+        return parameters
 
     def _get_complete_param_dict(self) -> Dict[str, np.ndarray]:
         param_by_name = {}
