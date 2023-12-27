@@ -259,15 +259,39 @@ class StateNode(NodeBase):
         
         return new_state_arr
     
+    def fidelity_drop_by_orth(self):
+        """
+        by orthorgonalize (redefine) the logical states, the fidelity will drop. 
+        This method returns the the amount of such drop.
+
+        Note: it only work if there is only one pair of ideal logical states
+        """
+        if self.terminated:
+            return 0
+
+        ideal_state_wo_orth = self._ideal_states(orthogonalize=False)
+        ideal_state_w_orth = self._ideal_states(orthogonalize=True)
+
+        if not len(ideal_state_wo_orth) == 1:
+            raise ValueError("This method only works if there is only one pair "
+                            "of ideal logical states.")
+        
+        fid = 1 - np.abs(ideal_state_w_orth[0].overlap(ideal_state_wo_orth[0]))**2
+        fid *= self.probability     # normalize by the probability
+        
+        return fid
+    
     @staticmethod
     def _qobj_unit(qobj: qt.Qobj) -> qt.Qobj:
         """
         used for vectorization of qobj.unit()
         """
         return qobj.unit()
-
-    @property
-    def ideal_states(self) -> np.ndarray[qt.Qobj]:
+    
+    def _ideal_states(
+        self,
+        orthogonalize: bool,
+    ) -> np.ndarray[qt.Qobj]:
         """
         Return the ideal state by logical states
         """
@@ -281,7 +305,7 @@ class StateNode(NodeBase):
         
         # need to be modified as the logical states are not necessarily
         # orthogonal
-        if self.ORTHOGONALIZE_LOGICAL_STATES:
+        if orthogonalize:
             othogonalized_states = self._orthogonalize(self.ideal_logical_states)
             return (
                 self._prob_amp_01[0] * othogonalized_states[:, 0]
@@ -295,6 +319,15 @@ class StateNode(NodeBase):
                 self._prob_amp_01[0] * self.ideal_logical_states[:, 0] 
                 + self._prob_amp_01[1] * self.ideal_logical_states[:, 1]
             )
+
+    @property
+    def ideal_states(
+        self,
+    ) -> np.ndarray[qt.Qobj]:
+        """
+        Return the ideal state by logical states
+        """
+        return self._ideal_states(self.ORTHOGONALIZE_LOGICAL_STATES)
     
     @property
     def ideal_projector(self) -> qt.Qobj:
@@ -485,6 +518,12 @@ class StateEnsemble:
         Check if the total trace is 1
         """
         return np.abs(self.probability - 1) < 1e-8
+    
+    def fidelity_drop_by_orth(self) -> float:
+        """
+        Calculate the fidelity drop by orthogonalization
+        """
+        return sum([node.fidelity_drop_by_orth() for node in self.nodes])
     
     @property
     def probability(self) -> float:
