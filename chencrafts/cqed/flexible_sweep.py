@@ -20,7 +20,7 @@ class FlexibleSweep():
         self,
         hilbertspace: HilbertSpace,
         para: Dict[str, float] = {"x": 0.0},    # a dummy parameter
-        swept_para: Dict[str, List[float] | np.ndarray] = {},
+        swept_para: Dict[str, List[float] | np.ndarray] = {"x": [0.0]},   # a dummy parameter
         update_hilbertspace_by_keyword: Callable | None = None,
         evals_count: int = 4,
         num_cpus: int = 1,
@@ -46,6 +46,8 @@ class FlexibleSweep():
             parameter sweep with current hilberspace parameters.
         swept_para: Dict[str, List[float] | np.ndarray]
             A dictionary of parameters to be swept. The values are lists or numpy arrays.
+            By default, it's set to {"x": [0.0]}, which is a dummy parameter and allows
+            doing single value parameter sweep with current hilberspace parameters.
         update_hilbertspace_by_keyword:
             A function that takes the signature 
             function(sweep, <keyword 1>, <keyword 2>, ...) 

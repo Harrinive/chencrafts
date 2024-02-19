@@ -96,23 +96,22 @@ def organize_dressed_esys(
     organized_evecs: np.ndarray = np.ndarray(dim_list, dtype=qt.Qobj)
     for idx, bare_idx in enumerate(np.ndindex(tuple(dim_list))):
 
-        drs_idx = drs_idx_map(bare_idx)          
+        drs_idx = drs_idx_map(bare_idx)   
 
-        if drs_idx is not None and drs_idx < len(evals):
-            evec = evecs[drs_idx]
-            eval = evals[drs_idx]
+        eval = np.nan
+        evec = None      
+        if drs_idx is not None:
+            if drs_idx < len(evals):
+                evec = evecs[drs_idx]
+                eval = evals[drs_idx]
 
-            if adjust_phase:
-                # make the "principle_val" have zero phase
-                principle_val = evec.data[idx, 0]
-                principle_val_phase = (principle_val) / np.abs(principle_val)
-                evec /= principle_val_phase
-
-            organized_evals[bare_idx] = eval
-            organized_evecs[bare_idx] = evec
-        else:
-            organized_evals[bare_idx] = np.nan
-            organized_evecs[bare_idx] = None
+                if adjust_phase:
+                    # make the "principle_val" have zero phase
+                    principle_val = evec.data[idx, 0]
+                    principle_val_phase = (principle_val) / np.abs(principle_val)
+                    evec /= principle_val_phase
+        organized_evals[bare_idx] = eval
+        organized_evecs[bare_idx] = evec            
 
     return organized_evals, organized_evecs
 
