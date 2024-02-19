@@ -112,8 +112,8 @@ class FlexibleSweep():
     
     def _order_swept_para(self) -> Parameters:
         # Meshgrids and shape of the sweep
-        if self.swept_para == {}:
-            raise ValueError("No swept parameters are specified.")
+        # if self.swept_para == {}:
+        #     raise ValueError("No swept parameters are specified.")
         
         # order the swept parameters by the order of para
         ordered_swept_para = {}

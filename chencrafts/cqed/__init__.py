@@ -80,6 +80,10 @@ from chencrafts.cqed.symbolic_bosons import (
     normal
 )
 
+from chencrafts.cqed.block_diag import (
+    block_diagonalize,
+)
+
 # specify private/public modules
 __all__ = [
     "GeneralPulse",
@@ -140,4 +144,6 @@ __all__ = [
     "n_crit_by_diag_subspace_w_hilbertspace",
 
     "normal",
+
+    "block_diagonalize",
 ]
