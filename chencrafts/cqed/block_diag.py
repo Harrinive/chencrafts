@@ -21,6 +21,10 @@ def _block_diag_ord1(
         Hamiltonian to be block-diagonalized.
     dims : List[int] | np.ndarray[int]
         Dimensions of the blocks.
+    previous_S : qt.Qobj | np.ndarray | np.matrix | None
+        When running this algorithm iteratively, the previous generator 
+        of the Schrieffer-Wolff transformation can be fed to this function
+        so that the optimization can start from the previous result.
     lr : float
         Learning rate for the optimization.
     tol : float
@@ -65,10 +69,21 @@ def _block_diag_ord1(
     def objective(
         generator: torch.Tensor, 
     ) -> torch.Tensor:
-        # 1st order Schrieffer-Wolff transformation
-        cost1 = torch.norm(H1 - (generator @ H0 - H0 @ generator))**2
-        # keep the generator anti-Hermitian
-        cost2 = torch.norm(generator + generator.t().conj())**2
+        # off-diagonal element H1 - [generator, H0] --> 0
+        off_diag_elem = H1 - (generator @ H0 - H0 @ generator)
+        cost1 = torch.sum(torch.stack(
+            [
+                torch.norm(off_diag_elem[
+                    cum_dims[i]:cum_dims[i+1], 
+                    cum_dims[j]:cum_dims[j+1]
+                ])**2 
+                for i in range(len(dims)) for j in range(len(dims)) if i != j
+            ]
+        ))
+
+        # # keep the generator anti-Hermitian
+        # cost2 = torch.norm(generator + generator.t().conj())**2
+            
         # keep the diag subspace untouched
         cost3 = torch.sum(torch.stack([
             torch.norm(generator[
@@ -77,7 +92,7 @@ def _block_diag_ord1(
             ])**2 for i in range(len(dims))
         ]))
 
-        return cost1 + cost2 + cost3
+        return cost1 + cost3
     
     # Adam iteration
     optimizer = torch.optim.Adam(
@@ -90,6 +105,16 @@ def _block_diag_ord1(
         loss = objective(generator)  # Calculate the loss function.
         loss.backward()  # Compute the gradients of the loss function with respect to the generator.
         optimizer.step()    # Perform a single optimization step.
+
+        # # constrain the generator to be anti-Hermitian and zero-diagonal
+        # generator_clone = generator.clone()
+        # generator_clone = (generator_clone - generator_clone.t().conj())/2
+        # for j in range(len(dims)):
+        #     generator_clone[
+        #         cum_dims[j]:cum_dims[j+1], 
+        #         cum_dims[j]:cum_dims[j+1]
+        #     ] = 0
+        # generator.data = generator_clone.data
 
         if loss < tol:
             print(f'Converged at iteration {i}.')
@@ -144,9 +169,9 @@ def block_diagonalize(
         H_, U_step = _block_diag_ord1(
             H_, 
             dims, 
-            lr, 
-            tol,
-            num_iter,
+            lr=lr, 
+            tol=tol,
+            num_iter=num_iter,
         )
         U_ = U_ * U_step
 
