@@ -66,45 +66,106 @@ def ket_in_basis(
 
     return qt.Qobj(data)
 
-def oprt_in_basis(
+def _oprt_in_basis(
     oprt: np.ndarray | qt.Qobj | csc_matrix, 
-    states: List[np.ndarray] | List[qt.Qobj] | np.ndarray
-):
+    bra_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
+    ket_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None,
+) -> Tuple[qt.Qobj, List[qt.Qobj], List[qt.Qobj], List[int]]:
     """
+    Internal function to realize oprt_in_basis, which returns more things 
+    that could be potentially useful.
+
     Convert an operator to a matrix representation described by a given set of basis.
     If the number of basis is smaller than the dimension of the Hilbert space, the operator
     will be projected onto the subspace spanned by the basis.
+    It can also calculate the off-diagonal elements if bra_states is provided.
+
+    Parameters
+    ----------
+    oprt : np.ndarray | qt.Qobj | csc_matrix
+        operator in matrix form
+    bra_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray
+        a list of states describing the basis, [<bra1|, <bra2|, ...].
+    ket_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None
+        a list of kets, [|ket1>, |ket2>, ...].
+        - If not provided, the returned operator will be O_{jk} = <bra_j|O|bra_k>.
+        - If provided, the returned operator will be O_{jk} = <bra_j|O|ket_k>, and it's not a square matrix.
+
+    Returns
+    -------
+    Tuple[qt.Qobj, List[qt.Qobj], List[qt.Qobj], List[int]]
+        the operator in the new basis, 
+        a list of qobj of the bra basis (Qobj), 
+        a list of qobj of the ket basis (Qobj),
+        and the dimension of the Qobj
     """
-    length = len(states)
+    if ket_basis is None:
+        ket_basis = bra_basis
+        ident_bra_ket_list = True
+    else:
+        # treat the basis as a list of bras
+        ident_bra_ket_list = False
 
     # dimension check
-    assert oprt.shape[0] == states[0].shape[0], "Dimension mismatch."
+    assert oprt.shape[0] == bra_basis[0].shape[0], "Dimension mismatch."
+    assert oprt.shape[1] == ket_basis[0].shape[0], "Dimension mismatch."
 
     # go through all states and oprt, to find a dimension 
     if isinstance(oprt, qt.Qobj):
         dim = oprt.dims[0]
-    elif isinstance(states[0], qt.Qobj):
-        dim = states[0].dims[0]
+    elif isinstance(bra_basis[0], qt.Qobj):
+        dim = bra_basis[0].dims[0]
+    elif isinstance(ket_basis[0], qt.Qobj):
+        dim = bra_basis[0].dims[0]
     else:
         dim = [oprt.shape[0]]
 
     # convert to qobj
     if isinstance(oprt, np.ndarray | csc_matrix):
         oprt = qt.Qobj(oprt, dims=[dim, dim])
-    state_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in states]
+    ket_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in ket_basis]
+    bra_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in bra_basis]
 
     # calculate matrix elements
-    data = np.zeros((length, length), dtype=complex)
-    for j in range(length):
-        for k in range(j, length):
-            data[j, k] = oprt.matrix_element(state_qobj[j], state_qobj[k])
-            if j != k:
-                if oprt.isherm:
-                    data[k, j] = data[j, k].conjugate()
-                else:
-                    data[k, j] = oprt.matrix_element(state_qobj[k], state_qobj[j])
+    data = np.zeros((len(bra_basis), len(ket_basis)), dtype=complex)
+    for j, bra in enumerate(bra_qobj):
+        for k, ket in enumerate(ket_qobj):
+            if ident_bra_ket_list and oprt.isherm and j > k:
+                data[k, j] = data[j, k].conjugate()
+                continue
 
-    return qt.Qobj(data)
+            data[j, k] = oprt.matrix_element(bra, ket)
+
+    return qt.Qobj(data), bra_qobj, ket_qobj, dim
+
+def oprt_in_basis(
+    oprt: np.ndarray | qt.Qobj | csc_matrix,
+    bra_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
+    ket_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None,
+) -> qt.Qobj:
+    """
+    Convert an operator to a matrix representation described by a given set of basis.
+    If the number of basis is smaller than the dimension of the Hilbert space, the operator
+    will be projected onto the subspace spanned by the basis.
+    It can also calculate the off-diagonal elements if bra_states is provided.
+
+    Parameters
+    ----------
+    oprt : np.ndarray | qt.Qobj | csc_matrix
+        operator in matrix form
+    bra_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray
+        a list of states describing the basis, [<bra1|, <bra2|, ...].
+    ket_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None
+        a list of kets, [|ket1>, |ket2>, ...].
+        - If not provided, the returned operator will be O_{jk} = <bra_j|O|bra_k>.
+        - If provided, the returned operator will be O_{jk} = <bra_j|O|ket_k>, and it's not a square matrix.
+
+    Returns
+    -------
+    qt.Qobj
+        the operator in the new basis
+    """
+    oprt, _, _, _ = _oprt_in_basis(oprt, bra_basis, ket_basis)
 
 def superop_in_basis(
     superop: np.ndarray | qt.Qobj | csc_matrix,
@@ -159,6 +220,7 @@ def evecs_2_transformation(evecs: List[qt.Qobj]) -> qt.Qobj:
         data[:, j] = evecs[j].full().squeeze()
 
     return qt.Qobj(data)
+
 
 # ##############################################################################
 def superop_evolve(superop: qt.Qobj, state: qt.Qobj) -> qt.Qobj:

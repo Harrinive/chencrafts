@@ -24,6 +24,7 @@ from chencrafts.toolbox.save import (
 from chencrafts.toolbox.plot import (
     color_palettes,
     color_cyclers,
+    color_iters,
     PiecewiseLinearNorm,
     remove_repeated_legend,
     filter,
@@ -63,6 +64,7 @@ __all__ = [
 
     'color_palettes',
     'color_cyclers',
+    'color_iters',
     'PiecewiseLinearNorm',
     'remove_repeated_legend',
     'filter',

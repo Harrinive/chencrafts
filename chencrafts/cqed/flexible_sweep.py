@@ -1,13 +1,14 @@
 import scqubits as scq
 
 from scqubits.core.hilbert_space import HilbertSpace
-from scqubits.core.param_sweep import ParameterSweep
+from scqubits.core.param_sweep import ParameterSweep, StateLabel
 from scqubits.core.namedslots_array import NamedSlotsNdarray, Parameters
+from scqubits.core.storage import SpectrumData
 
 import numpy as np
+from warnings import warn
 
 from typing import Dict, List, Tuple, Callable, Any, Literal
-import copy
 
 class FlexibleSweep():   
     """
@@ -230,3 +231,25 @@ def update(ps, {arg_name_str}):
 
     def full_dict(self) -> Dict[str, NamedSlotsNdarray]:
         return dict(self.items())
+
+    def transitions(
+        self, *args, **kwargs
+    ) -> SpectrumData | Tuple[
+        List[Tuple[StateLabel, StateLabel]], 
+        List[NamedSlotsNdarray]
+    ]:
+        """
+        A wrapper of scq.ParameterSweep.transitions. It returns the 
+        sliced data if the result is not a SpectrumData.
+        """
+        result = self.sweep.transitions(*args, **kwargs)
+
+        if not isinstance(result, tuple):   
+            warn("Result is a spectrum data and FlexibleSweep can't handle "
+            "it for now, returning the result as is.")
+            return result
+        
+        labels, data = result
+        sliced_data = [data[self.fixed_dim_slice] for data in data]
+
+        return labels, sliced_data

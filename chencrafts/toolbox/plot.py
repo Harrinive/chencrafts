@@ -3,7 +3,7 @@ from matplotlib import colors
 from matplotlib.axes import Axes
 from matplotlib import rcParams
 from cycler import cycler
-
+from itertools import cycle
 import numpy as np
 
 from typing import Dict, List, Tuple
@@ -27,14 +27,12 @@ color_palettes = dict(
         "#3f90da", "#ffa90e", "#bd1f01", "#832db6", "#94a4a2", "#a96b59", 
         "#e76300", "#b9ac70", "#717581", "#92dadd",]
 )
-color_cyclers = dict(
-    PGL = cycler(color = color_palettes["PGL"]),
-    green_to_red = cycler(color = color_palettes["green_to_red"]),
-    sunset = cycler(color = color_palettes["sunset"]),
-    hotel_70s = cycler(color = color_palettes["hotel_70s"]),
-    blue_to_red = cycler(color = color_palettes["blue_to_red"]),
-    colorblind_1 = cycler(color = color_palettes["colorblind_1"]),
-)
+color_cyclers = dict([
+    (key, cycler(color = color_palettes[key])) for key in color_palettes
+])
+color_iters = dict([
+    (key, cycle(color_palettes[key])) for key in color_palettes
+])
 
 def remove_repeated_legend(ax=None):
     """remove repeated legend"""
@@ -111,7 +109,9 @@ def bar_plot_compare(
     x_tick_rotation = 45, 
 ):
     """
-    The var_list_dict should be {labels: a series of value to compare}
+    The var_list_dict should be {labels: a series of value to compare}. 
+
+    Note: such function can be realized in pandas by DataFrame.plot(kind="bar")
     """
     # plot 
     if ax is None:
