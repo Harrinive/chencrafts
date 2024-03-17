@@ -167,6 +167,8 @@ def oprt_in_basis(
     """
     oprt, _, _, _ = _oprt_in_basis(oprt, bra_basis, ket_basis)
 
+    return oprt
+
 def superop_in_basis(
     superop: np.ndarray | qt.Qobj | csc_matrix,
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
