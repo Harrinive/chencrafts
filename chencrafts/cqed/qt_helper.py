@@ -131,7 +131,7 @@ def _oprt_in_basis(
     for j, bra in enumerate(bra_qobj):
         for k, ket in enumerate(ket_qobj):
             if ident_bra_ket_list and oprt.isherm and j > k:
-                data[k, j] = data[j, k].conjugate()
+                data[j, k] = data[k, j].conjugate()
                 continue
 
             data[j, k] = oprt.matrix_element(bra, ket)
