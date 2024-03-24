@@ -2,8 +2,11 @@ import numpy as np
 from scipy.constants import (
     h, hbar, pi, e, 
 )
+from IPython.display import display, Math
+from sympy import latex
 
 
+# unit conversion ======================================================
 def capacitance_2_EC(C):
     """
     Give capacitance in fF, return charging energy in GHz.
@@ -113,3 +116,11 @@ def n_zpf_2_Z(n_zpf):
     The relationship between n_zpf and oscillator length is n_zpf = 1 / (sqrt(2) l_zpf).
     """
     return hbar / (n_zpf * 2 * e)**2 / 2
+
+
+# display ==============================================================
+def display_expr(expr):
+    """
+    Display sympy expression in LaTeX format in a Jupyter notebook.
+    """
+    display(Math(latex(expr)))

@@ -38,6 +38,11 @@ from chencrafts.toolbox.gadgets import (
     inductance_2_EL,
     EC_EL_2_omega_Z,
     omega_Z_2_EC_EL,
+    Z_2_phi_zpf,
+    phi_zpf_2_Z,
+    Z_2_n_zpf,
+    n_zpf_2_Z,
+    display_expr,
 )
 
 # specify private/public modules
@@ -77,4 +82,10 @@ __all__ = [
     'inductance_2_EL',
     'EC_EL_2_omega_Z',
     'omega_Z_2_EC_EL',
+    'Z_2_phi_zpf',
+    'phi_zpf_2_Z',
+    'Z_2_n_zpf',
+    'n_zpf_2_Z',
+
+    'display_expr',
 ]
