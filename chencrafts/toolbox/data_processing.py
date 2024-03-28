@@ -1,10 +1,14 @@
 
-from typing import Callable, List, Union, Dict
+from typing import Callable, List, Union, Dict, Tuple
 
 import numpy as np
 from scipy.interpolate import LinearNDInterpolator
 
 from scqubits.core.namedslots_array import NamedSlotsNdarray
+
+from scipy.signal import argrelextrema
+from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
 
 
 class DimensionModify():
@@ -196,7 +200,27 @@ def scatter_to_mesh(
     x_remeshed=None, y_remeshed=None
 ):
     """
-    x_data, y_data, z_data should all be in the same shape. 
+    Convert scattered data points to a mesh using linear interpolation.
+
+    Parameters
+    ----------
+    - x_data: 1-D array-like or iterable. The x-coordinates of the scattered data points.
+    - y_data: 1-D array-like or iterable. The y-coordinates of the scattered data points.
+    - z_data: 1-D array-like or iterable. The z-values of the scattered data points.
+    - x_remeshed: 1-D array-like or iterable, optional. The x-coordinates of the remeshed data points.
+    - y_remeshed: 1-D array-like or iterable, optional. The y-coordinates of the remeshed data points.
+
+    Returns
+    -------
+    - interp: LinearNDInterpolator object. The linear interpolator object.
+    - data: 1-D array or None. The interpolated z-values at the remeshed data points. If x_remeshed and y_remeshed are not provided, data will be None.
+
+    Notes
+    -----
+    - x_data, y_data, and z_data should all be in the same shape.
+    - If x_remeshed and y_remeshed are provided, the function will return both the interpolator object and the interpolated z-values at the remeshed data points.
+    - If x_remeshed and y_remeshed are not provided, the function will only return the interpolator object.
+
     """
     x_ravel = np.array(x_data).reshape(-1)
     y_ravel = np.array(y_data).reshape(-1)
@@ -219,74 +243,86 @@ def scatter_to_mesh(
     else:
         return interp
 
-def merge_sort(arr: Union[List, np.ndarray], ascent: bool = True) -> np.ndarray:
+
+def find_envelope(
+    data_array: np.ndarray | List[float]
+) -> tuple[np.ndarray, np.ndarray]:
     """
-    Merge sort an array
-    
+    Find the envelope of a curve given the data points.
+
     Parameters
     ----------
-    arr:
-        the array to be sorted
-    ascent: 
-        the order of the returned array
-
+    data_array: 
+        1-D array-like or iterable. The data points of the curve.
+    
     Returns
     -------
-        the sorted array
+    top_envelope:
+        1-D array. The top envelope of the curve.
+    bottom_envelope:
+        1-D array. The bottom envelope of the curve.
     """
-    length = len(arr)
-    array = np.array(arr)
+    data_array = np.array(data_array)
 
-    _merge_sort_kernel(array, length, ascent)
+    # Find the local maxima and minima using relative extrema
+    maxima_indices = argrelextrema(data_array, np.greater)[0]
+    minima_indices = argrelextrema(data_array, np.less)[0]
 
-    return array
+    # Check if any maxima or minima were found
+    if len(maxima_indices) == 0 or len(minima_indices) == 0:
+        raise ValueError("No envelope found for the given data")
 
-def _merge_sort_kernel(arr: Union[List, np.ndarray], length: int, ascent: bool) -> None:
+    # Create interpolation functions with extrapolation using scipy
+    top_envelope_func = interp1d(
+        maxima_indices, data_array[maxima_indices], 
+        kind="cubic", fill_value="extrapolate"
+    )
+    bottom_envelope_func = interp1d(
+        minima_indices, data_array[minima_indices], 
+        kind="cubic", fill_value="extrapolate"
+    )
+
+    # Compute the envelopes
+    top_envelope = top_envelope_func(np.arange(len(data_array)))
+    bottom_envelope = bottom_envelope_func(np.arange(len(data_array)))
+
+    return top_envelope, bottom_envelope
+
+def decay_rate(
+    t_array: np.ndarray | List[float],
+    data_array: np.ndarray | List[float]
+):
     """
-    Kernel function of chencrafts.merge_sort()
-    """
-    def swap(arr: np.ndarray, p_1: int = 0, p_2: int = 1):
-        tmp = arr[p_1]
-        arr[p_1] = arr[p_2]
-        arr[p_2] = tmp
+    Find the decay rate of a curve by fitting the data curve. If 
 
-    def merge(arr: np.ndarray, l: int, l1: int, l2: int, ascent: bool):
-        pointer = 0
-        pointer_1 = 0
-        pointer_2 = l1
-
-        new_array = np.empty(l)
-
-        while pointer_1 < l1 and pointer_2 < l:
-            if (arr[pointer_1] < arr[pointer_2]) == ascent:
-                new_array[pointer] = arr[pointer_1]
-                pointer_1 += 1
-            else:
-                new_array[pointer] = arr[pointer_2]
-                pointer_2 += 1
-            pointer += 1
-
-        if pointer_1 < l1:
-            new_array[pointer:] = arr[pointer_1: l1]
-        elif pointer_2 < l:
-            new_array[pointer:] = arr[pointer_2:]
-        
-        arr[:] = new_array[:]
-
-    if length == 1:
-        return None
-    if length == 2:
-        if (arr[0] > arr[1]) == ascent:
-            swap(arr)
-        return None
+    Parameters
+    ----------
+    t_array: 
+        1-D array-like or iterable. The time points of the curve.
+    data_array:
+        1-D array-like or iterable. The data points of the curve.
     
-    split_length_1 = int(length / 2)
-    split_length_2 = length - split_length_1
+    Returns
+    -------
+    decay_rate:
+        float. The decay rate of the curve.
+    """
+    # find the envelope of the curve using numpy
+    try:
+        top_envelope, bottom_envelope = find_envelope(data_array)
+        data_array = top_envelope - bottom_envelope
+    except ValueError:
+        pass
 
-    _merge_sort_kernel(arr[:split_length_1], split_length_1, ascent)
-    _merge_sort_kernel(arr[split_length_1:], split_length_2, ascent)
+    # find the decay rate by fitting the envelope
+    fit_func = lambda x, a, b, c: a * np.exp(-b * x) + c
 
-    merge(arr, length, split_length_1, split_length_2, ascent)
+    # fit the top envelope
+    popt, pcov = curve_fit(fit_func, t_array, data_array)
+    a_top, b_top, c_top = popt
 
-    return None
-    
+    if pcov[1, 1] > 0.1:
+        print("Warning: The decay rate fit may not be accurate.")
+
+    # return the sum of the two decay rates
+    return b_top
