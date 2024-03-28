@@ -2,7 +2,9 @@ from chencrafts.toolbox.data_processing import (
     DimensionModify,
     NSArray,
     nd_interpolation,
-    scatter_to_mesh,
+    scatter_to_mesh,    
+    find_envelope,
+    decay_rate,
 )
 from chencrafts.toolbox.optimize import (
     nan_2_flat_val, 
@@ -44,6 +46,9 @@ from chencrafts.toolbox.gadgets import (
     n_zpf_2_Z,
     display_expr,
 )
+from chencrafts.cqed.decoherence import (
+    n_th,
+)
 
 # specify private/public modules
 __all__ = [
@@ -51,6 +56,8 @@ __all__ = [
     'NSArray',
     'nd_interpolation',
     'scatter_to_mesh',
+    'find_envelope',
+    'decay_rate',
 
     'nan_2_flat_val',
     # 'nan_2_constr', 
@@ -86,6 +93,7 @@ __all__ = [
     'phi_zpf_2_Z',
     'Z_2_n_zpf',
     'n_zpf_2_Z',
+    'n_th',
 
     'display_expr',
 ]

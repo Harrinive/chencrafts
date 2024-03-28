@@ -319,10 +319,7 @@ def process_fidelity(
     qt.average_gate_fidelity is: 
         process_fidelity * d + 1 = (d + 1) * qt.average_gate_fidelity
     where d is the dimension of the Hilbert space.
-
-
     """
-
     if subspace_basis is not None:
         # write the superoperators in the new basis to reduce the dimension and speed up 
         # the calculation
