@@ -1989,6 +1989,27 @@ class ConstructFullPulse(serializers.Serializable):
             fill_value="extrapolate",
         )
         return spline_a, spline_b, spline_c, total_times_a, total_times_b, total_times_c
+    
+    @classmethod
+    def by_new_params(
+        E_Ja, E_Jb, 
+        E_Ca, E_Cb, 
+        E_La, E_Lb,
+        E_C, ECm, E_L1, E_L2, E_J,
+        flux_a=0.5, flux_b=0.5, flux_c=0.27, 
+        **kwargs
+    ):
+        """just to change the parameter naming... """
+        FTC_grounded = FluxoniumTunableCouplerGrounded(
+            EJa=E_Ja, EJb=E_Jb, EC_twoqubit=np.inf,
+            ECq1=E_Ca, ECq2=E_Cb, ELa=E_La, ELb=E_Lb,
+            flux_a=flux_a, flux_b=flux_b, flux_c=flux_c,
+            fluxonium_cutoff=110, fluxonium_truncated_dim=6,
+            ECc=E_C, ECm=ECm, EL1=E_L1, EL2=E_L2, EJC=E_J,
+            fluxonium_minus_truncated_dim=4, h_o_truncated_dim=4
+        )
+
+        return FTC_grounded
 
 
 if __name__ == "__main__":
@@ -2032,3 +2053,4 @@ if __name__ == "__main__":
     print("10", E10)
     print("11", E11)
     print("eta", E11 - E10 - E01 + E00)
+
