@@ -268,6 +268,7 @@ def dressed_state_component(
     hilbertspace: HilbertSpace, 
     state_label: Tuple[int, ...] | List[int] | int,
     eigensys = None,
+    truncate: int | None = None,
 ) -> Tuple[List[int], List[float]]:
     """
     For a dressed state with bare_label, will return the bare state conponents and the 
@@ -288,6 +289,9 @@ def dressed_state_component(
         `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. Can also
         be a string "stored" indicating that the eigensys is stored inside
         the hilbertspace object.
+    truncate:
+        The number of components to be returned. If None, all components 
+        will be returned.
     """
     if eigensys is None:
         eigensys = hilbertspace.eigensys(hilbertspace.dimension)
@@ -325,5 +329,9 @@ def dressed_state_component(
 
         bare_label_list.append(state_label)
         prob_list.append(prob)
+
+    if truncate is not None:
+        bare_label_list = bare_label_list[:truncate]
+        prob_list = prob_list[:truncate]
 
     return bare_label_list, prob_list
