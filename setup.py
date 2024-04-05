@@ -8,6 +8,7 @@ PACKAGES = [
     'chencrafts.toolbox',
     'chencrafts.bsqubits',
     'chencrafts.cqed',
+    'chencrafts.cqed.custom_sweeps',
     'chencrafts.specfit',
     'chencrafts.projects',
 ]
