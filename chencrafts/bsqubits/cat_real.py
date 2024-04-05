@@ -1,6 +1,5 @@
 import numpy as np
 import qutip as qt
-from multiprocess import Pool
 import copy
 
 import scqubits as scq
@@ -455,6 +454,13 @@ def qubit_gate(
         return prop
     
     if num_cpus > 1:
+        try:
+            from multiprocess import Pool
+        except ImportError:
+            raise ImportError(
+                "multiprocess is a optional dependency for bsqubits module."
+                "Please install it via 'pip install multiprocess' or 'conda install multiprocess'."
+            )
         with Pool(num_cpus) as pool:
             prop_list = list(pool.map(
                 calculate_prop, evec_arr

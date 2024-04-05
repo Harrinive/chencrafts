@@ -15,6 +15,10 @@ PACKAGES = [
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(CURRENT_DIR, "requirements.txt")) as requirements:
     INSTALL_REQUIRES = requirements.read().splitlines()
+EXTRA_REQUIRES = {
+    "cqed": ["torch", "multiprocess"],
+    "bsqubits": ["networkx"]
+}
 
 setuptools.setup(name='chencrafts', 
     version=VERSION,
@@ -26,6 +30,7 @@ setuptools.setup(name='chencrafts',
     packages=PACKAGES,
     zip_safe=False,
     install_requires=INSTALL_REQUIRES,
+    extras_require=EXTRA_REQUIRES,
     python_requires='>=3.10',
 )
 
