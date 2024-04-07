@@ -1,4 +1,3 @@
-import torch
 import qutip as qt
 import numpy as np
 from scipy.linalg import expm, block_diag
@@ -39,6 +38,15 @@ def _block_diag_ord1(
         U: unitary transformation.
         Here L = U^dag H U and U^dag U = I.
     """
+    try:
+        import torch
+    except ImportError:
+        raise ImportError(
+            "PyTorch is a optional dependency for block_diag module."
+            "Please install it via 'pip install torch' or 'conda install pytorch'."
+        )
+    
+
     # type checking
     if isinstance(H, qt.Qobj):
         qobj_dims = H.dims    # for returning the result as a qobj

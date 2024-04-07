@@ -4,5 +4,6 @@ scipy
 tqdm
 pandas
 dill
+pathos
 scqubits
-pytorch
+IPython

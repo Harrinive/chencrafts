@@ -5,6 +5,8 @@ from scqubits.core.param_sweep import ParameterSweep, StateLabel
 from scqubits.core.namedslots_array import NamedSlotsNdarray, Parameters
 from scqubits.core.storage import SpectrumData
 
+from chencrafts.cqed.scq_helper import meshgrid_by_name
+
 import numpy as np
 from warnings import warn
 
@@ -79,7 +81,7 @@ class FlexibleSweep():
         # Parameter setup
         self._complete_param_dict = self._get_complete_param_dict()
         _parameters = self._order_swept_para()
-        self._swept_para_meshgrids = _parameters.meshgrid_by_name()
+        self._swept_para_meshgrids = meshgrid_by_name(_parameters)
         self.dims = _parameters.counts
         self.hilbertspace = hilbertspace
         self._subsys_update_info = self._all_subsys_update_info(subsys_update_info, default_update_info)

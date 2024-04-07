@@ -1,6 +1,5 @@
 import qutip as qt
 import numpy as np
-import networkx as nx
 from copy import deepcopy
 from warnings import warn
 

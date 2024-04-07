@@ -1,5 +1,4 @@
 import qutip as qt
-import networkx as nx
 
 from chencrafts.bsqubits.QEC_graph.node import StateEnsemble
 
@@ -43,7 +42,15 @@ class EvolutionGraph:
     def edge_num(self):
         return len(self.edges)
     
-    def to_nx(self) -> nx.DiGraph:
+    def to_nx(self) -> "nx.DiGraph":
+        try:
+            import networkx as nx
+        except ImportError:
+            raise ImportError(
+                "NetworkX is a optional dependency for QEC_graph module."
+                "Please install it via 'pip install networkx' or 'conda install networkx'."
+            )
+
         nx_graph = nx.DiGraph()
         nx_graph.add_nodes_from([node.to_nx() for node in self.nodes])
         nx_graph.add_edges_from([edge.to_nx() for edge in self.edges])
