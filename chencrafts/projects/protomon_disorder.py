@@ -50,6 +50,9 @@ class DisorderProtomon(base.QubitBaseClass, serializers.Serializable):
         self, EJ, EC, EL, ELA, dC, dJ, dL, flux_c, flux_d, kbt,
         cutoff = 100,
     ):
+        """
+        Xinyuan's code
+        """
         self.EJ = EJ
         self.EC = EC
         self.EL = EL

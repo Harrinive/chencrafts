@@ -70,7 +70,10 @@ class FluxoniumTunableCouplerFloating(base.QubitBaseClass, serializers.Serializa
         h_o_truncated_dim=3,
         id_str: Optional[str] = None,
     ):
-#        base.QuantumSystem.__init__(self, id_str=id_str)
+        """
+        Danny's code
+        """
+        # base.QuantumSystem.__init__(self, id_str=id_str)
         self.EJa = EJa
         self.EJb = EJb
         self.ECg_top = ECg_top
@@ -1081,6 +1084,9 @@ class FluxoniumTunableCouplerGrounded(FluxoniumTunableCouplerFloating):
         fluxonium_minus_truncated_dim=6,
         h_o_truncated_dim=3,
     ):
+        """
+        Danny's code
+        """
         FluxoniumTunableCouplerFloating.__init__(
             self,
             EJa,
@@ -1247,6 +1253,9 @@ class ConstructFullPulse(serializers.Serializable):
         max_freq=0.255,
         min_freq=0.125,
     ):
+        """
+        Danny's code
+        """
         self.H_0 = H_0
         self.H_a = H_a
         self.H_b = H_b

@@ -30,7 +30,9 @@ import scqubits.utils.spectrum_utils as matele_utils
 
 # — Inductively-shunted Rhombus circuit ————————————————————————
 class DisorderFullProtomon(base.QubitBaseClass, serializers.Serializable):
-    r"""inductively-shunted Rhombus qubit, with the harmonic mode in the ground state
+    r"""
+    Xianyuan's code
+    inductively-shunted Rhombus qubit, with the harmonic mode in the ground state
 
     Parameters
     ----------
