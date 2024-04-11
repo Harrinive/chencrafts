@@ -11,11 +11,18 @@ import chencrafts.toolbox as tb
 # set matplotlib 
 import matplotlib as _mpl
 import matplotlib.font_manager as _mpl_font
-import matplotlib_inline.backend_inline as _backend_inline
 from chencrafts.toolbox.plot import color_cyclers as _color_cyclers
 _mpl.rcParams = _mpl.rcParamsDefault.copy()
 # figure format
-_backend_inline.set_matplotlib_formats("png")
+
+# set figure format in jupyter notebook
+try:
+    get_ipython()
+    import matplotlib_inline.backend_inline as _backend_inline
+    _backend_inline.set_matplotlib_formats("png")
+except NameError:
+    pass
+
 # color cycle
 _mpl.rcParams["axes.prop_cycle"] = _color_cyclers["PGL"]
 _mpl.rcParams['text.usetex'] = False
