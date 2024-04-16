@@ -39,6 +39,11 @@ class PulseBase:
         self.base_angular_freq = base_angular_freq
         self.duration = duration
         self._rotation_angle = rotation_angle
+
+        if np.abs(tgt_mat_elem) < 1e-10:
+            warn("The matrix element of the drive operator is too small, "
+                "which may cause numerical instability.")
+
         self.tgt_mat_elem = tgt_mat_elem
         self.init_time = init_time
 
