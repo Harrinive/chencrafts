@@ -290,39 +290,56 @@ def find_envelope(
 
 def decay_rate(
     t_array: np.ndarray | List[float],
-    data_array: np.ndarray | List[float]
+    data_array: np.ndarray | List[float],
+    extract_envelope: bool = True,
+    maxfev: int = 1000,
 ):
     """
-    Find the decay rate of a curve by fitting the data curve. If 
+    Find the decay rate of a curve by fitting the data curve. 
 
     Parameters
     ----------
-    t_array: 
-        1-D array-like or iterable. The time points of the curve.
-    data_array:
-        1-D array-like or iterable. The data points of the curve.
-    
+    t_array: 1-D array-like or iterable. 
+        The time points of the curve.
+    data_array: 1-D array-like or iterable.
+        The data points of the curve.
+    extract_envelope: bool (optional).
+        Whether to extract the envelope of the curve before fitting. 
+        Default is True.
+    maxfev: int (optional).
+        The maximum number of function evaluations before the fit is terminated.
+        Default is 1000.
+
     Returns
     -------
-    decay_rate:
-        float. The decay rate of the curve.
+    Coefficient of function f(t) = a * exp(-b * t) + c
+    
+    a: float. 
+        The amplitude of the decay rate.
+    b: float. 
+        The decay rate.
+    c: float.
+        The offset of the decay rate.
+
     """
     # find the envelope of the curve using numpy
-    try:
+    if extract_envelope:
         top_envelope, bottom_envelope = find_envelope(data_array)
         data_array = top_envelope - bottom_envelope
-    except ValueError:
-        pass
 
     # find the decay rate by fitting the envelope
     fit_func = lambda x, a, b, c: a * np.exp(-b * x) + c
 
     # fit the top envelope
-    popt, pcov = curve_fit(fit_func, t_array, data_array)
-    a_top, b_top, c_top = popt
+    popt, pcov = curve_fit(
+        fit_func, t_array, data_array, 
+        p0 = [data_array.max(), 1/(t_array[1] - t_array[0]), data_array.min()],
+        maxfev=maxfev
+    )
+    a, b, c = popt
 
     if pcov[1, 1] > 0.1:
         print("Warning: The decay rate fit may not be accurate.")
 
     # return the sum of the two decay rates
-    return b_top
+    return a, b, c
