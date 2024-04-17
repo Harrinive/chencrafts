@@ -22,8 +22,8 @@ class FlexibleSweep():
     def __init__(
         self,
         hilbertspace: HilbertSpace,
-        para: Dict[str, float] = {"x": 0.0},    # a dummy parameter
-        swept_para: Dict[str, List[float] | np.ndarray] = {"x": [0.0]},   # a dummy parameter
+        para: Dict[str, float] = {"dummy": 0.0},    # a dummy parameter
+        swept_para: Dict[str, List[float] | np.ndarray] = {"dummy": [0.0]},   # a dummy parameter
         update_hilbertspace_by_keyword: Callable | None = None,
         evals_count: int = 4,
         num_cpus: int = 1,
@@ -180,15 +180,23 @@ def update(ps, {arg_name_str}):
 
     @property
     def fixed_dim_slice(self) -> Tuple[slice]:
+        """
+        A slice that can slice out the fixed parameters. 
+        """
         slc_list = []
         for key in self.para.keys():
-            if key in self.swept_para.keys():
+            if key in self.swept_para.keys() and key != "dummy":
                 continue
             slc_list.append(slice(key, 0))
-
+    
         return tuple(slc_list)
 
     def __getitem__(self, key):
+        """
+        Since we swept all para and swpet_para, and user expect to get 
+        a sweep result with axes being only the swept_para, we need to
+        slice the result to remove the fixed parameters.
+        """
         if isinstance(key, tuple):
             # scq.ParameterSweep usually requires multiple slicing
             para_name = key[0]
