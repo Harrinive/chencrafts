@@ -29,7 +29,7 @@ jobs:
 
   publish-to-pypi:
     name: >-
-      Publish Python 🐍 distribution 📦 to PyPI
+      Publish to PyPI
     if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
     needs:
     - build
@@ -54,8 +54,7 @@ jobs:
 
   github-release:
     name: >-
-      Sign the Python 🐍 distribution 📦 with Sigstore
-      and upload them to GitHub Release
+      Sign with Sigstore and upload them to GitHub Release
     needs:
     - publish-to-pypi
     runs-on: ubuntu-latest
@@ -96,7 +95,7 @@ jobs:
         --repo '${{ github.repository }}'
 
   publish-to-testpypi:
-    name: Publish Python 🐍 distribution 📦 to TestPyPI
+    name: Publish to TestPyPI
     needs:
       - build
     runs-on: ubuntu-latest
@@ -115,7 +114,7 @@ jobs:
           name: python-package-distributions
           path: dist/
   
-      - name: Extract version from distribution file  
+      - name: Extract version from distribution 📦 file  
         # assuming the version is in the format `<chencrafts>-<version>-<other>.whl`
         id: get_version
         run: |
@@ -123,11 +122,7 @@ jobs:
           VERSION=$(echo $FILENAME | sed -n 's/^[^0-9]*-\([^-]*\)-.*/\1/p')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "::set-output name=package_version::$VERSION"
-  
-      - name: Print out version
-        run: |
-          echo "Version: ${{ env.VERSION }}"
-  
+
       - name: Check if version exists on TestPyPI
         run: |
           RESPONSE=$(curl -s https://test.pypi.org/pypi/chencrafts/json)
