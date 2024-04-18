@@ -5,7 +5,6 @@ from chencrafts.version import version as __version__
 import chencrafts.bsqubits as bsq
 import chencrafts.cqed as cqed
 import chencrafts.projects as prj
-import chencrafts.specfit as sf
 import chencrafts.toolbox as tb
 
 # set matplotlib 
