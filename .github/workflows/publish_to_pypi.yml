@@ -114,15 +114,27 @@ jobs:
       with:
         name: python-package-distributions
         path: dist/
-    - name: Check current directory and list files
+
+    - name: Extract version from distribution file
+      id: get_version
       run: |
-        pwd
-        ls -la
-      working-directory: ${{ github.workspace }}
+        FILENAME=$(ls dist/*.whl | head -n 1)  # Using the first wheel file found
+        VERSION=$(echo $FILENAME | sed 's/.*-\(.*\)-.*/\1/')
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "::set-output name=package_version::$VERSION"
+
     - name: Check if version exists on TestPyPI
-      run: >-
-        VERSION=$(python setup.py --version); EXISTS=$(twine search -r testpypi chencrafts | grep $VERSION); if [ -z "$EXISTS" ]; then echo "VERSION_EXISTS=false" >> $GITHUB_ENV; else echo "VERSION_EXISTS=true" >> $GITHUB_ENV; fi
-      working-directory: ${{ github.workspace }}
+      run: |
+        EXISTS=$(twine search -r testpypi chencrafts==$VERSION | grep $VERSION)
+        if [ -z "$EXISTS" ]; then 
+          echo "VERSION_EXISTS=false" >> $GITHUB_ENV
+        else 
+          echo "VERSION_EXISTS=true" >> $GITHUB_ENV
+        fi
+      env:
+        VERSION: ${{ steps.get_version.outputs.package_version }}
+      working-directory: dist  # Ensuring we're in the right directory to find the wheel files
+
     - name: Publish distribution 📦 to TestPyPI
       if: env.VERSION_EXISTS == 'false'
       uses: pypa/gh-action-pypi-publish@release/v1
