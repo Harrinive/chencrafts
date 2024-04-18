@@ -124,7 +124,8 @@ jobs:
           echo "::set-output name=package_version::$VERSION"
   
       - name: Print out version
-        run: echo "Version: ${{ env.VERSION }}"
+        run: |
+          echo "Version: ${{ env.VERSION }}"
   
       - name: Check if version exists on TestPyPI
         run: |
