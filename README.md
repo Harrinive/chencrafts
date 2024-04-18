@@ -1,9 +1,7 @@
 CHEN CRAFTS, my personal toolbox!
 =================================
 
-For now, there are three main parts in this package:
-bsqubits, cqed and toolbox. 
-They serves for different purposes in Danyang's research.
+There are four main parts in this package: `Toolbox`, `cqed`, `bsqubits`, and `projects`. They serves for different purposes in Danyang's research.
 
 
 ## Modules

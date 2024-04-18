@@ -52,7 +52,8 @@ with open(version_path, "w") as versionfile:
     )
 
 
-setup(name='chencrafts', 
+setup(
+    name='chencrafts', 
     version=VERSION,
     description=DESCRIPTION,
     long_description=LONG_DESCRIPTION,
@@ -71,7 +72,3 @@ setup(name='chencrafts',
     keywords=KEYWORDS,
     **EXTRA_KWARGS
 )
-
-
-
-
