@@ -32,7 +32,7 @@ CLASSIFIERS = [_f for _f in CLASSIFIERS.split("\n") if _f]
 PLATFORMS = ["Linux", "Mac OSX", "Unix", "Windows"]
 
 
-with open(os.path.join(CURRENT_DIR, 'README.md'), encoding='utf-8') as f:
+with open(os.path.join(CURRENT_DIR, 'README.md')) as f:
     README_CONTENT = f.read().split("\n")
 
 DESCRIPTION = README_CONTENT[0]
@@ -56,8 +56,8 @@ setup(
     name='chencrafts', 
     version=VERSION,
     description=DESCRIPTION,
-    long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
+    long_description=LONG_DESCRIPTION,
     url='https://github.com/Harrinive/chencrafts',
     author='Danyang Chen',
     author_email='DanyangChen2026@u.northwestern.edu',
