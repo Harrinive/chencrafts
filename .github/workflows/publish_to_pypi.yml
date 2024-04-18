@@ -115,9 +115,6 @@ jobs:
         name: python-package-distributions
         path: dist/
 
-    - name: Install twine
-      run: python -m pip install twine
-
     - name: Extract version from distribution file
       id: get_version
       run: |
@@ -128,15 +125,13 @@ jobs:
 
     - name: Check if version exists on TestPyPI
       run: |
-        EXISTS=$(twine search -r testpypi chencrafts==$VERSION | grep $VERSION)
-        if [ -z "$EXISTS" ]; then 
-          echo "VERSION_EXISTS=false" >> $GITHUB_ENV
-        else 
+        RESPONSE=$(curl -s https://test.pypi.org/pypi/chencrafts/json)
+        if echo "$RESPONSE" | grep -q "\"${{ env.VERSION }}\""; then
           echo "VERSION_EXISTS=true" >> $GITHUB_ENV
+        else
+          echo "VERSION_EXISTS=false" >> $GITHUB_ENV
         fi
-      env:
-        VERSION: ${{ steps.get_version.outputs.package_version }}
-      working-directory: dist  # Ensuring we're in the right directory to find the wheel files
+      working-directory: dist
 
     - name: Publish distribution 📦 to TestPyPI
       if: env.VERSION_EXISTS == 'false'
