@@ -1,6 +1,7 @@
 /.DS_Store
 chencrafts.egg-info/
 chencrafts/version.py
+build/
 
 .vscode/settings.json
 
