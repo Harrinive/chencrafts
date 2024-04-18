@@ -95,48 +95,50 @@ jobs:
         '${{ github.ref_name }}' dist/**
         --repo '${{ github.repository }}'
 
-  publish-to-testpypi:  # always publish to TestPyPI even on non-tag pushes
+  publish-to-testpypi:
     name: Publish Python 🐍 distribution 📦 to TestPyPI
     needs:
-    - build
+      - build
     runs-on: ubuntu-latest
-
+  
     environment:
       name: testpypi
       url: https://test.pypi.org/p/chencrafts
-
+  
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
-
+      contents: write  # Typical permission needed for operations affecting repository contents
+  
     steps:
-    - name: Download all the dists
-      uses: actions/download-artifact@v3
-      with:
-        name: python-package-distributions
-        path: dist/
-
-    - name: Extract version from distribution file
-      id: get_version
-      run: |
-        FILENAME=$(ls dist/*.whl | head -n 1)  # Using the first wheel file found
-        VERSION=$(echo $FILENAME | sed 's/.*-\(.*\)-.*/\1/')
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        echo "::set-output name=package_version::$VERSION"
-
-    - name: Check if version exists on TestPyPI
-      run: |
-        RESPONSE=$(curl -s https://test.pypi.org/pypi/chencrafts/json)
-        if echo "$RESPONSE" | grep -q "\"${{ env.VERSION }}\""; then
-          echo "VERSION_EXISTS=true" >> $GITHUB_ENV
-        else
-          echo "VERSION_EXISTS=false" >> $GITHUB_ENV
-        fi
-      working-directory: dist
-
-    - name: Publish distribution 📦 to TestPyPI
-      if: env.VERSION_EXISTS == 'false'
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        repository-url: https://test.pypi.org/legacy/
-        user: __token__
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      - name: Download all the dists
+        uses: actions/download-artifact@v3
+        with:
+          name: python-package-distributions
+          path: dist/
+  
+      - name: Extract version from distribution file
+        id: get_version
+        run: |
+          FILENAME=$(ls dist/*.whl | head -n 1)
+          VERSION=$(echo $FILENAME | sed -n 's/.*-\([^-]*\)-.*/\1/p')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "::set-output name=package_version::$VERSION"
+  
+      - name: Print out version
+        run: echo "Version: ${{ env.VERSION }}"
+  
+      - name: Check if version exists on TestPyPI
+        run: |
+          RESPONSE=$(curl -s https://test.pypi.org/pypi/chencrafts/json)
+          if echo "$RESPONSE" | grep -q "\"${{ env.VERSION }}\""; then
+            echo "VERSION_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "VERSION_EXISTS=false" >> $GITHUB_ENV
+  
+      - name: Publish distribution 📦 to TestPyPI
+        if: env.VERSION_EXISTS == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          user: __token__
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+  
