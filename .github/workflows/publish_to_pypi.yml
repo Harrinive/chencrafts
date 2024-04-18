@@ -115,11 +115,12 @@ jobs:
           name: python-package-distributions
           path: dist/
   
-      - name: Extract version from distribution file
+      - name: Extract version from distribution file  
+        # assuming the version is in the format `<chencrafts>-<version>-<other>.whl`
         id: get_version
         run: |
           FILENAME=$(ls dist/*.whl | head -n 1)
-          VERSION=$(echo $FILENAME | sed -n 's/.*-\([^-]*\)-.*/\1/p')
+          VERSION=$(echo $FILENAME | sed -n 's/^[^0-9]*-\([^-]*\)-.*/\1/p')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "::set-output name=package_version::$VERSION"
   
@@ -134,6 +135,7 @@ jobs:
             echo "VERSION_EXISTS=true" >> $GITHUB_ENV
           else
             echo "VERSION_EXISTS=false" >> $GITHUB_ENV
+          fi
   
       - name: Publish distribution 📦 to TestPyPI
         if: env.VERSION_EXISTS == 'false'
