@@ -263,3 +263,12 @@ def update(ps, {arg_name_str}):
         sliced_data = [data[self.fixed_dim_slice] for data in data]
 
         return labels, sliced_data
+
+    def dressed_indices(self, bare_indices: Tuple[int, ...]) -> np.ndarray:
+        """
+        A wrapper of scq.ParameterSweep.dressed_indices. It helps to to ravel
+        the bare indices.
+        """
+        raveled_idx = np.ravel_multi_index(bare_indices, self.hilbertspace.subsystem_dims)
+        return self["dressed_indices"][..., raveled_idx]
+    
