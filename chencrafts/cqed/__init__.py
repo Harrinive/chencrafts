@@ -19,6 +19,7 @@ from chencrafts.cqed.qt_helper import (
     projected_superop,
     evecs_2_transformation,
 
+    normalization_factor,
     direct_sum,
 
     process_fidelity,
@@ -102,6 +103,7 @@ __all__ = [
     "projected_superop",
     "evecs_2_transformation",
 
+    "normalization_factor",
     "direct_sum",
     "process_fidelity",
     "ave_fid_2_proc_fid",
