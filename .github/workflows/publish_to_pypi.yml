@@ -114,7 +114,17 @@ jobs:
       with:
         name: python-package-distributions
         path: dist/
+    - name: Check if version exists on TestPyPI
+      run: >-
+        VERSION=$(python setup.py --version)
+        EXISTS=$(twine search -r testpypi qfit | grep $VERSION)
+        if [ -z "$EXISTS" ]; then
+        echo "VERSION_EXISTS=false" >> $GITHUB_ENV
+        else
+        echo "VERSION_EXISTS=true" >> $GITHUB_ENV
+        fi
     - name: Publish distribution 📦 to TestPyPI
+      if: env.VERSION_EXISTS == 'false'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/

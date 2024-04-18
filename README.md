@@ -1,4 +1,4 @@
-CHEN CRAFTS, my personal toolbox!
+CHENCRAFTS, Danyang's personal toolbox!
 =================================
 
 There are four main parts in this package: `Toolbox`, `cqed`, `bsqubits`, and `projects`. They serves for different purposes in Danyang's research.
