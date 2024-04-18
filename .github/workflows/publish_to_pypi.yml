@@ -114,6 +114,11 @@ jobs:
       with:
         name: python-package-distributions
         path: dist/
+    - name: Check current directory and list files
+      run: |
+        pwd
+        ls -la
+      working-directory: ${{ github.workspace }}
     - name: Check if version exists on TestPyPI
       run: >-
         VERSION=$(python setup.py --version); EXISTS=$(twine search -r testpypi chencrafts | grep $VERSION); if [ -z "$EXISTS" ]; then echo "VERSION_EXISTS=false" >> $GITHUB_ENV; else echo "VERSION_EXISTS=true" >> $GITHUB_ENV; fi
