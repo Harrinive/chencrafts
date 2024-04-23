@@ -1,16 +1,20 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
+requires = ["setuptools>=64", "wheel", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "chencrafts/version.py"
+fallback_version = "0.1.0"
 
 [project]
 name = "chencrafts"
 description = "A personal toolbox for superconducting qubits and quantum mechanics."
 readme = "README.md"
 license = { text = "MIT" }
+dynamic = ["version"]
 authors = [
     { name = "Danyang Chen", email = "DanyangChen2026@u.northwestern.edu" }
 ]
-version = "0.0.0"  # Set a dummy version, real version to be determined by setuptools_scm
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -45,7 +49,3 @@ Repository = "https://github.com/Harrinive/chencrafts"
 [project.optional-dependencies]
 cqed = ["torch>=1.7", "multiprocess"]
 bsqubits = ["networkx>=2.4"]
-
-[tool.setuptools_scm]
-write_to = "chencrafts/version.py"
-fallback_version = "0.1.0"
