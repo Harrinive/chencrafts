@@ -1,0 +1,31 @@
+package:
+  name: chencrafts
+  version: 1.1
+
+source:
+  path: .
+
+build:
+  script: 
+    - pip install . --no-deps --ignore-installed --no-cache-dir -vvv
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - python
+    - matplotlib
+    - numpy
+    - scipy
+    - tqdm
+    - pandas
+    - dill
+    - pathos
+    - scqubits
+    - IPython
+
+about:
+  home: https://github.com/Harrinive/chencrafts
+  license: BSD-3
+  summary: "CHENCRAFTS, Danyang's personal toolbox! There are four main parts in this package Toolbox, cqed, bsqubits, and projects. They serves for different purposes in Danyang's research."
