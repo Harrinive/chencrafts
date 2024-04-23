@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "chencrafts/version.py"
-fallback_version = "0.1.0"
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+fallback_version = "0.0"
 
 [project]
 name = "chencrafts"
 description = "A personal toolbox for superconducting qubits and quantum mechanics."
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "BSD" }
 dynamic = ["version"]
 authors = [
     { name = "Danyang Chen", email = "DanyangChen2026@u.northwestern.edu" }
@@ -18,7 +20,7 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: BSD License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -40,7 +42,6 @@ dependencies = [
     "scqubits",
     "IPython"
 ]
-
 
 [project.urls]
 Homepage = "https://github.com/Harrinive/chencrafts"
