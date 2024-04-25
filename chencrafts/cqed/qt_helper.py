@@ -263,7 +263,7 @@ def normalization_factor(ket_or_dm: qt.Qobj):
     Such factor makes Qobj / N normalized.
     """
     if qt.isket(ket_or_dm):
-        return np.sqrt(((ket_or_dm.dag() * ket_or_dm).tr()).real)
+        return np.sqrt((ket_or_dm * ket_or_dm.dag()).tr()).real
     elif qt.isoper(ket_or_dm):
         return (ket_or_dm.tr()).real
     else:
