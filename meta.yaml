@@ -28,4 +28,4 @@ requirements:
 about:
   home: https://github.com/Harrinive/chencrafts
   license: BSD-3
-  summary: "CHENCRAFTS, Danyang's personal toolbox! There are four main parts in this package Toolbox, cqed, bsqubits, and projects. They serves for different purposes in Danyang's research."
+  summary: "CHENCRAFTS, Danyang's personal toolbox!"
