@@ -33,6 +33,8 @@ color_cyclers = dict([
 color_iters = dict([
     (key, cycle(color_palettes[key])) for key in color_palettes
 ])
+def set_color_cycler(cycler_name):
+    rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]
 
 def remove_repeated_legend(ax=None):
     """remove repeated legend"""

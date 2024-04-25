@@ -7,13 +7,6 @@ import chencrafts.cqed as cqed
 import chencrafts.projects as prj
 import chencrafts.toolbox as tb
 
-# set matplotlib 
-import matplotlib as _mpl
-import matplotlib.font_manager as _mpl_font
-from chencrafts.toolbox.plot import color_cyclers as _color_cyclers
-_mpl.rcParams = _mpl.rcParamsDefault.copy()
-# figure format
-
 # set figure format in jupyter notebook
 try:
     get_ipython()
@@ -22,9 +15,16 @@ try:
 except NameError:
     pass
 
+# set matplotlib 
+import matplotlib as _mpl
+import matplotlib.font_manager as _mpl_font
+from chencrafts.toolbox.plot import color_cyclers as _color_cyclers
+_mpl.rcParams = _mpl.rcParamsDefault.copy()
+
 # color cycle
 _mpl.rcParams["axes.prop_cycle"] = _color_cyclers["PGL"]
 _mpl.rcParams['text.usetex'] = False
+
 # disable font warning message
 font_selected = None
 try:
