@@ -322,6 +322,9 @@ def decay_rate(
         The offset of the decay rate.
 
     """
+    t_array = np.array(t_array)
+    data_array = np.array(data_array)
+    
     # find the envelope of the curve using numpy
     if extract_envelope:
         top_envelope, bottom_envelope = find_envelope(data_array)
