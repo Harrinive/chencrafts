@@ -3,6 +3,7 @@ import qutip as qt
 from typing import List, Tuple
 
 import scqubits as scq
+from chencrafts.settings import QUTIP_VERSION
 
 def coherent_coef_list(n, alpha) -> np.ndarray:
     coef = np.exp(-alpha*alpha.conjugate()/2)
@@ -30,9 +31,13 @@ def d2_coherent_coef_list(n, alpha) -> np.ndarray:
 
 def sum_of_basis(basis: List[qt.Qobj], coef_list: List[complex]) -> qt.Qobj:
     dims = basis[0].dims
-    N = np.prod(np.array(dims))
 
-    state = qt.zero_ket(N, dims=dims)
+    if QUTIP_VERSION[0] >= 5:
+        state = qt.zero_ket(dimensions=dims[0])
+    else:
+        N = np.prod(np.array(dims))
+        state = qt.zero_ket(N, dims=dims)
+
     for idx in range(len(coef_list)):
         state = state + basis[idx] * coef_list[idx]
     return state.unit()
@@ -70,8 +75,12 @@ def cat(phase_disp_pair: List[Tuple[complex, complex]], basis: List[qt.Qobj] | N
         basis = [qt.fock(max_n, n) for n in range(max_n)]
 
     dims = basis[0].dims
-    N = np.prod(np.array(dims))
-    state = qt.zero_ket(N, dims=dims)
+
+    if QUTIP_VERSION[0] >= 5:
+        state = qt.zero_ket(dimensions=dims[0])
+    else:
+        N = np.prod(np.array(dims))
+        state = qt.zero_ket(N, dims=dims)
     
     for phase, disp in phase_disp_pair:
         state += phase * coherent(basis, disp)

@@ -16,3 +16,8 @@ if executed_in_ipython():
 else:
     PROGRESSBAR_DISABLED = True
     IN_IPYTHON = False
+
+
+# qutip version related settings
+import qutip as qt
+QUTIP_VERSION = tuple(map(int, qt.__version__.split(".")))

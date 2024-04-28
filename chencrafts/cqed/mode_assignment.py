@@ -107,7 +107,7 @@ def organize_dressed_esys(
 
                 if adjust_phase:
                     # make the "principle_val" have zero phase
-                    principle_val = evec.data[idx, 0]
+                    principle_val = evec.full()[idx, 0]
                     principle_val_phase = (principle_val) / np.abs(principle_val)
                     evec /= principle_val_phase
         organized_evals[bare_idx] = eval

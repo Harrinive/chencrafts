@@ -10,6 +10,7 @@ from scqubits.core.namedslots_array import NamedSlotsNdarray
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
 from chencrafts.cqed.qt_helper import oprt_in_basis, direct_sum
 from chencrafts.cqed.pulses import DRAGGaussian, Gaussian
+from chencrafts.settings import QUTIP_VERSION
 
 from typing import Dict, List, Tuple, Callable, Any, Literal
 import warnings
@@ -442,13 +443,17 @@ def qubit_gate(
         except AttributeError:
             pass
 
+        options = dict(
+            nsteps=1000000,
+            atol=1e-10,
+        )
+        if QUTIP_VERSION[0] < 5:
+            options = qt.Options(**options)
+
         prop = qt.propagator(
             H = lambda t, args: H0_ss + H1_ss * pulse(t),
             t = pulse.duration,
-            options = qt.Options(
-                nsteps=1000000,
-                atol=1e-10,
-            ),
+            options = options,
         )
 
         return prop

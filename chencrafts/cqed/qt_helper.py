@@ -278,8 +278,8 @@ def _direct_sum_op(A: qt.Qobj, B: qt.Qobj) -> qt.Qobj:
     shape_A = np.array(A.shape)
     shape_B = np.array(B.shape)
 
-    A = np.pad(A, ((0, shape_B[0]), (0, shape_B[1])), mode="constant")
-    B = np.pad(B, ((shape_A[0], 0), (shape_A[1], 0)), mode="constant")
+    A = np.pad(A.full(), ((0, shape_B[0]), (0, shape_B[1])), mode="constant")
+    B = np.pad(B.full(), ((shape_A[0], 0), (shape_A[1], 0)), mode="constant")
 
     return qt.Qobj(A + B)
 
