@@ -485,7 +485,7 @@ class StateEnsemble:
 
     def __init__(
         self, 
-        nodes: [List[StateNode] | None] = None,
+        nodes: List[StateNode] | None = None,
         # note: Do not use [] as the default value, it will be shared by 
         # all the instances, as it's a mutable object
     ):
@@ -542,6 +542,12 @@ class StateEnsemble:
         """
         Calculate the total state
         """
+        for node in self.nodes:
+            try:
+                node.state
+            except AttributeError:
+                raise AttributeError(f"A node {node} has not been evolved.")
+
         if not self.is_trace_1():
             warn("The total trace is not 1. The averaged state is not "
                  "physical. \n")

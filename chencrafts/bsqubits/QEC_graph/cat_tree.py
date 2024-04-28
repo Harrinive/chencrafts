@@ -1,7 +1,12 @@
+from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, overload, Literal
+from warnings import warn
+from copy import deepcopy
+from tqdm.notebook import tqdm
+from abc import ABC, abstractmethod
+
 import numpy as np
 import qutip as qt
 import scqubits as scq
-
 
 from chencrafts.cqed import FlexibleSweep, superop_evolve
 
@@ -13,14 +18,19 @@ from chencrafts.bsqubits.QEC_graph.graph import EvolutionGraph, EvolutionTree
 import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.cat_real as cat_real
 
-from tqdm.notebook import tqdm
-from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, overload, Literal
-from warnings import warn
 
 
-class GraphBuilder:
+class TreeBuilder(ABC):
 
     graph = EvolutionGraph()
+
+    # ideal_process_switches
+    idling_is_ideal: bool = False
+    gate_1_is_ideal: bool = True
+    parity_mapping_is_ideal: bool = False
+    gate_2_is_ideal: bool = True
+    qubit_measurement_is_ideal: bool = False
+    qubit_reset_is_ideal: bool = True
 
     def __init__(
         self,
@@ -30,8 +40,290 @@ class GraphBuilder:
         self.fsweep = fsweep
         self.sim_para = sim_para
 
+    # utils ############################################################
+    @staticmethod
+    def _current_parity(meas_record: MeasurementRecord):
+        # with adaptive qubit pulse, detecting "1" meaning a parity flip
+        return sum(meas_record) % 2
 
-class CatGraphBuilder(GraphBuilder):
+    @staticmethod
+    @overload
+    def _kraus_to_super(
+        qobj_list: List[qt.Qobj]
+    ) -> qt.Qobj:
+        ...
+
+    @staticmethod
+    @overload
+    def _kraus_to_super(
+        qobj_list: Callable[[MeasurementRecord], List[qt.Qobj]]
+    ) -> Callable[[MeasurementRecord], qt.Qobj]:
+        ...
+        
+    @staticmethod
+    def _kraus_to_super(
+        qobj_list: List[qt.Qobj] | Callable[[MeasurementRecord], List[qt.Qobj]]
+    ) -> qt.Qobj | Callable[[MeasurementRecord], qt.Qobj]:
+        """
+        Convert a list of Kraus operators to a superoperator. It also works
+        for a function that returns a list of Kraus operators.
+        """
+        if isinstance(qobj_list, qt.Qobj):
+            # Qobj is callable and we should detect it before checking callable
+            raise TypeError("The input should be a list of Qobj or a function.")
+        
+        if isinstance(qobj_list, list):
+            return sum([qt.to_super(qobj) for qobj in qobj_list])
+        elif callable(qobj_list):
+            return lambda meas_record: sum([qt.to_super(qobj) for qobj in qobj_list(meas_record)])
+        else:
+            raise TypeError("The input should be a list of Qobj or a function.")
+        
+    @staticmethod
+    def _add_leaves(
+        graph: EvolutionTree,
+        nodes: StateEnsemble,
+        edge: Edge,
+    ) -> StateEnsemble:
+        final_nodes = StateEnsemble()
+
+        for node in nodes.active_nodes():
+            edge = deepcopy(edge)
+            f_node = StateNode()
+            final_nodes.append(f_node)
+            graph.add_node(f_node)
+            graph.add_edge_connect(
+                edge,
+                node,
+                f_node,
+            )
+
+        return final_nodes
+        
+    # idling ###########################################################
+    _idling_real: qt.Qobj
+    _idling_ideal: List[qt.Qobj]
+
+    def idle(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+        correctable_single_photon_loss: bool = True,
+    ) -> StateEnsemble:
+        """
+        Idling process.
+
+        Add one idling edge to every node in the initial ensemble.
+
+        Note that it doesn't support idling_is_ideal.
+
+        Parameters
+        ----------
+        correctable_single_photon_loss: bool
+            Denote single-photon loss as a correctable error, which enables 
+            the fidelity calculation when QEC is on. When QEC is off, we should 
+            set it to False.
+        """
+        if correctable_single_photon_loss:
+            accepted_states_num = 2
+        else:
+            accepted_states_num = 1
+
+        edge_idling = PropagatorEdge(
+            f"ID ({step})",
+            self._idling_real,  # when ideal, time=0, it's already the identity, no need to change
+            self._idling_ideal[:accepted_states_num],
+        )
+
+        return self._add_leaves(graph, init_nodes.active_nodes(), edge_idling)
+    
+    # qubit gate #######################################################
+    _qubit_gate_p_ideal: List[qt.Qobj]
+    _qubit_gate_m_ideal: List[qt.Qobj]
+    _qubit_gate_p_real: qt.Qobj
+    _qubit_gate_m_real: qt.Qobj
+
+    @abstractmethod
+    def _qubit_gate_2_map_real(
+        self,
+        meas_record: MeasurementRecord,
+    ) -> qt.Qobj:
+        pass
+        
+    @abstractmethod
+    def _qubit_gate_2_map_ideal(
+        self,
+        meas_record: MeasurementRecord,
+    ) -> List[qt.Qobj]:
+        pass
+
+    def qubit_gate_1(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        edge_qubit_gate = PropagatorEdge(
+            f"G1 ({step})",
+            (
+                self._qubit_gate_p_real 
+                if not self.gate_1_is_ideal 
+                else self._kraus_to_super(self._qubit_gate_p_ideal)
+            ),
+            self._qubit_gate_p_ideal,
+        )
+        return self._add_leaves(graph, init_nodes.active_nodes(), edge_qubit_gate)
+    
+    def qubit_gate_2(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        edge_qubit_gate = PropagatorEdge(
+            f"G2 ({step})",
+            (
+                self._qubit_gate_2_map_real 
+                if not self.gate_2_is_ideal 
+                else self._kraus_to_super(self._qubit_gate_2_map_ideal)
+            ),
+            self._qubit_gate_2_map_ideal,
+        )
+
+        return self._add_leaves(graph, init_nodes.active_nodes(), edge_qubit_gate)
+    
+    # parity mapping ###################################################
+    _parity_mapping_ideal: List[qt.Qobj]
+    _parity_mapping_real: qt.Qobj
+
+    def parity_mapping(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        edge_parity_mapping = PropagatorEdge(
+            name = f"PM ({step})",
+            real_map = (
+                self._parity_mapping_real
+                if not self.parity_mapping_is_ideal 
+                else self._kraus_to_super(self._parity_mapping_ideal)
+            ),
+            ideal_maps = self._parity_mapping_ideal
+        )
+
+        return self._add_leaves(graph, init_nodes.active_nodes(), edge_parity_mapping)
+    
+    # qubit measurement ################################################
+    _accepted_measurement_outcome_pool: List[int]
+    _measurement_outcome_pool: List[int]
+
+    _qubit_projs_ideal: List[qt.Qobj]
+    _qubit_projs_real: List[qt.Qobj]
+
+    def qubit_measurement(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        all_final_nodes = StateEnsemble()
+
+        for idx in range(len(self._qubit_projs_ideal)):
+            # final_node is trash if not accepted
+            trashed = idx >= len(self._accepted_measurement_outcome_pool)
+            edge = MeasurementEdge(
+                name = f"MS ({step})",
+                outcome = self._measurement_outcome_pool[idx],
+                real_map = (
+                    self._qubit_projs_real[idx] 
+                    if not self.qubit_measurement_is_ideal 
+                    else self._qubit_projs_ideal[idx]
+                ),
+                ideal_map = [self._qubit_projs_ideal[idx]],
+            )              
+
+            final_nodes = self._add_leaves(
+                graph, init_nodes.active_nodes(), edge
+            )
+
+            for node in final_nodes.active_nodes():
+                node.terminated = trashed
+
+            all_final_nodes.nodes += final_nodes.nodes
+
+        return all_final_nodes
+    
+    # qubit reset ######################################################
+    @abstractmethod
+    def _qubit_reset_map_real(
+        self,
+        meas_record: MeasurementRecord,
+    ) -> qt.Qobj:
+        pass
+            
+    @abstractmethod
+    def _qubit_reset_map_ideal(
+        self,
+        meas_record: MeasurementRecord,
+    ) -> List[qt.Qobj]:
+        pass
+
+    def qubit_reset(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        final_nodes = StateEnsemble()
+
+        for node in init_nodes.active_nodes():
+            edge_qubit_reset = PropagatorEdge(
+                f"RS ({step})",
+                (
+                    self._qubit_reset_map_real 
+                    if not self.qubit_reset_is_ideal 
+                    else self._kraus_to_super(self._qubit_reset_map_ideal)
+                ),
+                self._qubit_reset_map_ideal,
+            )
+            final_nodes.append(StateNode())
+
+            graph.add_node(final_nodes[-1])
+
+            graph.add_edge_connect(
+                edge_qubit_reset,
+                node,
+                final_nodes[-1],
+            )
+
+        return final_nodes
+    
+    # check point ######################################################
+    def check_point(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        all_final_nodes = StateEnsemble()
+
+        for success in [True, False]:
+            edge_check_point = CheckPointEdge(
+                name = f"CP ({step})",
+                success = success,
+            )
+            final_nodes = self._add_leaves(
+                graph, init_nodes.active_nodes(), edge_check_point
+            )
+
+            all_final_nodes.nodes += final_nodes.nodes
+        
+        return all_final_nodes
+
+
+class CatGraphBuilder(TreeBuilder):
     _res_mode_idx: int
     _qubit_mode_idx: int
     res_dim: int
@@ -47,28 +339,21 @@ class CatGraphBuilder(GraphBuilder):
     _accepted_measurement_outcome_pool = [0, 1]
     _measurement_outcome_pool: List
 
-    # processes:
-    _identity: qt.Qobj
-    _idling_real: qt.Qobj
-    _idling_ideal: List[qt.Qobj]
-    _qubit_gate_m_ideal: List[qt.Qobj]
-    _qubit_gate_p_ideal: List[qt.Qobj]
-    _qubit_gate_m_real: qt.Qobj
-    _qubit_gate_p_real: qt.Qobj
-    _parity_mapping_ideal: List[qt.Qobj]
-    _parity_mapping_real: qt.Qobj
-    _qubit_projs_ideal: List[qt.Qobj]
-    _qubit_projs_real: List[qt.Qobj]
-    _qubit_reset_real: qt.Qobj
-    _qubit_reset_ideal: [qt.Qobj]
+    # # processes:
+    # _identity: qt.Qobj
+    # _idling_real: qt.Qobj
+    # _idling_ideal: List[qt.Qobj]
+    # _qubit_gate_m_ideal: List[qt.Qobj]
+    # _qubit_gate_p_ideal: List[qt.Qobj]
+    # _qubit_gate_m_real: qt.Qobj
+    # _qubit_gate_p_real: qt.Qobj
+    # _parity_mapping_ideal: List[qt.Qobj]
+    # _parity_mapping_real: qt.Qobj
+    # _qubit_projs_ideal: List[qt.Qobj]
+    # _qubit_projs_real: List[qt.Qobj]
+    # _qubit_reset_real: qt.Qobj
+    # _qubit_reset_ideal: List[qt.Qobj]
 
-    # ideal_process_switches
-    idling_is_ideal: bool = False
-    gate_1_is_ideal: bool = True
-    parity_mapping_is_ideal: bool = False
-    gate_2_is_ideal: bool = True
-    qubit_measurement_is_ideal: bool = False
-    qubit_reset_is_ideal: bool = True
 
     def __init__(
         self,
@@ -142,45 +427,6 @@ class CatGraphBuilder(GraphBuilder):
         # else:
         #     raise ValueError("Unknown qubit type.")
         self._gate_axis = "x"
-
-    # utils ############################################################
-    @staticmethod
-    def _current_parity(meas_record: MeasurementRecord):
-        # with adaptive qubit pulse, detecting "1" meaning a parity flip
-        return sum(meas_record) % 2
-
-    @staticmethod
-    @overload
-    def _kraus_to_super(
-        qobj_list: List[qt.Qobj]
-    ) -> qt.Qobj:
-        ...
-
-    @staticmethod
-    @overload
-    def _kraus_to_super(
-        qobj_list: Callable[[MeasurementRecord], List[qt.Qobj]]
-    ) -> Callable[[MeasurementRecord], qt.Qobj]:
-        ...
-        
-    @staticmethod
-    def _kraus_to_super(
-        qobj_list: List[qt.Qobj] | Callable[[MeasurementRecord], List[qt.Qobj]]
-    ) -> qt.Qobj | Callable[[MeasurementRecord], qt.Qobj]:
-        """
-        Convert a list of Kraus operators to a superoperator. It also works
-        for a function that returns a list of Kraus operators.
-        """
-        if isinstance(qobj_list, qt.Qobj):
-            # Qobj is callable and we should detect it before checking callable
-            raise TypeError("The input should be a list of Qobj or a function.")
-        
-        if isinstance(qobj_list, list):
-            return sum([qt.to_super(qobj) for qobj in qobj_list])
-        elif callable(qobj_list):
-            return lambda meas_record: sum([qt.to_super(qobj) for qobj in qobj_list(meas_record)])
-        else:
-            raise TypeError("The input should be a list of Qobj or a function.")
         
     # overall properties ################################################
     @property
@@ -237,43 +483,6 @@ class CatGraphBuilder(GraphBuilder):
     def _idling_time(self) -> float:
         return float(self.fsweep["T_W"] * (1 - self.idling_is_ideal))
 
-    def idle(
-        self,
-        step: int | str,
-        graph: EvolutionTree,
-        init_nodes: StateEnsemble,
-        correctable_single_photon_loss: bool = True,
-    ) -> StateEnsemble:
-        """
-        Idling process.
-
-        Add one idling edge to every node in the initial ensemble.
-        """
-        final_nodes = StateEnsemble()
-
-        if correctable_single_photon_loss:
-            accepted_states_num = 2
-        else:
-            accepted_states_num = 1
-
-        for node in init_nodes.active_nodes():
-            edge_idling = PropagatorEdge(
-                f"ID ({step})",
-                self._idling_real,  # when ideal, time=0, it's already the identity, no need to change
-                self._idling_ideal[:accepted_states_num],
-            )
-            final_nodes.append(StateNode())
-
-            graph.add_node(final_nodes[-1])
-
-            graph.add_edge_connect(
-                edge_idling,
-                node,
-                final_nodes[-1],
-            )
-
-        return final_nodes
-    
     # qubit gate #######################################################
     def frame_transform(
         self,
@@ -412,66 +621,6 @@ class CatGraphBuilder(GraphBuilder):
         return float(self.fsweep["tau_p_eff"])
         # return float(self.fsweep["tau_p_eff"] * (1 - self.gate_2_is_ideal))
 
-    def qubit_gate_1(
-        self,
-        step: int | str,
-        graph: EvolutionTree,
-        init_nodes: StateEnsemble,
-    ) -> StateEnsemble:
-        final_nodes = StateEnsemble()
-
-        for node in init_nodes.active_nodes():
-            edge_qubit_gate = PropagatorEdge(
-                f"G1 ({step})",
-                (
-                    self._qubit_gate_p_real 
-                    if not self.gate_1_is_ideal 
-                    else self._kraus_to_super(self._qubit_gate_p_ideal)
-                ),
-                self._qubit_gate_p_ideal,
-            )
-            final_nodes.append(StateNode())
-
-            graph.add_node(final_nodes[-1])
-
-            graph.add_edge_connect(
-                edge_qubit_gate,
-                node,
-                final_nodes[-1],
-            )
-
-        return final_nodes
-    
-    def qubit_gate_2(
-        self,
-        step: int | str,
-        graph: EvolutionTree,
-        init_nodes: StateEnsemble,
-    ) -> StateEnsemble:
-        final_nodes = StateEnsemble()
-
-        for node in init_nodes.active_nodes():
-            edge_qubit_gate = PropagatorEdge(
-                f"G2 ({step})",
-                (
-                    self._qubit_gate_2_map_real 
-                    if not self.gate_2_is_ideal 
-                    else self._kraus_to_super(self._qubit_gate_2_map_ideal)
-                ),
-                self._qubit_gate_2_map_ideal,
-            )
-            final_nodes.append(StateNode())
-
-            graph.add_node(final_nodes[-1])
-
-            graph.add_edge_connect(
-                edge_qubit_gate,
-                node,
-                final_nodes[-1],
-            )
-
-        return final_nodes
-    
     # parity mapping ###################################################
     def _build_parity_mapping_process(
         self,
@@ -527,40 +676,33 @@ class CatGraphBuilder(GraphBuilder):
         """
         qubit_gate_time_tot = self._qubit_gate_1_time + self._qubit_gate_2_time
         return np.pi - self._average_pm_interaction * qubit_gate_time_tot / 2
-
+    
     def parity_mapping(
         self,
         step: int | str,
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
     ) -> StateEnsemble:
-        final_nodes = StateEnsemble()
-
-        for node in init_nodes.active_nodes():
-            edge_parity_mapping = PropagatorEdge(
-                name = f"PM ({step})",
-                real_map = (
-                    self._parity_mapping_real
-                    if not self.parity_mapping_is_ideal 
-                    else self._kraus_to_super(self._parity_mapping_constructed)
-                ),
-                ideal_maps = (
-                    self._parity_mapping_ideal
-                    if not self.parity_mapping_is_ideal
-                    else self._parity_mapping_constructed
-                )
+        """
+        Overwrite the base class parity mapping - as when the parity_mapping_is_ideal 
+        is true, the self._parity_mapping_ideal is not TP and can't serve as the 
+        ideal map for actual process.
+        """
+        edge_parity_mapping = PropagatorEdge(
+            name = f"PM ({step})",
+            real_map = (
+                self._parity_mapping_real
+                if not self.parity_mapping_is_ideal 
+                else self._kraus_to_super(self._parity_mapping_constructed)
+            ),
+            ideal_maps = (
+                self._parity_mapping_ideal
+                if not self.parity_mapping_is_ideal
+                else self._parity_mapping_constructed
             )
-            final_nodes.append(StateNode())
+        )
 
-            graph.add_node(final_nodes[-1])
-
-            graph.add_edge_connect(
-                edge_parity_mapping,
-                node,
-                final_nodes[-1],
-            )
-
-        return final_nodes
+        return self._add_leaves(graph, init_nodes.active_nodes(), edge_parity_mapping)
 
     # qubit measurement ################################################
     def _build_qubit_measurement_process(
@@ -624,40 +766,38 @@ class CatGraphBuilder(GraphBuilder):
         graph: EvolutionTree,
         init_nodes: StateEnsemble,
     ) -> StateEnsemble:
-        final_nodes = StateEnsemble()
+        all_final_nodes = StateEnsemble()
 
-        for node in init_nodes.active_nodes():
-            for idx in range(len(self._qubit_projs_ideal)):
-                # final_node is trash if not accepted
-                trashed = idx >= len(self._accepted_measurement_outcome_pool)
+        for idx in range(len(self._qubit_projs_ideal)):
+            # final_node is trash if not accepted
+            trashed = idx >= len(self._accepted_measurement_outcome_pool)
 
-                edge_qubit_measurement = MeasurementEdge(
-                    name = f"MS ({step})",
-                    outcome = self._measurement_outcome_pool[idx],
-                    real_map = (
-                        self._qubit_projs_real[idx] 
-                        if not self.qubit_measurement_is_ideal 
-                        else qt.to_super(self._qubit_projs_constructed[idx])
-                    ),
-                    ideal_map = (
-                        [self._qubit_projs_ideal[idx]]
-                        if not self.qubit_measurement_is_ideal 
-                        else [self._qubit_projs_constructed[idx]]
-                    ),
-                )                    
+            edge_qubit_measurement = MeasurementEdge(
+                name = f"MS ({step})",
+                outcome = self._measurement_outcome_pool[idx],
+                real_map = (
+                    self._qubit_projs_real[idx] 
+                    if not self.qubit_measurement_is_ideal 
+                    else qt.to_super(self._qubit_projs_constructed[idx])
+                ),
+                ideal_map = (
+                    [self._qubit_projs_ideal[idx]]
+                    if not self.qubit_measurement_is_ideal 
+                    else [self._qubit_projs_constructed[idx]]
+                ),
+            )                    
 
-                final_node = StateNode()
-                final_node.terminated = trashed
-                final_nodes.append(final_node)
-                graph.add_node(final_node)
+            final_nodes = self._add_leaves(
+                graph, init_nodes.active_nodes(), edge_qubit_measurement
+            )
 
-                graph.add_edge_connect(
-                    edge_qubit_measurement,
-                    node,
-                    final_node,
-                )
+            for node in final_nodes.active_nodes():
+                node.terminated = trashed
 
-        return final_nodes
+            all_final_nodes.nodes += final_nodes.nodes
+            
+
+        return all_final_nodes
 
     # qubit reset ######################################################
     def _build_qubit_reset_process(
@@ -714,65 +854,6 @@ class CatGraphBuilder(GraphBuilder):
     def _qubit_reset_time(self) -> float:
         return float(self.fsweep["tau_p_eff"] * 2 * (1 - self.qubit_reset_is_ideal))
         
-    def qubit_reset(
-        self,
-        step: int | str,
-        graph: EvolutionTree,
-        init_nodes: StateEnsemble,
-    ) -> StateEnsemble:
-        final_nodes = StateEnsemble()
-
-        for node in init_nodes.active_nodes():
-            edge_qubit_reset = PropagatorEdge(
-                f"RS ({step})",
-                (
-                    self._qubit_reset_map_real 
-                    if not self.qubit_reset_is_ideal 
-                    else self._kraus_to_super(self._qubit_reset_map_ideal)
-                ),
-                self._qubit_reset_map_ideal,
-            )
-            final_nodes.append(StateNode())
-
-            graph.add_node(final_nodes[-1])
-
-            graph.add_edge_connect(
-                edge_qubit_reset,
-                node,
-                final_nodes[-1],
-            )
-
-        return final_nodes
-    
-    # check point ######################################################
-    def check_point(
-        self,
-        step: int | str,
-        graph: EvolutionTree,
-        init_nodes: StateEnsemble,
-    ) -> StateEnsemble:
-        final_nodes = StateEnsemble()
-
-        for node in init_nodes.active_nodes():
-            for success in [True, False]:
-                edge_check_point = CheckPointEdge(
-                    name = f"CP ({step})",
-                    success = success,
-                )
-                final_node = StateNode()
-                final_node.terminated = not success
-                final_nodes.append(final_node)
-
-                graph.add_node(final_nodes[-1])
-
-                graph.add_edge_connect(
-                    edge_check_point,
-                    node,
-                    final_nodes[-1],
-                )
-
-        return final_nodes
-
     # overall generation ###############################################
     def build_all_processes(
         self,
