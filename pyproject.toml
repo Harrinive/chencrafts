@@ -12,7 +12,7 @@ fallback_version = "0.0"
 name = "chencrafts"
 description = "A personal toolbox for superconducting qubits and quantum mechanics."
 readme = "README.md"
-license = { text = "BSD-3-Clause", file = "LICENSE" }
+license = { file = "LICENSE" }
 dynamic = ["version"]
 authors = [
     { name = "Danyang Chen", email = "DanyangChen2026@u.northwestern.edu" }
