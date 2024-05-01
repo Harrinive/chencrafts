@@ -17,10 +17,10 @@ from chencrafts.bsqubits.QEC_graph.graph import EvolutionGraph, EvolutionTree
 
 import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.cat_real as cat_real
+import chencrafts.settings as settings
 
 
-
-class TreeBuilder(ABC):
+class CatTreeBuilder(ABC):
 
     graph = EvolutionGraph()
 
@@ -31,14 +31,6 @@ class TreeBuilder(ABC):
     gate_2_is_ideal: bool = True
     qubit_measurement_is_ideal: bool = False
     qubit_reset_is_ideal: bool = True
-
-    def __init__(
-        self,
-        fsweep: FlexibleSweep,
-        sim_para: Dict[str, Any],
-    ):
-        self.fsweep = fsweep
-        self.sim_para = sim_para
 
     # utils ############################################################
     @staticmethod
@@ -216,6 +208,8 @@ class TreeBuilder(ABC):
         return self._add_leaves(graph, init_nodes.active_nodes(), edge_parity_mapping)
     
     # qubit measurement ################################################
+    # the ideal process and the real process share the same outcomes,
+    # as the actual action is based on the real outcomes.
     _accepted_measurement_outcome_pool: List[int]
     _measurement_outcome_pool: List[int]
 
@@ -323,7 +317,7 @@ class TreeBuilder(ABC):
         return all_final_nodes
 
 
-class CatGraphBuilder(TreeBuilder):
+class FullCatTreeBuilder(CatTreeBuilder):
     _res_mode_idx: int
     _qubit_mode_idx: int
     res_dim: int
@@ -334,33 +328,15 @@ class CatGraphBuilder(TreeBuilder):
     esys: Tuple[np.ndarray, np.ndarray]
     frame_hamiltonian: qt.Qobj
 
-    # the ideal process and the real process share the same outcomes,
-    # as the actual action is based on the real outcomes.
     _accepted_measurement_outcome_pool = [0, 1]
-    _measurement_outcome_pool: List
-
-    # # processes:
-    # _identity: qt.Qobj
-    # _idling_real: qt.Qobj
-    # _idling_ideal: List[qt.Qobj]
-    # _qubit_gate_m_ideal: List[qt.Qobj]
-    # _qubit_gate_p_ideal: List[qt.Qobj]
-    # _qubit_gate_m_real: qt.Qobj
-    # _qubit_gate_p_real: qt.Qobj
-    # _parity_mapping_ideal: List[qt.Qobj]
-    # _parity_mapping_real: qt.Qobj
-    # _qubit_projs_ideal: List[qt.Qobj]
-    # _qubit_projs_real: List[qt.Qobj]
-    # _qubit_reset_real: qt.Qobj
-    # _qubit_reset_ideal: List[qt.Qobj]
-
 
     def __init__(
         self,
         fsweep: FlexibleSweep,
         sim_para: Dict[str, Any],
     ):
-        super().__init__(fsweep, sim_para)
+        self.fsweep = fsweep
+        self.sim_para = sim_para
 
         self._find_sim_param()
 
@@ -867,7 +843,7 @@ class CatGraphBuilder(TreeBuilder):
             self._build_qubit_reset_process,
         ]
 
-        for build in tqdm(builds):
+        for build in tqdm(builds, disable=settings.PROGRESSBAR_DISABLED):
             build()
 
     def generate_tree(
@@ -878,9 +854,6 @@ class CatGraphBuilder(TreeBuilder):
         QEC_rounds: int = 1,
         with_check_point: bool = False,
     ) -> EvolutionTree:
-        """
-        Currently, it only contains the idling process.
-        """
         graph = EvolutionTree()
 
         # initial node
@@ -961,3 +934,200 @@ class CatGraphBuilder(TreeBuilder):
                 step_counter += 1
 
         return graph
+    
+
+class KerrTreeBuilder(CatTreeBuilder):
+    """
+    Cat code in a Kerr oscillator
+
+    Parameters
+    ----------
+    para: Dict[str, Any]
+        System and protocol parameters. Should include keys:
+        "K", "lbd", "M_ge", "M_eg",
+        "T_W",
+    sim_para: Dict[str, Any]
+        Simulation parameters. Should include keys:
+        "res_dim"
+    """
+
+    def __init__(
+        self,
+        para: Dict[str, Any],
+        sim_para: Dict[str, Any],
+    ):
+        self.para = para
+        self.sim_para = sim_para
+
+        self._generate_cat_ingredients()
+        self.build_all_processes()
+
+    def _generate_cat_ingredients(
+        self,
+    ):
+        self._a_op = qt.destroy(self.sim_para["res_dim"])
+        self._n_op = qt.num(self.sim_para["res_dim"])
+        self._c_ops = [np.sqrt(self.para["lbd"]) * self._a_op]
+
+    def build_all_processes(
+        self,
+    ):
+        builds = [
+            self._build_idling_process,
+            self._build_parity_measurement_process,
+        ]
+
+        for build in tqdm(builds, disable=settings.PROGRESSBAR_DISABLED):
+            build()
+
+    # idling ###########################################################
+    def _H_K(self) -> qt.Qobj:
+        return self.para["K"] * self._a_op.dag()**2 * self._a_op**2
+
+    def _U_K(self, time: float) -> qt.Qobj:
+        return (-1j * time * self._H_K()).expm()
+    
+    def _U_R(self, theta: float) -> qt.Qobj:
+        return (-1j * theta * self._n_op).expm()
+    
+    def _T_K(self, time: float) -> qt.Qobj:
+        return self._U_K(time) * (
+            -1/2 * self.para["lbd"] * time * self._n_op
+        ).expm()
+    
+    def _idling_liouv(self, time: float) -> qt.Qobj:
+        liouv = qt.liouvillian(self._H_K(), self._c_ops)
+        return (liouv * time).expm()
+
+    def _build_idling_process(self):
+        """
+        Idling process for the cat code in a Kerr oscillator.
+        """
+        self._idling_real = self._idling_liouv(self.para["T_W"])
+
+        # the following content is the same as cat_ideal.idling_maps(...)
+        # no jump 
+        free_evolution_oprt = self._T_K(self.para["T_W"])
+
+        # single-photon loss related operators
+        spl_rotation_oprt = self._U_R(
+            self.para["K"] * self.para["T_W"]
+        )   # average rotation due to self-Kerr
+
+        self._idling_ideal = [
+            free_evolution_oprt,
+            free_evolution_oprt * spl_rotation_oprt * self._a_op    
+        ]
+
+    # parity measurement ###############################################
+    _measurement_outcome_pool = [0, 1]
+    _accepted_measurement_outcome_pool = [0, 1]
+
+    def _build_parity_measurement_process(
+        self,
+    ):
+        """
+        Measure the parity of the cavity with a probability of making 
+        assignment error.
+        """
+
+        # ideal process
+        L = self.sim_para["res_dim"]
+        alternating_list = np.tile([1, 0], L // 2 + 1)
+        self._parity_projs_ideal = [
+            qt.qdiags(alternating_list[:L]),
+            qt.qdiags(alternating_list[1:L+1]),
+        ]
+
+        # real process
+        confusion_matrix = np.eye(2)
+        confusion_matrix[0, 0] = 1 - self.para["M_ge"]
+        confusion_matrix[0, 1] = self.para["M_ge"]
+        confusion_matrix[1, 0] = self.para["M_eg"]
+        confusion_matrix[1, 1] = 1 - self.para["M_eg"]
+
+        measurement_ops = np.empty_like(confusion_matrix, dtype=object)
+        for idx, prob in np.ndenumerate(confusion_matrix):
+            measurement_ops[idx] = prob * qt.to_super(
+                self._parity_projs_ideal[idx[1]])
+        self._parity_projs_real = np.sum(measurement_ops, axis=1).tolist()
+
+    def parity_measurement(
+        self,
+        step: int | str,
+        graph: EvolutionTree,
+        init_nodes: StateEnsemble,
+    ) -> StateEnsemble:
+        all_final_nodes = StateEnsemble()
+
+        for idx in range(len(self._parity_projs_ideal)):
+            # final_node is trash if not accepted
+            trashed = idx >= len(self._accepted_measurement_outcome_pool)
+
+            edge_parity_measurement = MeasurementEdge(
+                name = f"MS ({step})",
+                outcome = self._measurement_outcome_pool[idx],
+                real_map = self._parity_projs_real[idx],
+                ideal_map = [self._parity_projs_ideal[idx]],
+            )                    
+
+            final_nodes = self._add_leaves(
+                graph, init_nodes.active_nodes(), edge_parity_measurement
+            )
+
+            for node in final_nodes.active_nodes():
+                node.terminated = trashed
+
+            all_final_nodes.nodes += final_nodes.nodes
+
+        return all_final_nodes
+    
+    def generate_tree(
+        self,
+        init_prob_amp_01: Tuple[float, float],
+        logical_0: qt.Qobj,
+        logical_1: qt.Qobj,
+        QEC_rounds: int = 1,
+        with_check_point: bool = False,
+    ) -> EvolutionTree:
+        graph = EvolutionTree()
+
+        # initial node
+        init_state_node = StateNode.initial_note(
+            init_prob_amp_01, logical_0, logical_1,
+        )
+        graph.add_node(init_state_node)
+
+        # current ensemble
+        current_ensemble = StateEnsemble([init_state_node])
+
+        # add edges step by step
+        edge_method_names = [
+            "idle",
+            "parity_measurement",
+        ]
+        if with_check_point:
+            # after each step, add a check point
+            edge_w_check_point = []
+            for method_name in edge_method_names:
+                edge_w_check_point.append(method_name)
+                edge_w_check_point.append("check_point")
+            edge_method_names = edge_w_check_point
+
+        step_counter = 0
+        for round in range(QEC_rounds):
+            for method_name in edge_method_names:
+                current_ensemble = getattr(self, method_name)(
+                    f"{round}.{step_counter}", graph, current_ensemble,
+                )
+                step_counter += 1
+            
+        return graph
+    
+    # other unused abstract methods ####################################
+    def _qubit_gate_2_map_ideal(self): pass
+    def _qubit_gate_2_map_real(self): pass
+    def _qubit_gate_2_time(self): pass
+    def _qubit_measurement_time(self): pass
+    def _qubit_reset_map_ideal(self): pass
+    def _qubit_reset_map_real(self): pass

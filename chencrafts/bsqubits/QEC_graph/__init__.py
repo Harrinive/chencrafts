@@ -14,7 +14,8 @@ from chencrafts.bsqubits.QEC_graph.graph import (
 )
 
 from chencrafts.bsqubits.QEC_graph.cat_tree import (
-    CatGraphBuilder,
+    FullCatTreeBuilder,
+    KerrTreeBuilder,
 )
 
 from chencrafts.bsqubits.QEC_graph.settings import (
@@ -29,7 +30,8 @@ __all__ = [
     'MeasurementEdge', 
     'EvolutionGraph',
     'EvolutionTree',
-    'CatGraphBuilder',
+    'FullCatTreeBuilder',
+    'KerrTreeBuilder',
 
     'IDEAL_STATE_THRESHOLD_0',
     'IDEAL_STATE_THRESHOLD_1',

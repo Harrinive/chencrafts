@@ -326,19 +326,17 @@ def qubit_projectors(
     # construct the measurement operators
     measurement_ops = np.empty_like(confusion_matrix, dtype=object)
     for idx, prob in np.ndenumerate(confusion_matrix):
-        measurement_ops[idx] = np.sqrt(prob) * projs[idx[0]]
+        op = np.sqrt(prob) * projs[idx[0]]
+        if superop:
+            op = qt.to_super(op)
+        measurement_ops[idx] = op
 
     if ensamble_average:
         measurement_ops = np.sum(measurement_ops, axis=0)
     else:
         measurement_ops = measurement_ops.ravel()
 
-    if superop:
-        measurement_ops = [qt.to_super(op) for op in measurement_ops]
-    else:
-        measurement_ops = measurement_ops.tolist()
-        
-    return measurement_ops
+    return measurement_ops.tolist()
     
 def qubit_gate(
     hilbertspace: HilbertSpace,
