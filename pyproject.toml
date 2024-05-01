@@ -31,18 +31,18 @@ classifiers = [
     "Operating System :: Microsoft :: Windows"
 ]
 keywords = ["personal toolbox", "superconducting qubits", "quantum mechanics"]
-
-[project.dependencies]
-python = ">=3.10"
-numpy = "*"
-matplotlib = "*"
-scipy = "*"
-pandas = "*"
-tqdm = "*"
-dill = "*"
-pathos = "*"
-scqubits = "*"
-IPython = "*"
+dependencies = [
+    "python >= 3.10",
+    "numpy",
+    "matplotlib",
+    "scipy",
+    "pandas",
+    "tqdm",
+    "dill",
+    "pathos",
+    "scqubits>=3.0.0",
+    "IPython"
+]
 
 
 [project.urls]
