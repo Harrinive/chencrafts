@@ -12,7 +12,7 @@ fallback_version = "0.0"
 name = "chencrafts"
 description = "A personal toolbox for superconducting qubits and quantum mechanics."
 readme = "README.md"
-license = { text = "BSD" }
+license = { text = "BSD-3-Clause", file = "LICENSE" }
 dynamic = ["version"]
 authors = [
     { name = "Danyang Chen", email = "DanyangChen2026@u.northwestern.edu" }
@@ -31,17 +31,19 @@ classifiers = [
     "Operating System :: Microsoft :: Windows"
 ]
 keywords = ["personal toolbox", "superconducting qubits", "quantum mechanics"]
-dependencies = [
-    "numpy",
-    "matplotlib",
-    "scipy",
-    "pandas",
-    "tqdm",
-    "dill",
-    "pathos",
-    "scqubits",
-    "IPython"
-]
+
+[project.dependencies]
+python = ">=3.10"
+numpy = "*"
+matplotlib = "*"
+scipy = "*"
+pandas = "*"
+tqdm = "*"
+dill = "*"
+pathos = "*"
+scqubits = "*"
+IPython = "*"
+
 
 [project.urls]
 Homepage = "https://github.com/Harrinive/chencrafts"
