@@ -2,6 +2,7 @@ from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib.axes import Axes
 from matplotlib import rcParams
+import matplotlib as mpl
 from cycler import cycler
 from itertools import cycle
 import numpy as np
@@ -34,7 +35,7 @@ color_iters = dict([
     (key, cycle(color_palettes[key])) for key in color_palettes
 ])
 def set_color_cycler(cycler_name):
-    rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]
+    mpl.rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]
 
 def remove_repeated_legend(ax=None):
     """remove repeated legend"""

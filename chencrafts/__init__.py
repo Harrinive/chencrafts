@@ -6,6 +6,8 @@ import chencrafts.bsqubits as bsq
 import chencrafts.cqed as cqed
 import chencrafts.projects as prj
 import chencrafts.toolbox as tb
+import chencrafts.settings as settings
+from chencrafts.version import __version__, __version_tuple__
 
 # set figure format in jupyter notebook
 try:
@@ -44,4 +46,8 @@ import numpy as _np
 _np.set_printoptions(precision=6, linewidth=130)
 
 # public modules
-__all__ = ["bsq", "cqed", "prj", "sf", "tb"]
+__all__ = [
+    "bsq", "cqed", "prj", "sf", "tb", 
+    "settings",
+    "__version__", "__version_tuple__"
+]
