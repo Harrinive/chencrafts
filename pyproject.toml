@@ -32,7 +32,6 @@ classifiers = [
 ]
 keywords = ["personal toolbox", "superconducting qubits", "quantum mechanics"]
 dependencies = [
-    "python >= 3.10",
     "numpy",
     "matplotlib",
     "scipy",
@@ -43,7 +42,7 @@ dependencies = [
     "scqubits>=3.0.0",
     "IPython"
 ]
-
+requires-python = ">= 3.10"
 
 [project.urls]
 Homepage = "https://github.com/Harrinive/chencrafts"
