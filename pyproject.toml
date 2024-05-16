@@ -44,7 +44,6 @@ dependencies = [
 ]
 requires-python = ">= 3.10"
 
-
 [project.urls]
 Homepage = "https://github.com/Harrinive/chencrafts"
 Repository = "https://github.com/Harrinive/chencrafts"
