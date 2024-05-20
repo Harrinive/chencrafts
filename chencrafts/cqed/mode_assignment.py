@@ -2,9 +2,10 @@ import numpy as np
 import qutip as qt
 
 from scqubits.core.hilbert_space import HilbertSpace
+from scqubits.core.spec_lookup import MixinCompatible, SpectrumLookupMixin
 
 from warnings import warn
-from typing import List, Tuple, Any, overload
+from typing import List, Tuple, Any, overload, Optional
 
 @overload
 def label_convert(
@@ -335,3 +336,177 @@ def dressed_state_component(
         prob_list = prob_list[:truncate]
 
     return bare_label_list, prob_list
+
+def _single_branch_analysis(
+    self: SpectrumLookupMixin,   # hilbertspace
+    mode_priority: List[int],
+    recusion_depth: int,
+    init_drs_idx: int, init_state: qt.Qobj, 
+    remaining_drs_indices: List[int], remaining_evecs: List[qt.Qobj], 
+):
+    """
+    Perform a single branch analysis according to Dumas et al. (2024). This 
+    is a core function to be run recursively.
+
+    In a nutshell, the function will:
+    1. Start from the "ground" state / starting point the branch, find
+    all of the branch states
+    2. Remove the found states from the remaining candidates
+    3. [If at the end of the depth-first search] Return the branch states
+    4. [If not at the end] For each branch state, use it as an init state to 
+    start such search again, which will return a (nested) list of branch 
+    states. Combine the list of branch states and return a nested list of
+    those states
+
+    In such way, the function will recursively go through this multi-dimensional
+    Hilbert space and assign the eigenstates to their labels.
+
+    Parameters
+    ----------
+    self:
+        SpectrumLookupMixin object, could be a `ParameterSweep` object or 
+        `HilbertSpace` object.
+    mode_priority:
+        A permutation of the mode indices. 
+        It represents the depth of the mode labels to be traversed. The later
+        the mode appears in the list, the deeper it is in the recursion.
+        For the last mode in the list, its states will be organized in a 
+        single branch - the innermost part of the nested list. 
+    recusion_depth:
+        The current depth of the recursion. It should be 0 at the beginning.
+    init_drs_idx:
+        The dressed index of the initial state of this branch.
+    init_state:
+        The initial state of this branch.
+    remaining_drs_indices:
+        The list of the remaining dressed indices to be assigned.
+    remaining_evecs:
+        The list of the remaining eigenstates to be assigned.
+    
+    Returns
+    -------
+    branch_drs_indices, branch_states
+        The (nested) list of the branch states and their dressed indices.
+    """
+
+    hspace = self.hilbertspace
+    mode_index = mode_priority[recusion_depth]
+    mode = hspace.subsystem_list[mode_index]
+    terminate_branch_length = hspace.subsystem_dims[mode_index]
+
+    # photon addition operator
+    if mode in hspace.osc_subsys_list:
+        excite_op = hspace.annihilate(mode).dag()
+    else:
+        # for this moment, have the same operator for both cases
+        excite_op = hspace.annihilate(mode).dag()
+
+    # loop over and find all states that matches the excited initial state
+    current_state = init_state
+    current_drs_idx = init_drs_idx
+    branch_drs_indices = []
+    branch_states = []
+    while len(branch_states) < terminate_branch_length:
+        if recusion_depth == len(mode_priority) - 1:
+            # we are at the end of the depth-first search:
+            # just add the state to the branch
+            branch_drs_indices.append(current_drs_idx)
+            branch_states.append(current_state)
+        else:
+            # continue the depth-first search:
+            # recursively call the function and append all the branch states
+            (
+                _branch_drs_indices, _branch_states
+            ) = _single_branch_analysis(
+                self, 
+                mode_priority, 
+                recusion_depth + 1,
+                current_drs_idx,
+                current_state, 
+                remaining_drs_indices,
+                remaining_evecs, 
+            )
+            branch_drs_indices.append(_branch_drs_indices)
+            branch_states.append(_branch_states)
+
+        # find the closest state to the excited current state
+        excited_state = (excite_op * current_state).unit()
+        overlaps = [np.abs(excited_state.overlap(evec)) for evec in remaining_evecs]
+        max_overlap_index = np.argmax(overlaps)
+
+        current_state = remaining_evecs[max_overlap_index]
+        current_drs_idx = remaining_drs_indices[max_overlap_index]
+
+        # remove the state from the remaining states
+        remaining_evecs.pop(max_overlap_index)
+        remaining_drs_indices.pop(max_overlap_index)
+
+        if len(remaining_evecs) == 0:
+            break
+
+    return branch_drs_indices, branch_states
+
+def full_branch_analysis_single_param(
+    self: SpectrumLookupMixin,   # hilbertspace
+    param_indices: Tuple[int, ...],
+    mode_priority: Optional[List[int]] = None,
+    transposed: bool = False,
+):
+    """
+    Perform a full branch analysis according to Dumas et al. (2024) for 
+    a single parameter point. This
+    function will organize the eigenstates into a multi-dimensional array
+    according to the mode_priority. 
+
+    Parameters
+    ----------
+    self:
+        SpectrumLookupMixin object, could be a `ParameterSweep` object or 
+        `HilbertSpace` object.
+    param_indices:
+        The indices of the parameter sweep to be analyzed.
+    mode_priority:
+        A permutation of the mode indices. 
+        It represents the depth of the mode labels to be traversed. The later
+        the mode appears in the list, the deeper it is in the recursion.
+        For the last mode in the list, its states will be organized in a 
+        single branch - the innermost part of the nested list.
+    transposed:
+        If True, the returned array will be transposed according to the
+        mode_priority. 
+
+    Returns
+    -------
+    branch_drs_indices
+        The multi-dimensional array of the dressed indices organized by 
+        the mode_priority. If the dimensions of the subsystems are
+        D0, D1 and D2, the returned array will have the shape (D0, D1, D2).
+        If transposed is True, the array will be transposed according to
+        the mode_priority.
+    """
+    if mode_priority is None:
+        mode_priority = list(range(self.hilbertspace.subsystem_count))
+    
+    # branch_states = np.ndarray(self.hilbertspace.subsystem_dims, dtype=object)
+    # branch_drs_indices = np.ndarray(self.hilbertspace.subsystem_dims, dtype=int)
+
+    evecs = self.hilbertspace._data["evecs"][param_indices]
+    init_state = evecs[0]
+    remaining_evecs = list(evecs[1:])
+    remaining_drs_indices = list(range(1, self.hilbertspace.dimension))
+
+    branch_drs_indices, _ = _single_branch_analysis(
+        self, mode_priority, 
+        0, 
+        0, init_state,
+        remaining_drs_indices, remaining_evecs
+    )
+
+    if not transposed:
+        reversed_permutation = np.argsort(mode_priority)
+        return np.transpose(
+            branch_drs_indices, reversed_permutation
+        )
+
+    return branch_drs_indices
+
