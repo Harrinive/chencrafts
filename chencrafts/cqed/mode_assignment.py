@@ -3,8 +3,10 @@ import qutip as qt
 
 from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.spec_lookup import MixinCompatible, SpectrumLookupMixin
+from scqubits.core.namedslots_array import NamedSlotsNdarray
 
 from warnings import warn
+import itertools
 from typing import List, Tuple, Any, overload, Optional
 
 @overload
@@ -446,7 +448,7 @@ def _single_branch_analysis(
 
     return branch_drs_indices, branch_states
 
-def full_branch_analysis_single_param(
+def generate_branch_analysis(
     self: SpectrumLookupMixin,   # hilbertspace
     param_indices: Tuple[int, ...],
     mode_priority: Optional[List[int]] = None,
@@ -495,12 +497,12 @@ def full_branch_analysis_single_param(
     remaining_evecs = list(evecs[1:])
     remaining_drs_indices = list(range(1, self.hilbertspace.dimension))
 
-    branch_drs_indices, _ = _single_branch_analysis(
+    branch_drs_indices, _ = np.array(_single_branch_analysis(
         self, mode_priority, 
         0, 
         0, init_state,
         remaining_drs_indices, remaining_evecs
-    )
+    ))
 
     if not transposed:
         reversed_permutation = np.argsort(mode_priority)
@@ -510,3 +512,21 @@ def full_branch_analysis_single_param(
 
     return branch_drs_indices
 
+def branch_analysis(
+    self: SpectrumLookupMixin,   # hilbertspace
+    mode_priority: Optional[List[int]] = None,
+    transposed: bool = False,
+) -> NamedSlotsNdarray:
+    """
+    """
+    dressed_indices = np.empty(shape=self._parameters.counts, dtype=object)
+
+    param_indices = itertools.product(*map(range, self._parameters.counts))
+    for index in param_indices:
+        dressed_indices[index] = generate_branch_analysis(
+            self, index, mode_priority, transposed,
+        )
+    dressed_indices = np.asarray(dressed_indices[:].tolist())
+
+    parameter_dict = self._parameters.ordered_dict.copy()
+    return NamedSlotsNdarray(dressed_indices, parameter_dict)
