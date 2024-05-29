@@ -75,7 +75,6 @@ def batched_sweep_bare_decoherence(
     # some parameters for use
     qubit_dim = sweep.hilbertspace.subsystem_dims[qubit_mode_idx]
     params = kwargs | sweep.parameters.meshgrid_by_name() 
-
     
     # cavity relaxation
     sweep.store_data(

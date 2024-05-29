@@ -70,10 +70,15 @@ def _qubit_proj(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
     qubit_state: int = 0,
+    qubit_state_2: int | None = None,
 ) -> qt.Qobj:
     """For qubit measurement"""
     res_oprt = qt.qeye(res_dim)
-    qubit_oprt = qt.projection(qubit_dim, qubit_state, qubit_state)
+    
+    if qubit_state_2 is not None:
+        qubit_oprt = qt.projection(qubit_dim, qubit_state, qubit_state_2)
+    else:
+        qubit_oprt = qt.projection(qubit_dim, qubit_state, qubit_state)
 
     return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
 
