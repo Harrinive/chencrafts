@@ -408,7 +408,7 @@ def _single_branch_analysis(
     current_drs_idx = init_drs_idx
     branch_drs_indices = []
     branch_states = []
-    while len(branch_states) < terminate_branch_length:
+    while True:
         if recusion_depth == len(mode_priority) - 1:
             # we are at the end of the depth-first search:
             # just add the state to the branch
@@ -431,7 +431,18 @@ def _single_branch_analysis(
             branch_drs_indices.append(_branch_drs_indices)
             branch_states.append(_branch_states)
 
+        # if the branch is long enough, terminate the loop
+        if len(branch_states) == terminate_branch_length:
+            break
+
         # find the closest state to the excited current state
+        if len(remaining_evecs) == 0:
+            raise ValueError(
+                "No more states to assign. It's likely that the eignestates "
+                "are not complete. Please try obtain a complete set of "
+                "eigenstates using generate_lookup."
+            )
+
         excited_state = (excite_op * current_state).unit()
         overlaps = [np.abs(excited_state.overlap(evec)) for evec in remaining_evecs]
         max_overlap_index = np.argmax(overlaps)
@@ -443,16 +454,13 @@ def _single_branch_analysis(
         remaining_evecs.pop(max_overlap_index)
         remaining_drs_indices.pop(max_overlap_index)
 
-        if len(remaining_evecs) == 0:
-            break
-
     return branch_drs_indices, branch_states
 
 def generate_branch_analysis(
     self: SpectrumLookupMixin,   # hilbertspace
     param_indices: Tuple[int, ...],
     mode_priority: Optional[List[int]] = None,
-    transposed: bool = False,
+    transpose: bool = False,
 ):
     """
     Perform a full branch analysis according to Dumas et al. (2024) for 
@@ -473,7 +481,7 @@ def generate_branch_analysis(
         the mode appears in the list, the deeper it is in the recursion.
         For the last mode in the list, its states will be organized in a 
         single branch - the innermost part of the nested list.
-    transposed:
+    transpose:
         If True, the returned array will be transposed according to the
         mode_priority. 
 
@@ -492,19 +500,20 @@ def generate_branch_analysis(
     # branch_states = np.ndarray(self.hilbertspace.subsystem_dims, dtype=object)
     # branch_drs_indices = np.ndarray(self.hilbertspace.subsystem_dims, dtype=int)
 
-    evecs = self.hilbertspace._data["evecs"][param_indices]
+    evecs = self._data["evecs"][param_indices]
     init_state = evecs[0]
     remaining_evecs = list(evecs[1:])
     remaining_drs_indices = list(range(1, self.hilbertspace.dimension))
 
-    branch_drs_indices, _ = np.array(_single_branch_analysis(
+    branch_drs_indices, _ = _single_branch_analysis(
         self, mode_priority, 
         0, 
         0, init_state,
         remaining_drs_indices, remaining_evecs
-    ))
+    )
+    branch_drs_indices = np.array(branch_drs_indices)
 
-    if not transposed:
+    if not transpose:
         reversed_permutation = np.argsort(mode_priority)
         return np.transpose(
             branch_drs_indices, reversed_permutation
@@ -515,7 +524,7 @@ def generate_branch_analysis(
 def branch_analysis(
     self: SpectrumLookupMixin,   # hilbertspace
     mode_priority: Optional[List[int]] = None,
-    transposed: bool = False,
+    transpose: bool = False,
 ) -> NamedSlotsNdarray:
     """
     """
@@ -524,9 +533,10 @@ def branch_analysis(
     param_indices = itertools.product(*map(range, self._parameters.counts))
     for index in param_indices:
         dressed_indices[index] = generate_branch_analysis(
-            self, index, mode_priority, transposed,
+            self, index, mode_priority, transpose,
         )
     dressed_indices = np.asarray(dressed_indices[:].tolist())
 
     parameter_dict = self._parameters.ordered_dict.copy()
     return NamedSlotsNdarray(dressed_indices, parameter_dict)
+

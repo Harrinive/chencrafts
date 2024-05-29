@@ -67,6 +67,10 @@ from chencrafts.cqed.flexible_sweep import (
     FlexibleSweep,
 )
 
+from chencrafts.cqed.floquet import (
+    FloquetBasis,
+)
+
 from chencrafts.cqed.spec_poly_fit import (
     spec_poly_fit,
 )
@@ -139,6 +143,8 @@ __all__ = [
     "cat",
 
     "FlexibleSweep",
+
+    "FloquetBasis",
 
     "spec_poly_fit",
 

@@ -6,11 +6,12 @@ from scqubits.core.namedslots_array import NamedSlotsNdarray, Parameters
 from scqubits.core.storage import SpectrumData
 
 from chencrafts.cqed.scq_helper import meshgrid_by_name
+from chencrafts.cqed.mode_assignment import branch_analysis
 
 import numpy as np
 from warnings import warn
 
-from typing import Dict, List, Tuple, Callable, Any, Literal
+from typing import Dict, List, Tuple, Callable, Any, Literal, Optional
 
 class FlexibleSweep():   
     """
@@ -25,7 +26,7 @@ class FlexibleSweep():
         para: Dict[str, float] = {"dummy": 0.0},    # a dummy parameter
         swept_para: Dict[str, List[float] | np.ndarray] = {"dummy": [0.0]},   # a dummy parameter
         update_hilbertspace_by_keyword: Callable | None = None,
-        evals_count: int = 4,
+        evals_count: Optional[int] = None,
         num_cpus: int = 1,
         subsys_update_info: Dict[str, Any] = {},
         default_update_info: List | Literal["all"] | None = "all",
@@ -86,6 +87,7 @@ class FlexibleSweep():
         self.hilbertspace = hilbertspace
         self._subsys_update_info = self._all_subsys_update_info(subsys_update_info, default_update_info)
         self._update_hilbertspace_by_keyword = update_hilbertspace_by_keyword
+        evals_count = evals_count if evals_count is not None else self.hilbertspace.dimension
 
         # ParameterSweep
         self.sweep = ParameterSweep(
@@ -272,3 +274,16 @@ def update(ps, {arg_name_str}):
         raveled_idx = np.ravel_multi_index(bare_indices, self.hilbertspace.subsystem_dims)
         return self["dressed_indices"][..., raveled_idx]
     
+    def branch_analysis(self, mode_priority: Optional[List[int]] = None):
+        branch_indices = branch_analysis(
+            self.sweep, mode_priority
+        )
+        self.sweep.store_data(
+            dressed_indices = branch_indices.reshape(1, -1)
+        )
+        (
+            self.sweep._data["lamb"],
+            self.sweep._data["chi"],
+            self.sweep._data["kerr"],
+            self.sweep._data["chi_prime"],      # only in Danyang's branch of scqubits
+        ) = self.sweep._dispersive_coefficients()
