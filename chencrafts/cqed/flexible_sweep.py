@@ -9,6 +9,7 @@ from chencrafts.cqed.scq_helper import meshgrid_by_name
 from chencrafts.cqed.mode_assignment import branch_analysis
 
 import numpy as np
+from numpy.typing import NDArray
 from warnings import warn
 
 from typing import Dict, List, Tuple, Callable, Any, Literal, Optional
@@ -24,7 +25,7 @@ class FlexibleSweep():
         self,
         hilbertspace: HilbertSpace,
         para: Dict[str, float] = {"dummy": 0.0},    # a dummy parameter
-        swept_para: Dict[str, List[float] | np.ndarray] = {"dummy": [0.0]},   # a dummy parameter
+        swept_para: Dict[str, List[float] | NDArray[Any]] = {"dummy": [0.0]},   # a dummy parameter
         update_hilbertspace_by_keyword: Callable | None = None,
         evals_count: Optional[int] = None,
         num_cpus: int = 1,
@@ -64,7 +65,7 @@ class FlexibleSweep():
             Specify whether a parameter change will update a subsystem in the HilbertSpace.
             Should be a dictionary of the form {<parameter name>: <subsys update info>}.
             If <subsys update info> is None, then no update will be triggered.
-            If <subsys update info> is a list, then the list should contain the id_str of 
+            If <subsys update info> is a list, then the list should contain the 
             the subsystems to be updated.
             If a parameter name is not included in the dictionary, then it is assumed that 
             the parameter's <subsys update info> is the `subsys_update_default_info`.
@@ -267,7 +268,7 @@ def update(ps, {arg_name_str}):
         return labels, sliced_data
 
     def dressed_indices(self, bare_indices: Tuple[int, ...]) -> np.ndarray:
-        """
+        """ 
         A wrapper of scq.ParameterSweep.dressed_indices. It helps to to ravel
         the bare indices.
         """
@@ -279,7 +280,9 @@ def update(ps, {arg_name_str}):
             self.sweep, mode_priority
         )
         self.sweep.store_data(
-            dressed_indices = branch_indices.reshape(1, -1)
+            dressed_indices = branch_indices.reshape(
+                *(self.sweep.parameters.counts + (-1,))
+            )
         )
         (
             self.sweep._data["lamb"],

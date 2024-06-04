@@ -854,18 +854,8 @@ class FullCatTreeBuilder(CatTreeBuilder):
         QEC_rounds: int = 1,
         with_check_point: bool = False,
     ) -> EvolutionTree:
-        graph = EvolutionTree()
 
-        # initial node
-        init_state_node = StateNode.initial_note(
-            init_prob_amp_01, logical_0, logical_1,
-        )
-        graph.add_node(init_state_node)
-
-        # current ensemble
-        current_ensemble = StateEnsemble([init_state_node])
-
-        # add edges step by step
+        # construct an operation list:
         edge_method_names = [
             "idle",
             "qubit_gate_1",
@@ -882,6 +872,17 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 edge_w_check_point.append("check_point")
             edge_method_names = edge_w_check_point
 
+        # generate the tree
+        graph = EvolutionTree()
+
+        # initial node
+        init_state_node = StateNode.initial_note(
+            init_prob_amp_01, logical_0, logical_1,
+        )
+        graph.add_node(init_state_node)
+
+        # update on the current ensemble by adding edges on it
+        current_ensemble = StateEnsemble([init_state_node])
         step_counter = 0
         for round in range(QEC_rounds):
             for method_name in edge_method_names:

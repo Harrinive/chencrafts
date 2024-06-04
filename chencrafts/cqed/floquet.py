@@ -143,7 +143,7 @@ class FloquetBasis(qt.FloquetBasis):
 
         return bare_label_list, prob_list
     
-    def prop_floquet(self, t, t0 = 0.0):
+    def prop_floquet(self, t: float, t0: float = 0.0) -> qt.Qobj:
         """
         Slow propagator by Floquet Hamiltonian exp[-i H_F (t - t0)], 
         following the Viebahn 2020's notation.
@@ -165,7 +165,6 @@ class FloquetBasis(qt.FloquetBasis):
             ]
         )
         return prop_floquet
-    
     def prop_kick(self, t, t0 = 0.0):
         """
         Stroboscopic kick propagator U_K = exp[-i K [t0] (t)], following the
