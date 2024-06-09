@@ -312,7 +312,12 @@ class CatTreeBuilder(ABC):
                 graph, init_nodes.active_nodes(), edge_check_point
             )
 
+            for node in final_nodes.active_nodes():
+                node.terminated = not success
+
             all_final_nodes.nodes += final_nodes.nodes
+
+        
         
         return all_final_nodes
 
