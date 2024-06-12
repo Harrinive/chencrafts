@@ -11,5 +11,3 @@ include pyproject.toml
 # excludes
 global-exclude *.pyc
 global-exclude __pycache__
-
-hbjhb
