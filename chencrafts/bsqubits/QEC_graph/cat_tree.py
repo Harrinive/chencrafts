@@ -468,7 +468,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
     def frame_transform(
         self,
         propagator: qt.Qobj,
-        time: float,
+        total_time: float,
         type: Literal[
             "rot2current", 
             "current2rot", 
@@ -477,6 +477,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
             "lab2rot",
             "rot2lab",
         ],
+        init_time: float = 0,
     ) -> qt.Qobj:
         """
         Transform the propagator to the rotating frame.
@@ -505,30 +506,40 @@ class FullCatTreeBuilder(CatTreeBuilder):
         trans_ham = init_ham - final_ham
 
         prop_free = lambda t: (-1j * trans_ham * t).expm()
-        return prop_free(time).dag() * propagator * prop_free(0)
+        return (
+            prop_free(total_time + init_time).dag() 
+            * propagator 
+            * prop_free(init_time)
+        )
     
     def _build_qubit_gate_process(
         self,
         num_cpus: int = 8,
     ):
-        gate_p_rot_ideal = cat_ideal.qubit_rot_propagator(
+        self._gate_p_rot_ideal = cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
             angle=np.pi/2, axis=self._gate_axis, superop=False,
         )   # p stands for angle's sign plus
         self._qubit_gate_p_ideal = [self.frame_transform(
-            gate_p_rot_ideal, self.fsweep["tau_p_eff"], "rot2current"
+            self._gate_p_rot_ideal, 
+            total_time = self.fsweep["tau_p_eff"], 
+            type = "rot2current",
+            # init_time = -self.fsweep["tau_p_eff"] / 2,
         )]  
-        gate_m_rot_ideal = cat_ideal.qubit_rot_propagator(
+        self._gate_m_rot_ideal = cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
             angle=-np.pi/2, axis=self._gate_axis, superop=False,
         )
         self._qubit_gate_m_ideal = [self.frame_transform(
-            gate_m_rot_ideal, self.fsweep["tau_p_eff"], "rot2current"
+            self._gate_m_rot_ideal, 
+            total_time = self.fsweep["tau_p_eff"], 
+            type = "rot2current",
+            # init_time = -self.fsweep["tau_p_eff"] / 2,
         )]
 
-        gate_p_lab_real = cat_real.qubit_gate(
+        self._gate_p_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
@@ -539,10 +550,13 @@ class FullCatTreeBuilder(CatTreeBuilder):
         )
         self._qubit_gate_p_real = self._kraus_to_super(
             [self.frame_transform(
-                gate_p_lab_real, self.fsweep["tau_p_eff"], "lab2current"
+                self._gate_p_lab_real, 
+                total_time = self.fsweep["tau_p_eff"], 
+                type = "lab2current",
+                # init_time = -self.fsweep["tau_p_eff"] / 2,
             )]
         )
-        gate_m_lab_real = cat_real.qubit_gate(
+        self._gate_m_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
@@ -553,7 +567,10 @@ class FullCatTreeBuilder(CatTreeBuilder):
         )
         self._qubit_gate_m_real = self._kraus_to_super(
             [self.frame_transform(
-                gate_m_lab_real, self.fsweep["tau_p_eff"], "lab2current"
+                self._gate_m_lab_real, 
+                total_time = self.fsweep["tau_p_eff"], 
+                type = "lab2current",
+                # init_time = -self.fsweep["tau_p_eff"] / 2,
             )]
         )
 
@@ -635,9 +652,9 @@ class FullCatTreeBuilder(CatTreeBuilder):
         """
         t = (
             float(np.abs(np.pi / self._average_pm_interaction))
-            # half of the qubit gate time is used for parity mapping
-            - self._qubit_gate_1_time / 2
-            - self._qubit_gate_2_time / 2
+            # During the first (ideal) qubit gates we get a phase when 
+            # transfroming to the current frame (linear)
+            - self._qubit_gate_1_time
         )
 
         if t > self.fsweep["T_W"]:
@@ -790,7 +807,10 @@ class FullCatTreeBuilder(CatTreeBuilder):
             angle=np.pi, axis=self._gate_axis, superop=False,
         )
         self._qubit_reset_ideal = [self.frame_transform(
-            reset_rot_ideal, self.fsweep["tau_p_eff"] * 2, "rot2current"
+            reset_rot_ideal, 
+            total_time = self.fsweep["tau_p_eff"] * 2, 
+            type = "rot2current",
+            # init_time = -self.fsweep["tau_p_eff"],
         )]
 
         reset_lab_real = cat_real.qubit_gate(
@@ -803,7 +823,10 @@ class FullCatTreeBuilder(CatTreeBuilder):
         )
         self._qubit_reset_real = self._kraus_to_super(
             [self.frame_transform(
-                reset_lab_real, self.fsweep["tau_p_eff"] * 2, "lab2current"
+                reset_lab_real, 
+                total_time = self.fsweep["tau_p_eff"] * 2, 
+                type = "lab2current",
+                # init_time = -self.fsweep["tau_p_eff"],
             )]
         )
 

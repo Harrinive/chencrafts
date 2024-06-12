@@ -25,7 +25,7 @@ class FlexibleSweep():
         self,
         hilbertspace: HilbertSpace,
         para: Dict[str, float] = {"dummy": 0.0},    # a dummy parameter
-        swept_para: Dict[str, List[float] | NDArray[Any]] = {"dummy": [0.0]},   # a dummy parameter
+        swept_para: Dict[str, List[float] | NDArray[Any]] = {}, 
         update_hilbertspace_by_keyword: Callable | None = None,
         evals_count: Optional[int] = None,
         num_cpus: int = 1,

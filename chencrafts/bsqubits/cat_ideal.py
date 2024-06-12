@@ -205,7 +205,7 @@ def qubit_rot_propagator(
     superop: bool = False,
 ) -> qt.Qobj:
     """
-    The ideal qubit rotation propagator.
+    The ideal qubit rotation propagator in the rotating frame.
     """
     if axis.startswith('-'):
         angle = -angle
