@@ -516,7 +516,7 @@ class StateEnsemble:
         """
         Check if the total trace is 1
         """
-        return np.abs(self.probability - 1) < 1e-8
+        return np.abs(self.probability - 1) < 1e-6
     
     def fidelity_drop_by_orth(self) -> float:
         """

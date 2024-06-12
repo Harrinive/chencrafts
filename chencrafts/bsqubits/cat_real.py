@@ -399,6 +399,9 @@ def qubit_gate(
     )
     tgt_mat_elem = gate_in_subspace[0, 1]
     leaking_mat_elem = gate_in_subspace[0, 2]
+    
+    # "normalize" Hamiltonian
+    H0 = H0 - evals[0, 0]
     H1 = H1 / (tgt_mat_elem / np.abs(tgt_mat_elem))     # remove phase factor
 
     # scale the pulse duration for different rotation angle

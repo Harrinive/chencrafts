@@ -244,7 +244,10 @@ def batched_sweep_readout(
     )
 
     # shot noise dephasing
-    n_th_r = n_th(omega_r_GHz, params["temp_r"], params["n_th_base"])
+    try:
+        n_th_r = params["n_th_r"] 
+    except KeyError:
+        n_th_r = n_th(omega_r_GHz, params["temp_r"], params["n_th_base"])
     kappa_a_phi_r = qubit_shot_noise_dephasing_w_res(
         params["kappa_r"], sweep["chi_ar"], n_th_r
     )
