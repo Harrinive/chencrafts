@@ -7,7 +7,7 @@ from sympy import latex
 
 
 # unit conversion ======================================================
-def capacitance_2_EC(C):
+def EC_by_C(C):
     """
     Give capacitance in fF, return charging energy in GHz.
 
@@ -15,7 +15,7 @@ def capacitance_2_EC(C):
     """
     return e**2 / (2 * C * 1e-15) / h / 1e9
 
-def EC_2_capacitance(EC):
+def C_by_EC(EC):
     """
     Give charging energy in GHz, return capacitance in fF
 
@@ -23,7 +23,7 @@ def EC_2_capacitance(EC):
     """
     return e**2 / (2 * h * EC * 1e9) / 1e-15
 
-def EL_2_inductance(EL):
+def L_by_EL(EL):
     """
     Give EL in GHz, return inductance in uH
 
@@ -33,7 +33,7 @@ def EL_2_inductance(EL):
     Phi_0 = h / (2 * e)
     return Phi_0**2 / (2 * pi)**2 / (h * EL * 1e9) / 1e-6
 
-def inductance_2_EL(L):
+def EL_by_L(L):
     """
     Give inductance in uH, return EL in GHz
 
@@ -43,7 +43,7 @@ def inductance_2_EL(L):
     Phi_0 = h / (2 * e)
     return Phi_0**2 / (2 * pi)**2 / (L * 1e-6) / h / 1e9
 
-def EC_EL_2_omega_Z(EC, EL):
+def omega_Z_by_EC_EL(EC, EL):
     """
     Give EC and EL in GHz, return oscillation frequency in GHz and
     impedence in ohms, where 
@@ -54,15 +54,15 @@ def EC_EL_2_omega_Z(EC, EL):
     freq = 1 / sqrt(LC) / (2 pi), and the impedence is given by
     Z = sqrt(L / C)
     """
-    C = EC_2_capacitance(EC) * 1e-15
-    L = EL_2_inductance(EL) * 1e-6
+    C = C_by_EC(EC) * 1e-15
+    L = L_by_EL(EL) * 1e-6
     
     freq = 1 / np.sqrt(L * C) / np.pi / 2 / 1e9
     Z = np.sqrt(L / C)
 
     return freq, Z
 
-def omega_Z_2_EC_EL(freq, Z):
+def EC_EL_by_omega_Z(freq, Z):
     """
     Give oscillation frequency in GHz and impedence in ohms, return
     EC and EL in GHz, where
@@ -75,12 +75,12 @@ def omega_Z_2_EC_EL(freq, Z):
     L = Z / (freq * 2 * np.pi * 1e9)
     C = L / Z**2
 
-    EC = capacitance_2_EC(C * 1e15)
-    EL = inductance_2_EL(L * 1e6)
+    EC = EC_by_C(C * 1e15)
+    EL = EL_by_L(L * 1e6)
 
     return EC, EL
 
-def Z_2_phi_zpf(Z):
+def phi_zpf_by_Z(Z):
     """
     For a resonator, give impedence in ohms, return zero point fluctuation of 
     flux in the unit of Phi_0 / 2pi. 
@@ -90,7 +90,7 @@ def Z_2_phi_zpf(Z):
     Phi_0 = h / (2 * e)
     return Phi_zpf / Phi_0 * 2 * np.pi
 
-def phi_zpf_2_Z(phi_zpf):
+def Z_by_phi_zpf(phi_zpf):
     """
     For a resonator, give zero point fluctuation of flux in the unit of Phi_0 / 2pi,
     return impedence in ohms.
@@ -100,7 +100,7 @@ def phi_zpf_2_Z(phi_zpf):
     Phi_zpf = phi_zpf * Phi_0 / 2 / np.pi
     return 2 * Phi_zpf**2 / hbar
 
-def Z_2_n_zpf(Z):
+def n_zpf_by_Z(Z):
     """
     For a resonator, give impedence in ohms, return zero point fluctuation of 
     charge in the unit of 2e. 
@@ -109,7 +109,7 @@ def Z_2_n_zpf(Z):
     Q_zpf = np.sqrt(hbar / 2 / Z)
     return Q_zpf / 2 / e
 
-def n_zpf_2_Z(n_zpf):
+def Z_by_n_zpf(n_zpf):
     """
     For a resonator, give zero point fluctuation of charge in the unit of 2e,
     return impedence in ohms.
@@ -117,6 +117,26 @@ def n_zpf_2_Z(n_zpf):
     """
     return hbar / (n_zpf * 2 * e)**2 / 2
 
+# Josephson junctions ==================================================
+def I_crit_by_EJ(EJ):
+    """
+    Convert EJ in GHz to critical current in uA.
+    
+    The relationship between EJ and critical current is given by
+    EJ = hbar * I_crit / 2e
+    """
+    I_crit = (EJ * 1e9) * (2 * pi) * (2 * e)
+    return I_crit * 1e6
+
+def EJ_by_I_crit(I_crit):
+    """
+    Convert critical current in uA to EJ in GHz.
+    
+    The relationship between EJ and critical current is given by
+    EJ = hbar * I_crit / 2e
+    """
+    EJ = (I_crit * 1e-6) / (2 * pi) / (2 * e)
+    return EJ * 1e9
 
 # display ==============================================================
 def display_expr(expr):
