@@ -12,7 +12,7 @@ import numpy as np
 from numpy.typing import NDArray
 from warnings import warn
 
-from typing import Dict, List, Tuple, Callable, Any, Literal, Optional
+from typing import Dict, List, Tuple, Callable, Any, Literal, Optional, overload
 
 class FlexibleSweep():   
     """
@@ -275,9 +275,20 @@ def update(ps, {arg_name_str}):
         raveled_idx = np.ravel_multi_index(bare_indices, self.hilbertspace.subsystem_dims)
         return self["dressed_indices"][..., raveled_idx]
     
-    def branch_analysis(self, mode_priority: Optional[List[int]] = None):
+    def branch_analysis(
+        self, 
+        mode: Literal["DF", "EF"] = "EF",
+        mode_priority: Optional[List[int]] = None,
+        truncate: int | None = None,
+        check_all_prev_states: bool = False,
+    ):
         branch_indices = branch_analysis(
-            self.sweep, mode_priority
+            self.sweep,
+            mode = mode,
+            mode_priority = mode_priority, 
+            transpose = False,
+            truncate = truncate,
+            check_all_prev_states = check_all_prev_states,
         )
         self.sweep.store_data(
             dressed_indices = branch_indices.reshape(
