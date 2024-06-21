@@ -527,6 +527,9 @@ def sweep_ac_stark_shift(
         else:
             # the dressed states are nearly bare states
             f_idx = lookup[drs_idx]
+            
+        if drs_idx is None or f_idx is None:
+            raise ValueError(f"drs_idx: {drs_idx}, f_idx: {f_idx}. Please check the system config.")
 
         shift = - mod_c(    # minus sign comes from -1j in exp(-1j * theta)
             (fevals[f_idx] - feval_0)
@@ -739,7 +742,7 @@ def sweep_CZ_propagator(
         ham,
         [
             param_mesh["amp"][idx] * drive_op / np.abs(target_mat_elem), 
-            f"cos({drive_freq}*t{spurious_phase_sign}{spurious_phase})"
+            f"cos({drive_freq}*t{spurious_phase_sign}{np.abs(spurious_phase)})"
         ],
     ]
     fbasis = FloquetBasis(ham_floquet, T)
