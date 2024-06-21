@@ -144,3 +144,10 @@ def display_expr(expr):
     Display sympy expression in LaTeX format in a Jupyter notebook.
     """
     display(Math(latex(expr)))
+    
+# math =================================================================
+def mod_c(a, b):
+    """
+    Modulo operation that always return a number in the range of [-b/2, b/2).
+    """
+    return (a + b/2) % b - b/2

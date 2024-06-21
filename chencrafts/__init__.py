@@ -4,6 +4,7 @@ from chencrafts.version import version as __version__
 # when changed, remember to change setup.py
 import chencrafts.bsqubits as bsq
 import chencrafts.cqed as cqed
+import chencrafts.fluxonium as fx
 import chencrafts.projects as prj
 import chencrafts.toolbox as tb
 import chencrafts.settings as settings
@@ -47,7 +48,7 @@ _np.set_printoptions(precision=6, linewidth=130)
 
 # public modules
 __all__ = [
-    "bsq", "cqed", "prj", "sf", "tb", 
+    "bsq", "cqed", "prj", "sf", "tb", "fx",
     "settings",
     "__version__", "__version_tuple__"
 ]
