@@ -10,7 +10,6 @@ def projector_w_basis(basis: List[qt.Qobj]) -> qt.Qobj:
     """
     Generate a projector onto the subspace spanned by the given basis.
     """
-
     projector: qt.Qobj = basis[0] * basis[0].dag()
     for ket in basis[1:]:
         projector = projector + ket * ket.dag()
@@ -32,6 +31,21 @@ def basis_of_projector(projector: qt.Qobj) -> List[qt.Qobj]:
                              "neither 0 nor 1.")
     return projected_basis
 
+def trans_by_kets(
+    kets: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
+):
+    """
+    Given a list of kets = [|k1>, |k2>, ...], 
+    calculate a transformation matrix that can transform a state in the 
+    basis of kets.
+    """
+    if isinstance(kets[0], qt.Qobj):
+        kets = [ket.full().ravel() for ket in kets]
+    
+    # stack all column vectors 
+    trans = np.stack(kets, axis=-1)
+    return trans
+    
 def ket_in_basis(
     ket: np.ndarray | qt.Qobj | csc_matrix,
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
@@ -85,11 +99,13 @@ def _oprt_in_basis(
     oprt : np.ndarray | qt.Qobj | csc_matrix
         operator in matrix form
     bra_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray
-        a list of states describing the basis, [<bra1|, <bra2|, ...].
+        a list of states describing the basis, [<bra1|, <bra2|, ...]. Note that
+        each <bra1| should still be represented as a column vector.
     ket_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None
         a list of kets, [|ket1>, |ket2>, ...].
         - If not provided, the returned operator will be O_{jk} = <bra_j|O|bra_k>.
         - If provided, the returned operator will be O_{jk} = <bra_j|O|ket_k>, and it's not a square matrix.
+        Note that each |ket1> should be represented as a column vector.
 
     Returns
     -------
@@ -101,42 +117,52 @@ def _oprt_in_basis(
     """
     if ket_basis is None:
         ket_basis = bra_basis
-        ident_bra_ket_list = True
-    else:
-        # treat the basis as a list of bras
-        ident_bra_ket_list = False
+    #     ident_bra_ket_list = True
+    # else:
+    #     # treat the basis as a list of bras
+    #     ident_bra_ket_list = False
 
     # dimension check
     assert oprt.shape[0] == bra_basis[0].shape[0], "Dimension mismatch."
     assert oprt.shape[1] == ket_basis[0].shape[0], "Dimension mismatch."
 
-    # go through all states and oprt, to find a dimension 
+    # # go through all states and oprt, to find a dimension 
+    # if isinstance(oprt, qt.Qobj):
+    #     dim = oprt.dims[0]
+    # elif isinstance(bra_basis[0], qt.Qobj):
+    #     dim = bra_basis[0].dims[0]
+    # elif isinstance(ket_basis[0], qt.Qobj):
+    #     dim = bra_basis[0].dims[0]
+    # else:
+    #     dim = [oprt.shape[0]]
+
+    # # convert to qobj
+    # if isinstance(oprt, np.ndarray | csc_matrix):
+    #     oprt = qt.Qobj(oprt, dims=[dim, dim])
+    # ket_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in ket_basis]
+    # bra_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in bra_basis]
+
+    # # calculate matrix elements
+    # data = np.zeros((len(bra_basis), len(ket_basis)), dtype=complex)
+    # for j, bra in enumerate(bra_qobj):
+    #     for k, ket in enumerate(ket_qobj):
+    #         if ident_bra_ket_list and oprt.isherm and j > k:
+    #             data[j, k] = data[k, j].conjugate()
+    #             continue
+
+    #         data[j, k] = oprt.matrix_element(bra, ket)
+            
+    # return qt.Qobj(data), bra_qobj, ket_qobj, dim
+    
     if isinstance(oprt, qt.Qobj):
-        dim = oprt.dims[0]
-    elif isinstance(bra_basis[0], qt.Qobj):
-        dim = bra_basis[0].dims[0]
-    elif isinstance(ket_basis[0], qt.Qobj):
-        dim = bra_basis[0].dims[0]
-    else:
-        dim = [oprt.shape[0]]
-
-    # convert to qobj
-    if isinstance(oprt, np.ndarray | csc_matrix):
-        oprt = qt.Qobj(oprt, dims=[dim, dim])
-    ket_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in ket_basis]
-    bra_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in bra_basis]
-
-    # calculate matrix elements
-    data = np.zeros((len(bra_basis), len(ket_basis)), dtype=complex)
-    for j, bra in enumerate(bra_qobj):
-        for k, ket in enumerate(ket_qobj):
-            if ident_bra_ket_list and oprt.isherm and j > k:
-                data[j, k] = data[k, j].conjugate()
-                continue
-
-            data[j, k] = oprt.matrix_element(bra, ket)
-
-    return qt.Qobj(data), bra_qobj, ket_qobj, dim
+        oprt = oprt.full()
+    
+    # convert bra_list and ket list to transformation matrix
+    bra_trans = trans_by_kets(bra_basis)
+    ket_trans = trans_by_kets(ket_basis)
+    
+    data = np.conj(bra_trans.T) @ oprt @ ket_trans
+    return qt.Qobj(data)
 
 def oprt_in_basis(
     oprt: np.ndarray | qt.Qobj | csc_matrix,
@@ -165,7 +191,7 @@ def oprt_in_basis(
     qt.Qobj
         the operator in the new basis
     """
-    oprt, _, _, _ = _oprt_in_basis(oprt, bra_basis, ket_basis)
+    oprt = _oprt_in_basis(oprt, bra_basis, ket_basis)
 
     return oprt
 
