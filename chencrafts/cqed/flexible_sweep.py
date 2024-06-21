@@ -121,11 +121,17 @@ class FlexibleSweep():
         # if self.swept_para == {}:
         #     raise ValueError("No swept parameters are specified.")
         
-        # order the swept parameters by the order of para
+        # order the swept parameters by the order of _complete_param_dict
         ordered_swept_para = {}
-        for key, val in self.para.items():
+        for key, val in self._complete_param_dict.items():
             if key in self.swept_para.keys():
                 ordered_swept_para[key] = self.swept_para[key]
+
+        # # order the swept parameters by the order of para
+        # ordered_swept_para = {}
+        # for key, val in self.para.items():
+        #     if key in self.swept_para.keys():
+        #         ordered_swept_para[key] = self.swept_para[key]
 
         # put the rest of the swept parameters at the end
         ordered_swept_para.update(self.swept_para)
@@ -193,6 +199,37 @@ def update(ps, {arg_name_str}):
             slc_list.append(slice(key, 0))
     
         return tuple(slc_list)
+    
+    def full_slice(
+        self, 
+        slice_tuple: Tuple[slice | int, ...] | int | slice
+    ) -> Tuple[slice, ...]:
+        if isinstance(slice_tuple, (int, slice)):
+            slice_tuple = (slice_tuple,)
+        
+        base_slice = list(self.fixed_dim_slice)
+        
+        if all(isinstance(slc, int) for slc in slice_tuple):
+            # combine the key and the index
+            swept_para_names = self._order_swept_para().names
+            name_based_slc = [
+                slice(key, idx) 
+                for key, idx in zip(swept_para_names, slice_tuple)
+            ]
+            base_slice.extend(name_based_slc)
+                    
+        elif all(isinstance(slc, slice) for slc in slice_tuple):
+            for slc in slice_tuple:
+                assert isinstance(slc.start, str), "Invalid slice"
+                assert isinstance(slc.stop, int | float), "Invalid slice"
+                assert slc.step is None, "Invalid slice"
+                base_slice.append(slc)
+                
+        else:
+            raise ValueError("Invalid slice. Should be either a tuple of ints or"
+                             " name based slices.")
+
+        return tuple(base_slice)
 
     def __getitem__(self, key):
         """
