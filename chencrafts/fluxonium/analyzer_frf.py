@@ -16,12 +16,17 @@ def CZ_analyzer(
     - "drive_op_0_1"    (or other q1_idx, q2_idx, similar follows)
     - "full_CZ_0_1"
     - "pure_CZ_0_1"
-    """
+    """    
     full_indices = fs.full_slice(param_indices)
     
-    full_CZ = fs[f"full_CZ_{q1_idx}_{q2_idx}"][param_indices]
-    drive_op = fs[f"drive_op_{q1_idx}_{q2_idx}"][param_indices]
-    pure_CZ = fs[f"pure_CZ_{q1_idx}_{q2_idx}"][param_indices]
+    if len(fs.swept_para) > 0:
+        full_CZ = fs[f"full_CZ_{q1_idx}_{q2_idx}"][param_indices]
+        drive_op = fs[f"drive_op_{q1_idx}_{q2_idx}"][param_indices]
+        pure_CZ = fs[f"pure_CZ_{q1_idx}_{q2_idx}"][param_indices]
+    else:
+        full_CZ = fs[f"full_CZ_{q1_idx}_{q2_idx}"]
+        drive_op = fs[f"drive_op_{q1_idx}_{q2_idx}"]
+        pure_CZ = fs[f"pure_CZ_{q1_idx}_{q2_idx}"]
     hspace = fs.sweep.hilbertspace
     
     # subspace info
@@ -31,7 +36,11 @@ def CZ_analyzer(
     # leakage 
     for bare_label in comp_labels:
         ravel_idx = np.ravel_multi_index(bare_label, hspace.subsystem_dims)
-        drs_idx = fs[f"dressed_indices"][param_indices][ravel_idx]
+        
+        if len(fs.swept_para) > 0:
+            drs_idx = fs[f"dressed_indices"][param_indices][ravel_idx]
+        else:
+            drs_idx = fs[f"dressed_indices"][ravel_idx]
         print(f"Leakage from {bare_label}:")
         
         # leakage destination by propagator

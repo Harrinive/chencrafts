@@ -26,6 +26,14 @@ from chencrafts.fluxonium.batched_sweep_frf import (
     sweep_zzz,
     sweep_fidelity,
     batched_sweep_CZ,
+    
+    sweep_qubit_coherence,
+    sweep_res_coherence,
+    sweep_1Q_incoh_infid,
+    sweep_CZ_incoh_infid,
+    batched_sweep_incoh_infid,
+    
+    batched_sweep_frf_fidelity,
 )
 
 from chencrafts.fluxonium.analyzer_frf import CZ_analyzer
@@ -58,6 +66,14 @@ __all__ = [
     "sweep_zzz",
     "sweep_fidelity",
     "batched_sweep_CZ",
+    
+    "sweep_qubit_coherence",
+    "sweep_res_coherence",
+    "sweep_1Q_incoh_infid",
+    "sweep_CZ_incoh_infid",
+    "batched_sweep_incoh_infid",
+    
+    "batched_sweep_frf_fidelity",
     
     "CZ_analyzer",
 ]

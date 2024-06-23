@@ -2,11 +2,13 @@ import numpy as np
 import scqubits as scq
 import qutip as qt
 import copy
+import warnings
+import time
 
 from chencrafts.cqed.qt_helper import oprt_in_basis, process_fidelity
 from chencrafts.cqed.floquet import FloquetBasis
 from chencrafts.toolbox.gadgets import mod_c
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 # static properties ====================================================
 def sweep_comp_drs_indices(
@@ -57,7 +59,8 @@ def sweep_static_zzz(
 
 def batched_sweep_static(
     ps: scq.ParameterSweep,
-    comp_labels: List[Tuple[int, ...]]  
+    comp_labels: List[Tuple[int, ...]],
+    **kwargs
 ):
     """
     Static properties:
@@ -65,21 +68,25 @@ def batched_sweep_static(
     - comp_bare_overlap: the minimal overlap on bare basis
     - static_zzz: the static ZZ observable
     """
-    ps.add_sweep(
-    sweep_comp_drs_indices,
-        sweep_name = 'comp_drs_indices',
-        comp_labels = comp_labels,
-    )
-    ps.add_sweep(
-        sweep_static_zzz,
-        sweep_name = 'static_zzz',
-        comp_labels = comp_labels,
-    )
-    ps.add_sweep(
-        sweep_comp_bare_overlap,
-        sweep_name = 'comp_bare_overlap',
-        comp_labels = comp_labels,
-    )
+    
+    if "comp_drs_indices" not in ps.keys():
+        ps.add_sweep(
+            sweep_comp_drs_indices,
+            sweep_name = 'comp_drs_indices',
+            comp_labels = comp_labels,
+        )
+    if "static_zzz" not in ps.keys():
+        ps.add_sweep(
+            sweep_static_zzz,
+            sweep_name = 'static_zzz',
+            comp_labels = comp_labels,
+        )
+    if "comp_bare_overlap" not in ps.keys():
+        ps.add_sweep(
+            sweep_comp_bare_overlap,
+            sweep_name = 'comp_bare_overlap',
+            comp_labels = comp_labels,
+        )
 
 # target transitions ===================================================
 def fill_in_target_transitions(
@@ -241,6 +248,7 @@ def batched_sweep_target_transition(
     num_q: int,
     num_r: int,
     add_default_target: bool = True,
+    **kwargs
 ):
     """
     Target transition related sweeps:
@@ -363,6 +371,10 @@ def sweep_nearby_trans(
             if drs_i is None or drs_f is None:
                 continue
             
+            # skip the state that is not included in the truncation of matrix element
+            if drs_i >= res_n_op.shape[0] or drs_f >= res_n_op.shape[0]:
+                continue
+            
             # skip the transitions with very different frequency
             freq = evals[drs_f] - evals[drs_i]
             if np.abs(freq - drs_target_freq) > freq_thres_GHz:
@@ -421,6 +433,7 @@ def batched_sweep_nearby_trans(
     n_matelem_fraction_thres: float = 1e-1,
     freq_thres_GHz: float = 0.3,
     num_thres: int = 30,
+    **kwargs
 ):
     """
     Identify nearby transitions and their frequency
@@ -510,6 +523,16 @@ def sweep_ac_stark_shift(
     eval_0 = ps["evals"][idx][drs_idx_0]
     f_idx_0 = lookup[drs_idx_0]
     feval_0 = fevals[f_idx_0]
+    
+    if f_idx_0 is None or drs_idx_0 is None:
+        warnings.warn(
+            f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+            "Ground state identification failed. It's usually "
+            "due to strongly driving / coupling to the unwanted transitions. "
+            "Please check the system config."
+        )
+        
+        return np.zeros((3, len(comp_labels))) * np.nan
 
     # calculate ac-Stark shift
     init_state_bare_labels = bare_trans[:, 0, :].tolist()
@@ -529,7 +552,15 @@ def sweep_ac_stark_shift(
             f_idx = lookup[drs_idx]
             
         if drs_idx is None or f_idx is None:
-            raise ValueError(f"drs_idx: {drs_idx}, f_idx: {f_idx}. Please check the system config.")
+            warnings.warn(
+                f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, state: {state}. "
+                "Floquet state identification failed. It's usually due to "
+                "strongly driving / coupling to the unwanted transitions. Please check "
+                "the system config."
+            )
+            ac_stark_shifts.append(np.nan)
+            continue
+            
 
         shift = - mod_c(    # minus sign comes from -1j in exp(-1j * theta)
             (fevals[f_idx] - feval_0)
@@ -555,6 +586,24 @@ def sweep_ac_stark_shift(
         f_idx_plus, _ = fbasis._closest_state(fevecs, drs_plus)  # we put the |+> state in the qubit state list
         f_idx_minus, _ = fbasis._closest_state(fevecs, drs_minus) # we put the |1> state in the resonator list 
         
+        if (
+            init is None 
+            or final is None 
+            or f_idx_plus is None 
+            or f_idx_minus is None
+        ):
+            warnings.warn(
+                f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, init "
+                "state: {init}, final state: {final}. "
+                "Driven state identification failed. It's usually due to "
+                "strongly driving / coupling to the unwanted transitions. Please check "
+                "the system config."
+            )
+            Rabi_minus_list.append(np.nan)
+            Rabi_plus_list.append(np.nan)
+            Rabi_rot_frame_list.append(np.nan)
+            continue
+        
         # it could be used to calibrate a gate time to complete a rabi cycle
         Rabi_minus = - mod_c(
             fevals[f_idx_minus] - feval_0,
@@ -572,6 +621,7 @@ def sweep_ac_stark_shift(
             - (ps["evals"][idx][init] - eval_0) * np.pi * 2,
             drive_freq
         )
+        
         Rabi_minus_list.append(Rabi_minus)
         Rabi_plus_list.append(Rabi_plus)
         Rabi_rot_frame_list.append(Rabi_rot_frame)
@@ -580,6 +630,7 @@ def sweep_ac_stark_shift(
     # frame. So we put them together.
     for ac_shift_idx, state in enumerate(comp_labels):
         if list(state) in init_state_bare_labels:
+            # print(f"state: {state}, init_state_bare_labels: {init_state_bare_labels}, Rabi_rot_frame_list: {Rabi_rot_frame_list}")
             bare_trans_idx = init_state_bare_labels.index(list(state))
             ac_stark_shifts[ac_shift_idx] = Rabi_rot_frame_list[bare_trans_idx]
 
@@ -591,7 +642,6 @@ def sweep_ac_stark_shift(
     freq_shift_data[2, :len(drs_trans)] = Rabi_plus_list
 
     return freq_shift_data
-
 
 def sweep_gate_time(ps: scq.ParameterSweep, idx, q1_idx, q2_idx):
     freq_shifts = ps[f"ac_stark_shifts_{q1_idx}_{q2_idx}"][idx]
@@ -651,6 +701,7 @@ def batched_sweep_gate_calib(
     num_r: int,
     comp_labels: List[Tuple[int, ...]],
     trunc: int = 30,
+    **kwargs
 ):
     """
     Calibration of gate time and spurious phase, keys:
@@ -701,9 +752,18 @@ def sweep_CZ_propagator(
     trunc = 60,
 ):
     drs_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
-
-    # pulse 1 ----------------------------------------------------------
     ham = qt.qdiags(ps["evals"][idx][:trunc], 0) * np.pi * 2
+    gate_time = ps[f"gate_time_{q1_idx}_{q2_idx}"][idx]    
+    spurious_phase = ps[f"spurious_phase_{q1_idx}_{q2_idx}"][idx]
+
+    if np.isnan(spurious_phase) or np.isnan(gate_time):
+        nan_prop = np.nan * qt.qzero_like(ham)
+        
+        # don't know what happened, but scqubit gives all zeros
+        # when I set to nan
+        return nan_prop
+    
+    # pulse 1 ----------------------------------------------------------
 
     # drive freq = average of all target transition freqs
     drive_freq = 0.0
@@ -728,10 +788,7 @@ def sweep_CZ_propagator(
 
     T = np.pi * 2 / drive_freq
     fbasis = FloquetBasis(ham_floquet, T)
-
-    gate_time = ps[f"gate_time_{q1_idx}_{q2_idx}"][idx]    
-    spurious_phase = ps[f"spurious_phase_{q1_idx}_{q2_idx}"][idx]
-
+    
     # unitary without phase shift
     unitary_1 = fbasis.propagator(gate_time / 2)
 
@@ -870,6 +927,7 @@ def batched_sweep_CZ(
     r_idx,
     num_q,
     trunc = 60,
+    **kwargs
 ):
     """
     CZ gate sweep, keys:
@@ -918,3 +976,398 @@ def batched_sweep_CZ(
         num_q = num_q,
         update_hilbertspace=False,
     )
+    
+# coherence time =======================================================
+def sweep_qubit_coherence(
+    ps: scq.ParameterSweep,
+    idx,
+    num_q,
+    Q_cap = 1e6,
+    Q_ind = 1e8,
+    T = 0.05,
+):
+    """
+    Find the qubits and resonators' coherence time.
+    """
+    circ = ps.hilbertspace.subsystem_list[0].parent
+    
+    evals = ps["evals"][idx]
+    evecs = ps["evecs"][idx]
+    reshaped_esys = evals, np.array([evec.full()[:, 0] for evec in evecs]).T
+    
+    dims = ps.hilbertspace.subsystem_dims
+    
+    # qubit state labels
+    zero_label = np.zeros_like(dims, dtype=int)
+    raveled_zero_label = np.ravel_multi_index(zero_label, dims)
+    drs_zero_label = ps["dressed_indices"][idx][raveled_zero_label]
+    
+    decay_rate = np.zeros((num_q))
+    for q_idx in range(num_q):
+        bare_label = np.zeros_like(dims, dtype=int)
+        bare_label[q_idx] = 1
+        raveled_bare_label = np.ravel_multi_index(bare_label, dims)
+        drs_bare_label = ps["dressed_indices"][idx][raveled_bare_label]
+        
+        rate = circ.t1_capacitive(
+            i = drs_bare_label,
+            j = drs_zero_label,
+            Q_cap = Q_cap,
+            T = T,
+            get_rate = True,
+            total = True,
+            esys = reshaped_esys,
+        )
+        rate += circ.t1_inductive(
+            i = drs_bare_label,
+            j = drs_zero_label,
+            Q_ind = Q_ind,
+            T = T,
+            get_rate = True,
+            total = True,
+            esys = reshaped_esys,
+        )
+        
+        decay_rate[q_idx] = rate
+        
+    return decay_rate
+
+def sweep_res_coherence(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    Q_cap = 1e6,
+    Q_ind = 1e8,
+    T = 0.05,
+):
+    """
+    Find the qubits and resonators' coherence time.
+    """
+    circ = ps.hilbertspace.subsystem_list[0].parent
+    
+    evals = ps["evals"][idx]
+    evecs = ps["evecs"][idx]
+    reshaped_esys = evals, np.array([evec.full()[:, 0] for evec in evecs]).T
+    
+    # qubit state labels
+    target_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
+    
+    decay_rate = []
+    for init, final in target_trans:
+        rate = circ.t1_capacitive(
+            i = final,
+            j = init,
+            Q_cap = Q_cap,
+            T = T,
+            get_rate = True,
+            total = True,
+            esys = reshaped_esys,
+        )
+        rate += circ.t1_inductive(
+            i = final,
+            j = init,
+            Q_ind = Q_ind,
+            T = T,
+            get_rate = True,
+            total = True,
+            esys = reshaped_esys,
+        )
+        decay_rate.append(rate)
+
+    return np.average(decay_rate)
+
+def sweep_CZ_incoh_infid(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+):
+    target_decay_rate = ps[f"tgt_decay_{q1_idx}_{q2_idx}"][idx]
+    gate_time = ps[f"gate_time_{q1_idx}_{q2_idx}"][idx]
+    spurious_phase = ps[f"spurious_phase_{q1_idx}_{q2_idx}"][idx]
+
+    if np.isnan(spurious_phase):
+        return np.nan
+    
+    return (
+        target_decay_rate
+        * gate_time 
+        / 4     # one of the four states are driven
+        / 2     # occupy higher states for half of the time
+    )
+
+def sweep_1Q_incoh_infid(
+    ps: scq.ParameterSweep,
+    idx,
+    cycle_per_gate: int = 4,
+):
+    qubit_decay_rate = ps[f"qubit_decay"][idx]
+    num_q = len(qubit_decay_rate)
+    
+    dims = ps.hilbertspace.subsystem_dims
+    
+    # qubit state labels
+    zero_label = np.zeros_like(dims, dtype=int)
+    raveled_zero_label = np.ravel_multi_index(zero_label, dims)
+    drs_zero_label = ps["dressed_indices"][idx][raveled_zero_label]
+    
+    # qubit frequency
+    freq = np.zeros(num_q)
+    for q_idx in range(num_q):
+        bare_label = np.zeros_like(dims, dtype=int)
+        bare_label[q_idx] = 1
+        raveled_bare_label = np.ravel_multi_index(bare_label, dims)
+        drs_bare_label = ps["dressed_indices"][idx][raveled_bare_label]
+        
+        freq[q_idx] = (
+            ps["evals"][idx][drs_bare_label]
+            - ps["evals"][idx][drs_zero_label]
+        )
+        
+    # assume qubit gate coherent error is limited by non-RWA error
+    gate_time = 1 / freq * cycle_per_gate
+
+    return qubit_decay_rate * gate_time / 2
+
+def batched_sweep_incoh_infid(
+    ps: scq.ParameterSweep,
+    q1_idx,
+    q2_idx,
+    num_q,
+    Q_cap = 1e6,
+    Q_ind = 1e8,
+    T = 0.05,
+    cycle_per_gate = 4,
+    **kwargs,
+):
+    """
+    Incoherent error infidility. Key:
+    - qubit_decay: the qubit decay rate
+    - tgt_decay_{q1_idx}_{q2_idx}: the target decay rate
+    - CZ_incoh_infid_{q1_idx}_{q2_idx}: the incoherent error infidility of the CZ gate
+    - 1Q_incoh_infid_{q1_idx}: the incoherent error infidility of the 1Q gate
+    """
+    if "qubit_decay" not in ps.keys():
+        # this batched function may be called multiple times for different q1_idx and q2_idx
+        # so we only add the sweep once
+        ps.add_sweep(
+            sweep_qubit_coherence,
+            sweep_name = f'qubit_decay',
+            num_q = num_q,
+            Q_cap = Q_cap,
+            Q_ind = Q_ind,
+            T = T,
+        )
+        ps.add_sweep(
+            sweep_1Q_incoh_infid,
+            sweep_name = f'1Q_incoh_infid',
+            cycle_per_gate = cycle_per_gate,
+            update_hilbertspace=False,
+        )
+        
+    ps.add_sweep(
+        sweep_res_coherence,
+        sweep_name = f'tgt_decay_{q1_idx}_{q2_idx}',
+        q1_idx = q1_idx,
+        q2_idx = q2_idx,
+        Q_cap = Q_cap,
+        Q_ind = Q_ind,
+        T = T,
+    )
+    ps.add_sweep(
+        sweep_CZ_incoh_infid,
+        sweep_name = f'CZ_incoh_infid_{q1_idx}_{q2_idx}',
+        q1_idx = q1_idx,
+        q2_idx = q2_idx,
+        update_hilbertspace=False,
+    )
+    
+# figure of merit =======================================================
+def sweep_bounding_error(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    option: int = 1,
+):
+    """
+    If we get nan as a fidelity, it's bad for our optimization. We 
+    should define something that will lead us back to the high coupling regime. This number should also be larger than 1, which makes it always larger than an infidelity.
+    
+    Option 1:
+        Hybridization of the target states we are driving.
+    """
+    if option == 1:
+        drs_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
+        total_hybrid = 0
+        for _, drs_target in drs_trans:
+            _, probs = ps.dressed_state_component(
+                state_label = drs_target,
+                truncate = 1,
+                param_npindices = idx,
+            )
+            total_hybrid += probs[0]
+            
+        return total_hybrid / len(drs_trans) + 1     # make it always greater than 1
+    
+    else:
+        raise ValueError(f"Invalid option: {option}")
+    
+
+def batched_sweep_frf_fidelity(
+    ps: scq.ParameterSweep,
+    num_q: int,
+    num_r: int,
+    cz_qr_map: Dict[Tuple[int, int], int],
+    cz_trans_map: Dict[Tuple[int, int], List[List[List[int]]]] | None = None,
+    **kwargs,
+):
+    """
+    Sweep everything for FRF circuit. 
+    
+    Parameters:
+    -----------
+    num_q: int
+        the number of qubits
+    num_r: int
+        the number of resonators
+    cz_qr_map: Dict[Tuple[int, int], int]
+        drive which resonator to realize a gate betweem q1 and q2. 
+        Key & value format: (q1, q2): r
+    cz_trans_map: Dict[Tuple[int, int], List[List[List[int]]]] = None
+        drive which transition to realize a gate between q1 and q2.
+        Key & value format: (q1, q2): 3D array, dimensions: 
+        0. different spectator states, (in this case, no spectator state)
+        1. init & final state
+        2. state label
+        If None, use the default transition map.
+    comp_labels: List[str]
+        the labels of the components
+    trunc: int
+        the dynamical truncation
+    Q_cap: float
+        the capacitance of the capacitor
+    Q_ind: float
+        the inductance of the inductor
+    T: float
+        the temperature
+    cycle_per_gate: float
+        the number of cycles per gate
+    sqg_tqg_ratio: float
+        the ratio of the number of single qubit gates to 
+        the number of two-qubit gates - a number for estimating the quality 
+        of the qubit
+    """
+    # time_0 = time.time()
+    
+    batched_sweep_static(
+        ps,
+        **kwargs,
+    )
+    
+    # time_1 = time.time()
+    # print(f"static sweep finished: {time_1 - time_0: .2f}s")
+    
+    if cz_trans_map is None:
+        for (q1_idx, q2_idx), r_idx in cz_qr_map.items():
+            batched_sweep_target_transition(
+                ps,
+                q1_idx,
+                q2_idx,
+                r_idx,
+                num_q,
+                num_r,
+                add_default_target = True,
+                **kwargs,
+            )
+    else:
+        for (q1_idx, q2_idx), r_idx in cz_qr_map.items():
+            ps.add_sweep(
+                fill_in_target_transitions,
+                f"target_transitions_{q1_idx}_{q2_idx}",
+                transitions_to_drive=cz_trans_map[(q1_idx, q2_idx)],
+            )
+            batched_sweep_target_transition(
+                ps,
+                q1_idx,
+                q2_idx,
+                r_idx,
+                num_q,
+                num_r,
+                add_default_target = False,
+                **kwargs,
+            )
+            
+    # time_2 = time.time()
+    # print(f"target transition sweep finished: {time_2 - time_1: .2f}s")
+    
+    for (q1_idx, q2_idx), r_idx in cz_qr_map.items():
+        batched_sweep_gate_calib(
+            ps,
+            q1_idx,
+            q2_idx,
+            r_idx,
+            num_q,
+            num_r,
+            **kwargs,
+        )
+        # time_3 = time.time()
+        # print(f"gate calibration sweep finished: {time_3 - time_2: .2f}s")
+        
+        batched_sweep_CZ(
+            ps,
+            q1_idx,
+            q2_idx,
+            r_idx,
+            num_q,
+            **kwargs,
+        )
+        # time_4 = time.time()
+        # print(f"CZ sweep finished: {time_4 - time_3: .2f}s")
+        
+        batched_sweep_incoh_infid(
+            ps,
+            q1_idx,
+            q2_idx,
+            num_q,
+            **kwargs,
+        )
+        # time_5 = time.time()
+        # print(f"incoh infid sweep finished: {time_5 - time_4: .2f}s")
+        
+        ps.add_sweep(
+            sweep_bounding_error,
+            sweep_name = f"bounding_error_{q1_idx}_{q2_idx}",
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+            option = 1,
+        )
+    
+    # summarize
+    tot_error = 0
+    bounding_error = 0
+    for q1_idx, q2_idx in cz_qr_map.keys():
+        error = (
+            1 - ps[f"fidelity_{q1_idx}_{q2_idx}"]
+            + ps[f"CZ_incoh_infid_{q1_idx}_{q2_idx}"]
+            + (
+                ps[f"1Q_incoh_infid"][..., q1_idx] 
+                + ps[f"1Q_incoh_infid"][..., q2_idx]
+            )
+            * kwargs["sqg_tqg_ratio"]
+        )
+        ps.store_data(**{f"error_{q1_idx}_{q2_idx}": error})
+        tot_error += error
+        
+        bounding_error += ps[f"bounding_error_{q1_idx}_{q2_idx}"]
+        
+    error /= len(cz_qr_map)
+    bounding_error /= len(cz_qr_map)
+    
+    ps.store_data(
+        error = error,
+        bounding_error = bounding_error,
+    )
+    
+    
