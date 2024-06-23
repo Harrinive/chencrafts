@@ -202,12 +202,16 @@ def update(ps, {arg_name_str}):
     
     def full_slice(
         self, 
-        slice_tuple: Tuple[slice | int, ...] | int | slice
-    ) -> Tuple[slice, ...]:
+        slice_tuple: Tuple[slice | int, ...] | int | slice | None
+    ) -> Tuple[slice, ...]:        
+        base_slice = list(self.fixed_dim_slice)
+        
+        if slice_tuple is None: 
+            return tuple(base_slice)
+        
+        
         if isinstance(slice_tuple, (int, slice)):
             slice_tuple = (slice_tuple,)
-        
-        base_slice = list(self.fixed_dim_slice)
         
         if all(isinstance(slc, int) for slc in slice_tuple):
             # combine the key and the index
