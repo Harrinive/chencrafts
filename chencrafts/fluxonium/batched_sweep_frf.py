@@ -1097,14 +1097,12 @@ def sweep_CZ_incoh_infid(
         / 2     # occupy higher states for half of the time
     )
 
-def sweep_1Q_incoh_infid(
+def sweep_1Q_gate_time(
     ps: scq.ParameterSweep,
     idx,
+    num_q,
     cycle_per_gate: int = 4,
-):
-    qubit_decay_rate = ps[f"qubit_decay"][idx]
-    num_q = len(qubit_decay_rate)
-    
+):    
     dims = ps.hilbertspace.subsystem_dims
     
     # qubit state labels
@@ -1127,8 +1125,38 @@ def sweep_1Q_incoh_infid(
         
     # assume qubit gate coherent error is limited by non-RWA error
     gate_time = 1 / freq * cycle_per_gate
+    
+    return gate_time
 
-    return qubit_decay_rate * gate_time / 2
+def sweep_1Q_error(
+    ps: scq.ParameterSweep, idx
+):
+    gate_time = ps[f"1Q_gate_time"][idx]
+    qubit_decay_rate = ps[f"qubit_decay"][idx]
+    num_q = len(gate_time)
+    
+    # collect all ZZ for each qubit
+    zz_infid = []
+    for q1_idx in range(num_q):
+        zz_q1 = 0
+        for q2_idx in range(num_q):
+            if q1_idx == q2_idx:
+                continue
+            
+            zz_q1 += (
+                np.pi * 2 
+                * np.abs(ps["kerr"][q1_idx, q2_idx][idx + (1, 1,)]) 
+            )
+        zz_infid.append(zz_q1)
+    
+    # a very rough estimate, not actually fidelity, more like an error prob
+    # need to be properly defined and re-calculated
+    # chance to flip the other qubits' state: 1/4 * zz * time
+    # change to decay: 1/2 * decay_rate * time
+    return (
+        np.array(zz_infid) * gate_time / 4
+        + qubit_decay_rate * gate_time / 2
+    )
 
 def batched_sweep_incoh_infid(
     ps: scq.ParameterSweep,
@@ -1160,9 +1188,15 @@ def batched_sweep_incoh_infid(
             T = T,
         )
         ps.add_sweep(
-            sweep_1Q_incoh_infid,
-            sweep_name = f'1Q_incoh_infid',
+            sweep_1Q_gate_time,
+            sweep_name = f'1Q_gate_time',
+            num_q = num_q,
             cycle_per_gate = cycle_per_gate,
+            update_hilbertspace=False,
+        )
+        ps.add_sweep(
+            sweep_1Q_error,
+            sweep_name = f'1Q_error',
             update_hilbertspace=False,
         )
         
@@ -1345,28 +1379,28 @@ def batched_sweep_frf_fidelity(
         )
     
     # summarize
+    # two qubit error
     tot_error = 0
     bounding_error = 0
     for q1_idx, q2_idx in cz_qr_map.keys():
-        error = (
+        two_q_error = (
             1 - ps[f"fidelity_{q1_idx}_{q2_idx}"]
             + ps[f"CZ_incoh_infid_{q1_idx}_{q2_idx}"]
-            + (
-                ps[f"1Q_incoh_infid"][..., q1_idx] 
-                + ps[f"1Q_incoh_infid"][..., q2_idx]
-            )
-            * kwargs["sqg_tqg_ratio"]
         )
-        ps.store_data(**{f"error_{q1_idx}_{q2_idx}": error})
-        tot_error += error
-        
         bounding_error += ps[f"bounding_error_{q1_idx}_{q2_idx}"]
         
-    error /= len(cz_qr_map)
+        tot_error += two_q_error
+        ps.store_data(**{f"error_{q1_idx}_{q2_idx}": two_q_error})
+        
+    tot_error /= len(cz_qr_map)     # average over all CZ gates
     bounding_error /= len(cz_qr_map)
     
+    # single qubit error
+    single_q_error = np.sum(ps[f"1Q_error"], axis=-1) / num_q
+    tot_error += single_q_error
+        
     ps.store_data(
-        error = error,
+        error = tot_error,
         bounding_error = bounding_error,
     )
     

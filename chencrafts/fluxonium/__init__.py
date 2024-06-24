@@ -29,7 +29,8 @@ from chencrafts.fluxonium.batched_sweep_frf import (
     
     sweep_qubit_coherence,
     sweep_res_coherence,
-    sweep_1Q_incoh_infid,
+    sweep_1Q_gate_time,
+    sweep_1Q_error,
     sweep_CZ_incoh_infid,
     batched_sweep_incoh_infid,
     
@@ -69,7 +70,9 @@ __all__ = [
     
     "sweep_qubit_coherence",
     "sweep_res_coherence",
-    "sweep_1Q_incoh_infid",
+    
+    "sweep_1Q_gate_time",
+    "sweep_1Q_error",
     "sweep_CZ_incoh_infid",
     "batched_sweep_incoh_infid",
     
