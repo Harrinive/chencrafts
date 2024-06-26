@@ -314,6 +314,7 @@ def sweep_nearby_trans(
     n_matelem_fraction_thres: float = 1e-1,
     freq_thres_GHz: float = 0.3,
     num_thres: int = 30,
+    include_trans_from_tgt: bool = False,
 ):
     """
     Identify transitions that are close to the target transition. 
@@ -343,7 +344,10 @@ def sweep_nearby_trans(
     drs_target_freq = np.average(ps[f"target_freq_{q1_idx}_{q2_idx}"][idx])
     
     # initial states: all possible computational states and the target state
-    init_states = np.array(list(comp_labels) + list(target_transitions[:, 1]))
+    if include_trans_from_tgt:
+        init_states = np.array(list(comp_labels) + list(target_transitions[:, 1]))
+    else:
+        init_states = np.array(list(comp_labels))
     
     # final states: 
     final_states = np.array([list(idx) for idx in np.ndindex(tuple(ps.hilbertspace.subsystem_dims))])
@@ -433,6 +437,7 @@ def batched_sweep_nearby_trans(
     n_matelem_fraction_thres: float = 1e-1,
     freq_thres_GHz: float = 0.3,
     num_thres: int = 30,
+    include_trans_from_tgt: bool = True,
     **kwargs
 ):
     """
@@ -463,6 +468,7 @@ def batched_sweep_nearby_trans(
         n_matelem_fraction_thres = n_matelem_fraction_thres,
         freq_thres_GHz = freq_thres_GHz,
         num_thres = num_thres,
+        include_trans_from_tgt = include_trans_from_tgt,
     )
     ps.add_sweep(
         sweep_nearby_freq,
