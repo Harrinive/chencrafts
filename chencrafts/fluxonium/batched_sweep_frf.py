@@ -8,6 +8,7 @@ import time
 from chencrafts.cqed.qt_helper import oprt_in_basis, process_fidelity
 from chencrafts.cqed.floquet import FloquetBasis
 from chencrafts.toolbox.gadgets import mod_c
+from qutip.solver.integrator.integrator import IntegratorException
 from typing import List, Tuple, Dict
 
 # static properties ====================================================
@@ -511,7 +512,12 @@ def sweep_ac_stark_shift(
 
     # floquet analysis and calibration for gate time ----------------------
     T = np.pi * 2 / drive_freq
-    fbasis = FloquetBasis(ham_floquet, T)
+    try:
+        fbasis = FloquetBasis(ham_floquet, T)
+    except IntegratorException:
+        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+                     "Floquet basis integration failed.")
+        return np.zeros((3, len(comp_labels))) * np.nan
     
     fevals = fbasis.e_quasi
     fevecs = fbasis.mode(0)
@@ -1396,7 +1402,7 @@ def batched_sweep_frf_fidelity(
     bounding_error /= len(cz_qr_map)
     
     # single qubit error
-    single_q_error = np.sum(ps[f"1Q_error"], axis=-1) / num_q
+    single_q_error = np.sum(ps[f"1Q_error"], axis=-1) / num_q * kwargs["sqg_tqg_ratio"]
     tot_error += single_q_error
         
     ps.store_data(
