@@ -13,6 +13,7 @@ from chencrafts.toolbox.optimize import (
     MultiTraj,
     Optimization, 
     MultiOpt,
+    promote_RUNNING_to_csv,
 )
 from chencrafts.toolbox.save import (
     datetime_dir,
@@ -68,6 +69,7 @@ __all__ = [
     'MultiTraj',
     'Optimization',
     'MultiOpt',
+    'promote_RUNNING_to_csv',
 
     'datetime_dir',
     'save_variable_list_dict',

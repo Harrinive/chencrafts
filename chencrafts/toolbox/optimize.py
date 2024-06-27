@@ -399,6 +399,7 @@ class MultiTraj():
         cls,
         path,
         with_fixed = True,
+        include_RUNNING = True,
     ) -> "MultiTraj":
         """
         Load a MultiTraj object from a folder. The folder should contain a list of csv files,
@@ -428,12 +429,21 @@ class MultiTraj():
 
                 traj = OptTraj.from_file(traj_path, fixed_path)
                 multi_traj.append(traj)
-                idx += 1
             except FileNotFoundError:
-                missing_in_a_row += 1
-                idx += 1
-                if missing_in_a_row > 20:
-                    break
+                if not include_RUNNING:
+                    missing_in_a_row += 1
+                else:
+                    try:
+                        traj_path = f"{path}/{idx}._RUNNING.csv"
+                        traj = OptTraj.from_file(traj_path, fixed_path)
+                        multi_traj.append(traj)
+                    except FileNotFoundError:
+                        missing_in_a_row += 1
+                    
+            if missing_in_a_row > 20:
+                break
+    
+            idx += 1
 
         return multi_traj
             
@@ -1172,3 +1182,14 @@ class MultiOpt():
 
         return multi_result
 
+def promote_RUNNING_to_csv(path: str):
+    """
+    Promote all ._RUNNING.csv files in path to a .csv file. This file is used 
+    when we still want to use the terminated optimization results.
+    """
+    path = os.path.normpath(path)
+    
+    for file in os.listdir(path):
+        if file.endswith("._RUNNING.csv"):
+            os.rename(f"{path}/{file}", f"{path}/{file[:-13]}.csv")
+    
