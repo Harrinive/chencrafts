@@ -60,6 +60,50 @@ def nan_2_flat_val(full_variables, possible_nan_value):
 #     else:
 #         return possible_nan_value
 
+def softplus(
+    x, 
+    lower_bound = 1e-5, 
+    scale = 1e-5,
+    log_scale = True,
+):    
+    """
+    Softplus function, which is a smooth approximation of the ReLU function.
+    
+    Parameters
+    ----------
+    x : float | np.ndarray
+        Input value(s)
+    lower_bound : float, default 1e-5
+        Lower bound of the function. When x < lower_bound, the function 
+        returns lower_bound approximately.
+    scale : float, default 1e-5
+        Scaling factor, controls the size of the turning point.
+    log_scale : bool, default True
+        Whether to take the log10 of the input and lower bound before doing 
+        the softplus function.
+    
+    Returns
+    -------
+    float or np.ndarray
+        Output value(s)
+    """
+    if not log_scale:
+        x = x / scale
+        lower_bound = lower_bound / scale
+        
+        return (
+            lower_bound 
+            + np.log1p(np.exp(x - lower_bound))
+        ) * scale
+    
+    else:
+        return 10.0**softplus(
+            np.log10(x),
+            np.log10(lower_bound),
+            scale,
+            log_scale=False,
+        )
+
 # ##############################################################################
 class OptTraj():
     """

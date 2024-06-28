@@ -57,5 +57,65 @@ def CZ_analyzer(
             )
         print()
             
-        
+def set_diff(
+    A: np.ndarray | float, 
+    B: np.ndarray | float, 
+    tol: float = 1e-8
+) -> np.ndarray:
+    """
+    Find all elements in B that are not in A.
+    """
+    if isinstance(B, float):
+        B = np.array([B])
     
+    if isinstance(A, float):
+        A = np.array([A])
+    
+    # Create a boolean mask for elements in B that are close to any element in A
+    mask = np.any(np.isclose(B[:, None], A, atol=tol), axis=1)
+
+    # Exclude elements of A from B using the mask
+    result = B[~mask]
+
+    return result
+
+def freq_distance(
+    A: np.ndarray | float, 
+    B: np.ndarray | float, 
+    mode: str = 'min',
+):
+    """
+    Find the minimum distance between all elements in A and B.
+    
+    mode:
+        'min': return the minimum distance
+        'max': return the maximum distance
+        'avg': return the average distance
+        'avg_min_5': return the average of the 5 smallest distances. Can 
+        replace 5 by any positive integer.
+    """
+    if isinstance(A, float):
+        A = np.array([A])
+    
+    if isinstance(B, float):
+        B = np.array([B])
+    
+    B = set_diff(A, B)
+    if mode == 'min':
+        return np.min(np.abs(A[:, None] - B), axis=None)
+    elif mode == 'max':
+        return np.max(np.abs(A[:, None] - B), axis=None)
+    elif mode == 'avg':
+        return np.average(np.abs(A[:, None] - B), axis=None)
+    elif mode[:8] == 'avg_min_':
+        # pick the smallest num_to_ave elements
+        num_to_ave = int(mode[8:])
+        diff = np.abs(A[:, None] - B).ravel()
+        smallest_diff = np.sort(diff)[:num_to_ave]
+        avg_diff = np.average(smallest_diff, axis=None)
+        
+        # print(smallest_diff, avg_diff)
+        
+        return avg_diff
+    else:
+        raise ValueError(f"Invalid mode: {mode}")

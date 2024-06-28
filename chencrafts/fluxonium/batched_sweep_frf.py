@@ -315,7 +315,7 @@ def sweep_nearby_trans(
     n_matelem_fraction_thres: float = 1e-1,
     freq_thres_GHz: float = 0.3,
     num_thres: int = 30,
-    include_trans_from_tgt: bool = False,
+    trans_from_tgt: bool = False,
 ):
     """
     Identify transitions that are close to the target transition. 
@@ -344,9 +344,12 @@ def sweep_nearby_trans(
     
     drs_target_freq = np.average(ps[f"target_freq_{q1_idx}_{q2_idx}"][idx])
     
-    # initial states: all possible computational states and the target state
-    if include_trans_from_tgt:
-        init_states = np.array(list(comp_labels) + list(target_transitions[:, 1]))
+    # There are two kinds of unwanted transitions, different from initial states
+    # 1. transition from the states that we don't want to drive.
+    # 2. transition from the target state to drive, to higher states. Typically
+    #    we can tolerate the second kind of transitions more.
+    if trans_from_tgt:
+        init_states = np.array(list(target_transitions[:, 1]))
     else:
         init_states = np.array(list(comp_labels))
     
@@ -403,8 +406,12 @@ def sweep_nearby_freq(
     idx,
     q1_idx,
     q2_idx,
+    trans_from_tgt: bool = False,
 ):
-    bare_trans = ps[f"nearby_trans_{q1_idx}_{q2_idx}"][idx]
+    if trans_from_tgt:
+        bare_trans = ps[f"trans_from_tgt_{q1_idx}_{q2_idx}"][idx]
+    else:
+        bare_trans = ps[f"nearby_trans_{q1_idx}_{q2_idx}"][idx]
     evals = ps["evals"][idx]
     
     # 1D array, dimensions: 
@@ -438,7 +445,6 @@ def batched_sweep_nearby_trans(
     n_matelem_fraction_thres: float = 1e-1,
     freq_thres_GHz: float = 0.3,
     num_thres: int = 30,
-    include_trans_from_tgt: bool = True,
     **kwargs
 ):
     """
@@ -469,13 +475,32 @@ def batched_sweep_nearby_trans(
         n_matelem_fraction_thres = n_matelem_fraction_thres,
         freq_thres_GHz = freq_thres_GHz,
         num_thres = num_thres,
-        include_trans_from_tgt = include_trans_from_tgt,
+        trans_from_tgt = False,
+    )
+    ps.add_sweep(
+        sweep_nearby_trans,
+        sweep_name = f"trans_from_tgt_{q1_idx}_{q2_idx}",
+        q1_idx = q1_idx,
+        q2_idx = q2_idx,
+        comp_labels = comp_labels,
+        n_matelem_fraction_thres = n_matelem_fraction_thres,
+        freq_thres_GHz = freq_thres_GHz,
+        num_thres = num_thres,
+        trans_from_tgt = True,
     )
     ps.add_sweep(
         sweep_nearby_freq,
         sweep_name = f"nearby_freq_{q1_idx}_{q2_idx}",
         q1_idx = q1_idx,
         q2_idx = q2_idx,
+        trans_from_tgt = False,
+    )
+    ps.add_sweep(
+        sweep_nearby_freq,
+        sweep_name = f"trans_from_tgt_freq_{q1_idx}_{q2_idx}",
+        q1_idx = q1_idx,
+        q2_idx = q2_idx,
+        trans_from_tgt = True,
     )
 
 # CZ calibration =======================================================

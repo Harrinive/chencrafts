@@ -37,7 +37,11 @@ from chencrafts.fluxonium.batched_sweep_frf import (
     batched_sweep_frf_fidelity,
 )
 
-from chencrafts.fluxonium.analyzer_frf import CZ_analyzer
+from chencrafts.fluxonium.analyzer_frf import (
+    CZ_analyzer,
+    set_diff,
+    freq_distance,
+)
 
 __all__ = [
     "sweep_comp_drs_indices",
@@ -79,4 +83,6 @@ __all__ = [
     "batched_sweep_frf_fidelity",
     
     "CZ_analyzer",
+    "set_diff",
+    "freq_distance",
 ]
