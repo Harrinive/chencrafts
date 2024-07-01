@@ -444,6 +444,7 @@ class MultiTraj():
         path,
         with_fixed = True,
         include_RUNNING = True,
+        max_missing_num = 100,
     ) -> "MultiTraj":
         """
         Load a MultiTraj object from a folder. The folder should contain a list of csv files,
@@ -484,7 +485,7 @@ class MultiTraj():
                     except FileNotFoundError:
                         missing_in_a_row += 1
                     
-            if missing_in_a_row > 20:
+            if missing_in_a_row > max_missing_num:
                 break
     
             idx += 1
