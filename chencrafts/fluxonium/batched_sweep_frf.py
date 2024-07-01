@@ -528,7 +528,7 @@ def sweep_ac_stark_shift(
         drive_freq += (e111 - e101) * np.pi * 2
     drive_freq /= len(drs_trans)
 
-    drive_op = ps[f"drive_op_{q1_idx}_{q2_idx}"][idx]
+    drive_op = qt.Qobj(ps[f"drive_op_{q1_idx}_{q2_idx}"][idx][:trunc, :trunc])
     # "normalize" the drive operator with one of its mat elem
     target_mat_elem = drive_op[drs_trans[0][0], drs_trans[0][1]]    
 
@@ -781,7 +781,7 @@ def batched_sweep_gate_calib(
     )
     
 # CZ gate ==============================================================
-def sweep_CZ_propagator(
+def calc_CZ_propagator(
     ps: scq.ParameterSweep, 
     idx,
     q1_idx,
@@ -798,7 +798,7 @@ def sweep_CZ_propagator(
         
         # don't know what happened, but scqubit gives all zeros
         # when I set to nan
-        return nan_prop
+        return None, None, nan_prop
     
     # pulse 1 ----------------------------------------------------------
 
@@ -810,7 +810,7 @@ def sweep_CZ_propagator(
         drive_freq += (e111 - e101) * np.pi * 2
     drive_freq /= len(drs_trans)
 
-    drive_op = ps[f"drive_op_{q1_idx}_{q2_idx}"][idx]
+    drive_op = qt.Qobj(ps[f"drive_op_{q1_idx}_{q2_idx}"][idx][:trunc, :trunc])
     # "normalize" the drive operator with one of its mat elem
     target_mat_elem = drive_op[drs_trans[0][0], drs_trans[0][1]]    
 
@@ -839,8 +839,8 @@ def sweep_CZ_propagator(
             f"cos({drive_freq}*t{spurious_phase_sign}{np.abs(spurious_phase)})"
         ],
     ]
-    fbasis = FloquetBasis(ham_floquet, T)
-    unitary_2 = fbasis.propagator(gate_time, t0=gate_time / 2)
+    fbasis_2 = FloquetBasis(ham_floquet, T)
+    unitary_2 = fbasis_2.propagator(gate_time, t0=gate_time / 2)
 
     # full gate: composed of two pulses --------------------------------
     unitary = unitary_2 * unitary_1
@@ -849,6 +849,16 @@ def sweep_CZ_propagator(
     rot_unit = (-1j * ham * gate_time).expm()
     rot_prop = rot_unit.dag() * unitary
     
+    return fbasis, fbasis_2, rot_prop
+
+def sweep_CZ_propagator(
+    ps: scq.ParameterSweep, 
+    idx,
+    q1_idx,
+    q2_idx,
+    trunc = 60,
+):
+    _, _, rot_prop = calc_CZ_propagator(ps, idx, q1_idx, q2_idx, trunc)
     return rot_prop
 
 def sweep_CZ_comp(

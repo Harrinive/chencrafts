@@ -20,6 +20,7 @@ from chencrafts.fluxonium.batched_sweep_frf import (
     sweep_spurious_phase,
     batched_sweep_gate_calib,
     
+    calc_CZ_propagator,
     sweep_CZ_propagator,
     sweep_CZ_comp,
     sweep_pure_CZ,
@@ -65,6 +66,7 @@ __all__ = [
     "sweep_spurious_phase",
     "batched_sweep_gate_calib",
     
+    "calc_CZ_propagator",
     "sweep_CZ_propagator",
     "sweep_CZ_comp",
     "sweep_pure_CZ",
