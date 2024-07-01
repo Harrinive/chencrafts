@@ -165,6 +165,29 @@ class FloquetBasis(qt.FloquetBasis):
             ]
         )
         return prop_floquet
+    
+    def ham_floquet(self) -> qt.Qobj:
+        """
+        Floquet Hamiltonian H_F (t0 = 0), following the Viebahn 2020's notation.
+
+        Parameters
+        ----------
+        t: float
+            Final time for the evolution.
+        t0: float, optional
+            Initial time for the evolution, also serves as the evaluation 
+            time for the Floquet modes. Default is 0.
+        """
+        fevals = self.e_quasi
+        fevecs = self.mode(0)
+        prop_floquet = sum(
+            [
+                vec * val * vec.dag()
+                for vec, val in zip(fevecs, fevals)
+            ]
+        )
+        return prop_floquet
+    
     def prop_kick(self, t, t0 = 0.0):
         """
         Stroboscopic kick propagator U_K = exp[-i K [t0] (t)], following the
@@ -197,8 +220,6 @@ class FloquetBasis(qt.FloquetBasis):
             Initial time for the evolution, also serves as the evaluation 
             time for the Floquet modes. Default is 0.
         """
-        T = self.T
-
         prop_floquet = self.prop_floquet(t, t0)
         prop_kick_ = self.prop_kick(t, t0)
 
