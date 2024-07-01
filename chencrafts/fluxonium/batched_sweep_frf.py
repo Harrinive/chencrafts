@@ -533,10 +533,14 @@ def sweep_ac_stark_shift(
     target_mat_elem = drive_op[drs_trans[0][0], drs_trans[0][1]]    
 
     param_mesh = ps.parameters.meshgrid_by_name()
+    try:
+        amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
+    except KeyError:
+        amp = param_mesh["amp"][idx]
     ham_floquet = [
         ham,
         [
-            param_mesh["amp"][idx] * drive_op / np.abs(target_mat_elem), 
+            amp * drive_op / np.abs(target_mat_elem), 
             f"cos({drive_freq}*t)"
         ],
     ]
@@ -815,10 +819,14 @@ def calc_CZ_propagator(
     target_mat_elem = drive_op[drs_trans[0][0], drs_trans[0][1]]    
 
     param_mesh = ps.parameters.meshgrid_by_name()
+    try:
+        amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
+    except KeyError:
+        amp = param_mesh["amp"][idx]
     ham_floquet = [
         ham,
         [
-            param_mesh["amp"][idx] * drive_op / np.abs(target_mat_elem), 
+            amp * drive_op / np.abs(target_mat_elem), 
             f"cos({drive_freq}*t)"
         ],
     ]
@@ -835,7 +843,7 @@ def calc_CZ_propagator(
     ham_floquet = [
         ham,
         [
-            param_mesh["amp"][idx] * drive_op / np.abs(target_mat_elem), 
+            amp * drive_op / np.abs(target_mat_elem), 
             f"cos({drive_freq}*t{spurious_phase_sign}{np.abs(spurious_phase)})"
         ],
     ]
