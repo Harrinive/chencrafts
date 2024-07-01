@@ -113,6 +113,13 @@ def freq_distance(
         diff = np.abs(A[:, None] - B).ravel()
         smallest_diff = np.sort(diff)[:num_to_ave]
         avg_diff = np.average(smallest_diff, axis=None)
+        return avg_diff
+    elif mode[:8] == 'sum_min_':
+        # pick the smallest num_to_ave elements
+        num_to_ave = int(mode[8:])
+        diff = np.abs(A[:, None] - B).ravel()
+        smallest_diff = np.sort(diff)[:num_to_ave]
+        avg_diff = np.sum(smallest_diff, axis=None)
         
         # print(smallest_diff, avg_diff)
         
