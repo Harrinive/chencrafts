@@ -11,8 +11,9 @@ There are four main parts in this package: `Toolbox`, `cqed`, `bsqubits`, and `p
 
 - `bsqubits` (or `bsq`): A package for simulating and studying some spacific systems, especially for the resonator-qubit systems. The code isn't general enough to be used for other systems. Very high level and practical. Specifically, it has module `QEC_graph` for simulating the cat code using a graph representation.
 
-
 - `projects` (or `prj`): A collection for all other projects, including files collected from other collaborators.
+
+- `fluxonium` (or `fx`): Like `bsqubits`, it's also a code collection for a specific project. It has codes to calculate gate fidelity for FRF system and perform the corresponding analysis.
 
 ## Installation
 ```bash
