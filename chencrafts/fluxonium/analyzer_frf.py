@@ -51,7 +51,7 @@ def CZ_analyzer(
                 dest, truncate=3, param_npindices = full_indices
             )
             print(
-                f"\t{trans_prob:.3f} --> drs state {dest}.",
+                f"\t{trans_prob:.4f} --> drs state {dest}.",
                 "Compoent:", dest_bare_comp, 
                 "Probability:", [f"{p:.3f}" for p in occ_prob],
             )
