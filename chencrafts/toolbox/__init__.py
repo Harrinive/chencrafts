@@ -15,6 +15,7 @@ from chencrafts.toolbox.optimize import (
     Optimization, 
     MultiOpt,
     promote_RUNNING_to_csv,
+    randomize,
 )
 from chencrafts.toolbox.save import (
     datetime_dir,
@@ -72,6 +73,7 @@ __all__ = [
     'Optimization',
     'MultiOpt',
     'promote_RUNNING_to_csv',
+    'randomize',
 
     'datetime_dir',
     'save_variable_list_dict',

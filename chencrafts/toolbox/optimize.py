@@ -1238,3 +1238,40 @@ def promote_RUNNING_to_csv(path: str):
         if file.endswith("._RUNNING.csv"):
             os.rename(f"{path}/{file}", f"{path}/{file[:-13]}.csv")
     
+    
+def randomize(
+    para_dict: Dict[str, float],
+    r_variance: float | None = None,
+    a_variance: float | None = None,
+):
+    """
+    Randomize the parameters in the dictionary.
+    
+    Parameters
+    ----------
+    para_dict: Dict[str, float],
+        The dictionary of the parameters to be randomized.
+    r_variance: float, optional
+        The variance of the relative randomness, by default None. If None, the relative randomness
+        will be randomized within the range of [-0.05, 0.05].
+    a_variance: float, optional
+        The variance of the absolute randomness, by default None.
+        
+    Return
+    ------
+    new_para_dict: Dict[str, float]
+        The dictionary of the randomized parameters.
+    """
+    if r_variance is None and a_variance is None:
+        r_variance = 0.05
+    elif r_variance is not None and a_variance is not None:
+        raise ValueError("Only one of r_variance and a_variance can be specified.")
+    
+    new_para_dict = {}
+    for var, val in para_dict.items():
+        if r_variance is not None:
+            new_para_dict[var] = val * (1 + np.random.uniform(-r_variance, r_variance))
+        else:
+            new_para_dict[var] = val + np.random.uniform(-a_variance, a_variance)
+    
+    return new_para_dict
