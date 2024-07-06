@@ -397,7 +397,16 @@ def sweep_nearby_trans(
     
     # pad zeros to the near_trans array to make the first dimension = num_thres
     padded_near_trans = np.ndarray((num_thres, 2, ps.hilbertspace.subsystem_count), dtype=object)
-    padded_near_trans[:len(near_trans)] = np.array(near_trans)
+    
+    if len(near_trans)  == 0:
+        return padded_near_trans    # nothing
+    elif len(near_trans) < num_thres:
+        padded_near_trans[:len(near_trans)] = np.array(near_trans)
+    else:
+        padded_near_trans[:num_thres] = np.array(near_trans[:num_thres])
+        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+                     "The number of nearby transitions is larger than the threshold. "
+                     "Please consider increasing the threshold.")
     
     return padded_near_trans
 
