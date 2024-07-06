@@ -559,21 +559,25 @@ def sweep_ac_stark_shift(
     
     # undriven states lookup
     lookup = fbasis.floquet_lookup(0, threshold=0.7)
-    raveled_0 = np.ravel_multi_index((0,) * (num_q + num_r), tuple(ps.hilbertspace.subsystem_dims))
-    drs_idx_0 = ps["dressed_indices"][idx][raveled_0]
-    eval_0 = ps["evals"][idx][drs_idx_0]
-    f_idx_0 = lookup[drs_idx_0]
-    feval_0 = fevals[f_idx_0]
     
-    if f_idx_0 is None or drs_idx_0 is None:
-        warnings.warn(
-            f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
-            "Ground state identification failed. It's usually "
-            "due to strongly driving / coupling to the unwanted transitions. "
-            "Please check the system config."
-        )
-        
-        return np.zeros((3, len(comp_labels))) * np.nan
+    # identify ground state
+    # it seems that we don't need to have a reference freq??
+    eval_0 = 0
+    feval_0 = 0
+    # raveled_0 = np.ravel_multi_index((0,) * (num_q + num_r), tuple(ps.hilbertspace.subsystem_dims))
+    # drs_idx_0 = ps["dressed_indices"][idx][raveled_0]
+    # eval_0 = ps["evals"][idx][drs_idx_0]
+    # f_idx_0 = lookup[drs_idx_0]
+    # feval_0 = fevals[f_idx_0]
+    
+    # if f_idx_0 is None or drs_idx_0 is None:
+    #     warnings.warn(
+    #         f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+    #         "Ground state identification failed. It's usually "
+    #         "due to strongly driving / coupling to the unwanted transitions. "
+    #         "Please check the system config."
+    #     )
+    #     return np.zeros((3, len(comp_labels))) * np.nan
 
     # calculate ac-Stark shift
     init_state_bare_labels = bare_trans[:, 0, :].tolist()
