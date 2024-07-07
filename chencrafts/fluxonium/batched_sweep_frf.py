@@ -42,6 +42,50 @@ def sweep_comp_bare_overlap(
 
     return np.array(overlaps)
 
+def sweep_static_zz(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    r_idx,
+    num_q,
+    mode: str = "Standard",
+):
+    """
+    Calculate zz shift for the two qubits.
+    
+    mode:
+        "Standard": Just pick the matrix element of the "kerr" array stored
+        "Flux0": The coupler is actually a fluxonium, so the ZZ will be 
+        calculated after setting the flux to 0. That requires diagonalizing 
+        the full system again.
+    """
+    
+    if mode == "Standard":
+        return ps["kerr"][q1_idx, q2_idx][idx + (1, 1,)]
+    elif mode == "Flux0":
+        # determine if the circuit is constructed by HilbertSpace or by Circuit
+        off_flux = 0.0
+        try:
+            on_flux = ps.hilbertspace.subsystem_list[r_idx + num_q].flux
+            ps.hilbertspace.subsystem_list[r_idx + num_q].flux = off_flux
+            built_by_HS = True
+        except AttributeError:
+            circ = ps.hilbertspace.subsystem_list[0].parent
+            on_flux = getattr(circ, f"Φ{r_idx + num_q}")
+            setattr(circ, f"Φ{r_idx + num_q}", off_flux)
+            built_by_HS = False
+        
+        evals = ps.hilbertspace.eigenvals(4)
+        zz = evals[3] - evals[2] - evals[1] + evals[0]
+        
+        if built_by_HS:
+            ps.hilbertspace.subsystem_list[r_idx + num_q].flux = on_flux
+        else:
+            setattr(circ, f"Φ{r_idx + num_q}", on_flux)
+            
+        return zz
+            
 def sweep_static_zzz(
     ps: scq.ParameterSweep, 
     idx, 
@@ -50,7 +94,12 @@ def sweep_static_zzz(
     """
     Comp_labels is a list of bare labels, e.g. [(0, 0, 0), (0, 0, 1),
     (1, 0, 0), (1, 0, 1)].
+    
+    Note: this one only works for a three mode system
     """
+    if not len(comp_labels) == 8:
+        warnings.warn("ZZZ calculation only works for a three qubit system.")
+    
     evals = ps["evals"][idx]
     comp_evals_w_sgn = [
         evals[ps.dressed_index(label)[idx]] * (-1)**np.sum(label)
@@ -60,7 +109,12 @@ def sweep_static_zzz(
 
 def batched_sweep_static(
     ps: scq.ParameterSweep,
+    q1_idx: int,
+    q2_idx: int,
+    r_idx: int,
+    num_q: int,
     comp_labels: List[Tuple[int, ...]],
+    off_zz_calc_mode: str = "Standard",
     **kwargs
 ):
     """
@@ -88,6 +142,16 @@ def batched_sweep_static(
             sweep_name = 'comp_bare_overlap',
             comp_labels = comp_labels,
         )
+        
+    ps.add_sweep(
+        sweep_static_zz,
+        sweep_name = f'off_ZZ_{q1_idx}_{q2_idx}',
+        q1_idx = q1_idx,
+        q2_idx = q2_idx,
+        r_idx = r_idx,
+        num_q = num_q,
+        mode = off_zz_calc_mode,
+    )
 
 # target transitions ===================================================
 def fill_in_target_transitions(
@@ -118,7 +182,6 @@ def fill_in_target_transitions(
         2. state label
     """
     return np.array(transitions_to_drive)
-    
 
 def sweep_default_target_transitions(
     ps: scq.ParameterSweep, 
@@ -1044,7 +1107,7 @@ def batched_sweep_CZ(
         num_q = num_q,
         update_hilbertspace=False,
     )
-    
+        
 # coherence time =======================================================
 def sweep_qubit_coherence(
     ps: scq.ParameterSweep,
@@ -1208,12 +1271,12 @@ def sweep_1Q_error(
     for q1_idx in range(num_q):
         zz_q1 = 0
         for q2_idx in range(num_q):
-            if q1_idx == q2_idx:
+            if q1_idx >= q2_idx:
                 continue
             
             zz_q1 += (
                 np.pi * 2 
-                * np.abs(ps["kerr"][q1_idx, q2_idx][idx + (1, 1,)]) 
+                * np.abs(ps[f"off_ZZ_{q1_idx}_{q2_idx}"][idx]) 
             )
         zz_infid.append(zz_q1)
     
@@ -1360,13 +1423,27 @@ def batched_sweep_frf_fidelity(
         the ratio of the number of single qubit gates to 
         the number of two-qubit gates - a number for estimating the quality 
         of the qubit
+    off_zz_calc_mode: str
+        the mode of calculating the off-diagonal ZZ.
+        "Standard": use the HilbertSpace's flux
+        "Flux0": set the flux to 0 and calculate the ZZ
     """
     # time_0 = time.time()
     
-    batched_sweep_static(
-        ps,
-        **kwargs,
-    )
+    # check cz_qr_map
+    for (q1_idx, q2_idx), r_idx in cz_qr_map.items():
+        if q1_idx >= q2_idx:
+            raise ValueError(f"q1_idx ({q1_idx}) must be less than q2_idx ({q2_idx})")
+        
+    for (q1_idx, q2_idx), r_idx in cz_qr_map.items():
+        batched_sweep_static(
+            ps,
+            q1_idx,
+            q2_idx,
+            r_idx,
+            num_q,
+            **kwargs,
+        )
     
     # time_1 = time.time()
     # print(f"static sweep finished: {time_1 - time_0: .2f}s")
