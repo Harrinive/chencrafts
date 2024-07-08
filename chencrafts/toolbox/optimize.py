@@ -697,6 +697,8 @@ class Optimization():
         # of the range for the free variables
         self.default_variables = fixed_variables.copy()
         for key, (low, high) in self.free_variables.items():
+            if low >= high:
+                raise ValueError(f"The range of {key} is invalid: {low} >= {high}")
             self.default_variables[key] = (low + high) / 2
 
         self.target_func = target_func
