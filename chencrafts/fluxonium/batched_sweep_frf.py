@@ -593,12 +593,7 @@ def sweep_ac_stark_shift(
     ham = qt.qdiags(ps["evals"][idx][:trunc], 0) * np.pi * 2
 
     # drive freq = average of all target transition freqs
-    drive_freq = 0.0
-    for init, final in drs_trans:
-        e101 = ps["evals"][idx][init]
-        e111 = ps["evals"][idx][final]
-        drive_freq += (e111 - e101) * np.pi * 2
-    drive_freq /= len(drs_trans)
+    drive_freq = np.average(ps[f"target_freq_{q1_idx}_{q2_idx}"][idx]) * np.pi * 2
 
     drive_op = qt.Qobj(ps[f"drive_op_{q1_idx}_{q2_idx}"][idx][:trunc, :trunc])
     # "normalize" the drive operator with one of its mat elem
@@ -762,6 +757,7 @@ def sweep_ac_stark_shift(
 
 def sweep_gate_time(ps: scq.ParameterSweep, idx, q1_idx, q2_idx):
     freq_shifts = ps[f"ac_stark_shifts_{q1_idx}_{q2_idx}"][idx]
+    tgt_freq = np.average(ps[f"target_freq_{q1_idx}_{q2_idx}"][idx])
 
     # calculate how many transitions we want to drive simultaneously
     # since freq_shifts has second dimension with length 2**num_q, 
@@ -773,7 +769,10 @@ def sweep_gate_time(ps: scq.ParameterSweep, idx, q1_idx, q2_idx):
     gate_time_list = []
 
     for i in range(len_trans):
-        gate_time = np.abs(np.pi * 2 / (Rabi_minus[i] - Rabi_plus[i]))
+        gate_time = np.abs(np.pi * 2 / mod_c(
+            Rabi_minus[i] - Rabi_plus[i],
+            tgt_freq * np.pi * 2
+        ))
         gate_time_list.append(gate_time)
 
     return np.average(gate_time_list)
@@ -883,12 +882,7 @@ def calc_CZ_propagator(
     # pulse 1 ----------------------------------------------------------
 
     # drive freq = average of all target transition freqs
-    drive_freq = 0.0
-    for init, final in drs_trans:
-        e101 = ps["evals"][idx][init]
-        e111 = ps["evals"][idx][final]
-        drive_freq += (e111 - e101) * np.pi * 2
-    drive_freq /= len(drs_trans)
+    drive_freq = np.average(ps[f"target_freq_{q1_idx}_{q2_idx}"][idx]) * np.pi * 2
 
     drive_op = qt.Qobj(ps[f"drive_op_{q1_idx}_{q2_idx}"][idx][:trunc, :trunc])
     # "normalize" the drive operator with one of its mat elem
