@@ -122,6 +122,13 @@ def batched_sweep_static(
     - comp_drs_indices: the dressed indices of the components
     - comp_bare_overlap: the minimal overlap on bare basis
     - static_zzz: the static ZZ observable
+    
+    off_zz_calc_mode: The mode of how to calculate the ZZ coupling strength
+    when the coupler is off.
+        - "Standard": Just pick the matrix element of the "kerr" array stored
+        - "Flux0": The coupler is actually a fluxonium, so the ZZ will be 
+        calculated after setting the flux to 0. That requires diagonalizing 
+        the full system again.
     """
     
     if "comp_drs_indices" not in ps.keys():
@@ -581,11 +588,20 @@ def sweep_ac_stark_shift(
     idx,
     q1_idx,
     q2_idx,
-    num_q,
-    num_r,
+    r_idx,
     comp_labels: List[Tuple[int, ...]],
     trunc: int = 30,
 ):
+    param_mesh = ps.parameters.meshgrid_by_name()
+    if "r_idx" in param_mesh.keys():
+        # We are in a mode to sweep over different ways to do gates
+        # only do the calculation when r_idx is the same as the current swept
+        # r_idx.
+        # For example, the FFFFF system
+        swept_r_idx = param_mesh["r_idx"][idx]
+        if swept_r_idx != r_idx:
+            return np.zeros((3, len(comp_labels))) * np.nan
+    
     bare_trans = ps[f"target_transitions_{q1_idx}_{q2_idx}"][idx]
     drs_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
 
@@ -599,7 +615,6 @@ def sweep_ac_stark_shift(
     # "normalize" the drive operator with one of its mat elem
     target_mat_elem = drive_op[drs_trans[0][0], drs_trans[0][1]]    
 
-    param_mesh = ps.parameters.meshgrid_by_name()
     try:
         amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
     except KeyError:
@@ -837,8 +852,7 @@ def batched_sweep_gate_calib(
         sweep_name = f"ac_stark_shifts_{q1_idx}_{q2_idx}",
         q1_idx = q1_idx,
         q2_idx = q2_idx,
-        num_q = num_q,
-        num_r = num_r,
+        r_idx = r_idx,
         comp_labels = comp_labels,
         trunc = trunc,
         update_hilbertspace=False,
@@ -1268,10 +1282,13 @@ def sweep_1Q_error(
             if q1_idx >= q2_idx:
                 continue
             
-            zz_q1 += (
-                np.pi * 2 
-                * np.abs(ps[f"off_ZZ_{q1_idx}_{q2_idx}"][idx]) 
-            )
+            try:
+                zz_q1 += (
+                    np.pi * 2 
+                    * np.abs(ps[f"off_ZZ_{q1_idx}_{q2_idx}"][idx]) 
+                )
+            except KeyError:
+                pass  # ignore the mode that are not connected.
         zz_infid.append(zz_q1)
     
     # a very rough estimate, not actually fidelity, more like an error prob
