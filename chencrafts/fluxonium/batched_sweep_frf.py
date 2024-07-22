@@ -4,6 +4,7 @@ import qutip as qt
 import copy
 import warnings
 import time
+import sympy as sp
 
 from chencrafts.cqed.qt_helper import oprt_in_basis, process_fidelity
 from chencrafts.cqed.floquet import FloquetBasis
@@ -106,6 +107,49 @@ def sweep_static_zzz(
         for label in comp_labels
     ]
     return np.sum(comp_evals_w_sgn)
+
+def sweep_coupling_strength(
+    ps: scq.ParameterSweep,
+    q_idx,
+    r_idx,
+    num_q, 
+    with_matrix_elem: bool = False,
+    qubit_mat_elem: Tuple[int, int] = (1, 2),
+):
+    # getting g
+    circ = ps.hilbertspace.subsystem_list[0].parent
+    ham_expr = sp.simplify(
+        circ.symbolic_circuit.generate_symbolic_hamiltonian(
+            substitute_params=True,
+            reevaluate_lagrangian=True,
+        )
+    )
+    
+    Qq_str = f"Q{q_idx + 1}"
+    if r_idx + num_q + 1 in circ.var_categories["periodic"]:
+        Qr_str = f"n{r_idx + num_q + 1}"
+    else:
+        Qr_str = f"Q{r_idx + num_q + 1}"
+    Qq_expr, Qr_expr = sp.symbols(f"{Qq_str} {Qr_str}")
+    g = ham_expr.coeff(Qq_expr * Qr_expr)
+    
+    if not with_matrix_elem:
+        return g
+    
+    # matrix element
+    mode_q = circ.subsystems[q_idx]
+    evals, evecs = mode_q.eigensys()
+    Qq_oprt = getattr(mode_q, f"{Qq_str}_operator")()
+    Qq_mat_eigbasis = oprt_in_basis(Qq_oprt, evecs.T)
+    
+    mode_r = circ.subsystems[r_idx + num_q]
+    evals, evecs = mode_r.eigensys()
+    Qr_oprt = getattr(mode_r, f"{Qr_str}_operator")()
+    Qr_mat_eigbasis = oprt_in_basis(Qr_oprt, evecs.T)
+    
+    return np.abs(
+        Qq_mat_eigbasis[*qubit_mat_elem] * Qr_mat_eigbasis[0, 1] * g
+    )
 
 def batched_sweep_static(
     ps: scq.ParameterSweep,
@@ -364,10 +408,18 @@ def sweep_drive_op(
     trunc: int = 30,
 ):
     res = ps.hilbertspace.subsystem_list[num_q + r_idx]
+    
     try:
         res_n_op = res.n_operator()
     except AttributeError:
-        op_name = str(res.vars['extended']['momentum'][0]) + "_operator"
+        res_idx = r_idx + num_q + 1
+        if res_idx in res.var_categories["periodic"]:
+            # transmon coupler
+            Qr_str = f"n{res_idx}"
+        else:
+            # fluxonium / resonator coupler
+            Qr_str = f"Q{res_idx}"
+        op_name = str(f"{Qr_str}_operator")
         res_n_op = getattr(res, op_name)()    
     drive_op = oprt_in_basis(
         scq.identity_wrap(res_n_op, res, ps.hilbertspace.subsystem_list),
@@ -617,6 +669,12 @@ def sweep_ac_stark_shift(
 
     try:
         amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
+        
+        if "amp" in param_mesh.keys():
+            warnings.warn(f"Both of 'amp_{q1_idx}_{q2_idx}' and 'amp' are "
+                          f"in the parameters, take 'amp_{q1_idx}_{q2_idx}' "
+                          f"as the amplitude.")
+            amp = param_mesh["amp"][idx]
     except KeyError:
         amp = param_mesh["amp"][idx]
     ham_floquet = [

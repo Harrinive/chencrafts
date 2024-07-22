@@ -2,6 +2,7 @@ from chencrafts.fluxonium.batched_sweep_frf import (
     sweep_comp_drs_indices,
     sweep_comp_bare_overlap,
     sweep_static_zzz,
+    sweep_coupling_strength,
     batched_sweep_static,
     
     fill_in_target_transitions,
@@ -48,6 +49,7 @@ __all__ = [
     "sweep_comp_drs_indices",
     "sweep_comp_bare_overlap",
     "sweep_static_zzz",
+    "sweep_coupling_strength",
     "batched_sweep_static",
     
     "fill_in_target_transitions",

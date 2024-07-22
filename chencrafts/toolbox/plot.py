@@ -26,7 +26,10 @@ color_palettes = dict(
         "#e63946", "#a8dadc", "#457b9d", "#a7bb40", "#3d1645"],
     colorblind_1 = [    # from https://arxiv.org/abs/2107.02270
         "#3f90da", "#ffa90e", "#bd1f01", "#832db6", "#94a4a2", "#a96b59", 
-        "#e76300", "#b9ac70", "#717581", "#92dadd",]
+        "#e76300", "#b9ac70", "#717581", "#92dadd",],
+    C2QA = [
+        '#007A86', '#F9B211', '#A12731', '#78C0E0', '#4A0E4E'
+    ],
 )
 color_cyclers = dict([
     (key, cycler(color = color_palettes[key])) for key in color_palettes
@@ -34,8 +37,15 @@ color_cyclers = dict([
 color_iters = dict([
     (key, cycle(color_palettes[key])) for key in color_palettes
 ])
-def set_color_cycler(cycler_name):
-    mpl.rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]
+def set_color_cycler(
+    cycler_name: str | List[str]
+):
+    if isinstance(cycler_name, str):
+        mpl.rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]
+        plt.rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]
+    elif isinstance(cycler_name, list):
+        mpl.rcParams["axes.prop_cycle"] = cycler(color = cycler_name)
+        plt.rcParams["axes.prop_cycle"] = cycler(color = cycler_name)
 
 def remove_repeated_legend(ax=None):
     """remove repeated legend"""
