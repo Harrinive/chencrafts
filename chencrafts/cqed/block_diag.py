@@ -2,7 +2,7 @@ import qutip as qt
 import numpy as np
 from scipy.linalg import expm, block_diag
 
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 
 def _block_diag_ord1(
     H: qt.Qobj | np.ndarray | np.matrix, 
@@ -43,14 +43,15 @@ def _block_diag_ord1(
     except ImportError:
         raise ImportError(
             "PyTorch is a optional dependency for block_diag module."
-            "Please install it via 'pip install torch' or 'conda install pytorch'."
+            "Please install it via 'pip install torch' or 'conda install "
+            "pytorch torchvision -c pytorch'."
         )
     
 
     # type checking
     if isinstance(H, qt.Qobj):
         qobj_dims = H.dims    # for returning the result as a qobj
-        H: np.ndarray = H.data.toarray()
+        H: np.ndarray = H.full()
     else:
         qobj_dims = None    # meaning that the user do not feed a qobj
     assert np.sum(dims) == H.shape[0]
@@ -184,3 +185,45 @@ def block_diagonalize(
         U_ = U_ * U_step
 
     return H_, U_
+
+
+def block_diagonalize_pymablock(
+    hamiltonian: List[qt.Qobj | np.ndarray],
+    *,
+    solve_sylvester: Callable | None = None,
+    subspace_eigenvectors: List[List[qt.Qobj]] | None = None,
+    subspace_indices: Tuple[int, ...] | np.ndarray | None = None,
+    direct_solver: bool = True,
+    solver_options: dict | None = None,
+    atol: float = 1e-12
+) -> Tuple:
+    """
+    A wrapper of pymablock's block_diagonalize function. It supports input
+    Hamiltonian in qt.Qobj format.
+    """
+    try:
+        import pymablock as pb
+    except ImportError:
+        raise ImportError(
+            "Pymablock is a optional dependency for block_diag module."
+            "Please install it via 'pip install pymablock' or 'conda install "
+            "pymablock -c conda-forge'."
+        )
+        
+    assert isinstance(hamiltonian[0], qt.Qobj), "Hamiltonian must be in qt.Qobj format."
+    assert isinstance(subspace_eigenvectors[0][0], qt.Qobj), "Subspace eigenvectors must be in Tuple[[qt.Qobj]] format."
+    
+    result = pb.block_diagonalize(
+        hamiltonian = [H.full() for H in hamiltonian],
+        solve_sylvester = solve_sylvester,
+        subspace_eigenvectors = tuple([
+            np.array([bs.full()[:, 0] for bs in bs_list]).T
+            for bs_list in subspace_eigenvectors
+        ]),
+        subspace_indices = subspace_indices,
+        direct_solver = direct_solver,
+        solver_options = solver_options,
+        atol = atol,
+    )
+    
+    return result

@@ -88,6 +88,7 @@ from chencrafts.cqed.symbolic_bosons import (
 
 from chencrafts.cqed.block_diag import (
     block_diagonalize,
+    block_diagonalize_pymablock,
 )
 
 # specify private/public modules
@@ -156,4 +157,5 @@ __all__ = [
     "normal",
 
     "block_diagonalize",
+    "block_diagonalize_pymablock",
 ]

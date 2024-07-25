@@ -49,5 +49,5 @@ Homepage = "https://github.com/Harrinive/chencrafts"
 Repository = "https://github.com/Harrinive/chencrafts"
 
 [project.optional-dependencies]
-cqed = ["torch>=1.7", "multiprocess"]
+cqed = ["torch>=1.7", "multiprocess", "pymablock"]
 bsqubits = ["networkx>=2.4"]
