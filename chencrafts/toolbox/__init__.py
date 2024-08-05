@@ -51,9 +51,12 @@ from chencrafts.toolbox.gadgets import (
     I_crit_by_EJ,
     EJ_by_I_crit,
     display_expr,
+    mod_c,
 )
 from chencrafts.cqed.decoherence import (
     n_th,
+    thermal_ratio,
+    thermal_factor,
 )
 
 # specify private/public modules
@@ -103,9 +106,12 @@ __all__ = [
     'Z_by_phi_zpf',
     'n_zpf_by_Z',
     'Z_by_n_zpf',
-    'n_th',
     'I_crit_by_EJ',
     'EJ_by_I_crit',
-
     'display_expr',
+    'mod_c',
+    
+    'n_th',
+    'thermal_ratio',
+    'thermal_factor',
 ]

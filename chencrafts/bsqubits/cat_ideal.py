@@ -17,19 +17,19 @@ def _res_qubit_tensor(
     elif res_mode_idx == 1:
         return qt.tensor(qubit_op, res_op)
 
-def _eye(
+def eye(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
 ) -> qt.Qobj:
     return _res_qubit_tensor(qt.qeye(res_dim), qt.qeye(qubit_dim), res_mode_idx)
 
-def _res_destroy(
+def res_destroy(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0, 
 ) -> qt.Qobj:
     return _res_qubit_tensor(qt.destroy(res_dim), qt.qeye(qubit_dim), res_mode_idx)
     
-def _qubit_pauli(
+def qubit_pauli(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
     axis: Literal['x', 'y', 'z'] = 'x',
@@ -47,7 +47,7 @@ def _qubit_pauli(
 
     return _res_qubit_tensor(qt.qeye(res_dim), qubit_oprt, res_mode_idx)
 
-def _res_number(
+def res_number(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
     qubit_state: int | None = None,
@@ -66,7 +66,7 @@ def _res_number(
 
     return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
     
-def _qubit_proj(
+def qubit_proj(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
     qubit_state: int = 0,
@@ -82,7 +82,7 @@ def _qubit_proj(
 
     return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
 
-def _res_rotation(
+def res_rotation(
     res_dim: int, qubit_dim: int,
     res_mode_idx: Literal[0, 1] = 0,
     angle: float = np.pi / 2,
@@ -119,15 +119,15 @@ def idling_maps(
     """
     # free evolution
     shrinkage_oprt = (
-        -decay_rate * time / 2 * _res_number(res_dim, qubit_dim, res_mode_idx)
+        -decay_rate * time / 2 * res_number(res_dim, qubit_dim, res_mode_idx)
     ).expm()
     free_evolution_oprt = shrinkage_oprt * (-1j * static_hamiltonian * time).expm()
 
     # single-photon loss related operators
-    spl_rotation_oprt = _res_rotation(
+    spl_rotation_oprt = res_rotation(
         res_dim, qubit_dim, res_mode_idx, angle = self_Kerr * time
     )   # average rotation due to self-Kerr
-    a_oprt = _res_destroy(res_dim, qubit_dim, res_mode_idx)
+    a_oprt = res_destroy(res_dim, qubit_dim, res_mode_idx)
 
     return [
         free_evolution_oprt,    # zero-photon loss
@@ -179,8 +179,8 @@ def idling_w_decay_propagator(
     superop: bool
         If False, return a list of Kraus operators. If True, return the superoperator.
     """
-    shrinkage_oprt = (-decay_prob / 2 * _res_number(res_dim, qubit_dim, res_mode_idx)).expm()
-    a_oprt = _res_destroy(res_dim, qubit_dim, res_mode_idx)
+    shrinkage_oprt = (-decay_prob / 2 * res_number(res_dim, qubit_dim, res_mode_idx)).expm()
+    a_oprt = res_destroy(res_dim, qubit_dim, res_mode_idx)
 
     # Kraus representation of the decay channel
     kraus_op = lambda k: (
@@ -211,7 +211,7 @@ def qubit_rot_propagator(
         angle = -angle
         axis = axis[1:]
 
-    generator = _qubit_pauli(res_dim, qubit_dim, res_mode_idx, axis) / 2
+    generator = qubit_pauli(res_dim, qubit_dim, res_mode_idx, axis) / 2
     unitary = (-1j * angle * generator).expm()
 
     if superop:
@@ -228,7 +228,7 @@ def parity_mapping_propagator(
     """
     The ideal parity mapping propagator.
     """
-    generator = _res_number(res_dim, qubit_dim, res_mode_idx, qubit_state=1)
+    generator = res_number(res_dim, qubit_dim, res_mode_idx, qubit_state=1)
     unitary = (-1j * angle * generator).expm()
 
     if superop:
@@ -246,7 +246,7 @@ def qubit_projectors(
     0, 1, ..., qubit_dim - 1.
     """
     ops = [
-        _qubit_proj(res_dim, qubit_dim, res_mode_idx, qubit_state=i) 
+        qubit_proj(res_dim, qubit_dim, res_mode_idx, qubit_state=i) 
         for i in range(qubit_dim)
     ]
     if superop:
@@ -324,6 +324,6 @@ def identity(
     The identity propagator.
     """
     if superop:
-        return qt.to_super(_eye(res_dim, qubit_dim, res_mode_idx))
+        return qt.to_super(eye(res_dim, qubit_dim, res_mode_idx))
     else:
-        return _eye(res_dim, qubit_dim, res_mode_idx)
+        return eye(res_dim, qubit_dim, res_mode_idx)

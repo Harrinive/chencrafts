@@ -16,6 +16,7 @@ from chencrafts.bsqubits.QEC_graph.edge import (
 from chencrafts.bsqubits.QEC_graph.graph import EvolutionGraph, EvolutionTree
 
 import chencrafts.bsqubits.cat_ideal as cat_ideal
+import chencrafts.bsqubits.cat_recipe as cat_recipe
 import chencrafts.bsqubits.cat_real as cat_real
 import chencrafts.settings as settings
 
@@ -339,9 +340,11 @@ class FullCatTreeBuilder(CatTreeBuilder):
         self,
         fsweep: FlexibleSweep,
         sim_para: Dict[str, Any],
+        new_recipe: bool = False,
     ):
         self.fsweep = fsweep
         self.sim_para = sim_para
+        self.new_recipe = new_recipe
 
         self._find_sim_param()
 
@@ -354,24 +357,39 @@ class FullCatTreeBuilder(CatTreeBuilder):
         Construct the static Hamiltonian and the collapse operators
         in the diagonalized & rotating frame.
         """
-        (
-            self.static_hamiltonian, self.c_ops, self.esys,
-            self.frame_hamiltonian
-        ) = cat_real.cavity_ancilla_me_ingredients(
-            hilbertspace=self.fsweep.hilbertspace,
-            res_mode_idx=self._res_mode_idx, qubit_mode_idx=self._qubit_mode_idx,
-            res_truncated_dim=self.res_dim, qubit_truncated_dim=self.qubit_dim,
-            collapse_parameters={
-                "res_decay": self.fsweep["kappa_s"],
-                "res_excite": self.fsweep["kappa_s"] * self.fsweep["n_th_s"],
-                "res_dephase": 0,
-                "qubit_decay": [
-                    [0, self.fsweep["Gamma_up"]], 
-                    [self.fsweep["Gamma_down"], 0]],
-                "qubit_dephase": [0, self.fsweep["Gamma_phi"]]
-            },
-            in_rot_frame=True,
-        )
+        if not self.new_recipe:
+            (
+                self.static_hamiltonian, self.c_ops, self.esys,
+                self.frame_hamiltonian
+            ) = cat_real.cavity_ancilla_me_ingredients(
+                hilbertspace=self.fsweep.hilbertspace,
+                res_mode_idx=self._res_mode_idx, 
+                qubit_mode_idx=self._qubit_mode_idx,
+                res_truncated_dim=self.res_dim, 
+                qubit_truncated_dim=self.qubit_dim,
+                collapse_parameters={
+                    "res_decay": self.fsweep["kappa_s"],
+                    "res_excite": self.fsweep["kappa_s"] * self.fsweep["n_th_s"],
+                    "res_dephase": 0,
+                    "qubit_decay": [
+                        [0, self.fsweep["Gamma_up"]], 
+                        [self.fsweep["Gamma_down"], 0]],
+                    "qubit_dephase": [0, self.fsweep["Gamma_phi"]]
+                },
+                in_rot_frame=True,
+            )
+        else:
+            (
+                self.static_hamiltonian, self.c_ops, self.esys,
+                self.frame_hamiltonian
+            ) = cat_recipe.cavity_ancilla_me_ingredients(
+                fsweep = self.fsweep, 
+                res_mode_idx=self._res_mode_idx,
+                qubit_mode_idx=self._qubit_mode_idx, 
+                res_trunc_dim=self.res_dim,
+                qubit_trunc_dim=self.qubit_dim, 
+                in_rot_frame=True,
+            )
 
         # change unit from GHz to rad / ns
         self.static_hamiltonian = self.static_hamiltonian * np.pi * 2

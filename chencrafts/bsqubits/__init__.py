@@ -24,7 +24,13 @@ from chencrafts.bsqubits.batched_custom_sweeps import (
     batched_sweep_cat_code,
 )
 
+from chencrafts.bsqubits.batched_sweeps_recipe import (
+    batched_sweep_dressed_op,
+    batched_sweep_jump_rates,
+)
+
 import chencrafts.bsqubits.cat_real as cat_real
+import chencrafts.bsqubits.cat_recipe as cat_recipe
 import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.QEC_graph as QEC_graph
 
@@ -47,8 +53,12 @@ __all__ = [
     'batched_sweep_total_decoherence',
     'batched_sweep_pulse',
     'batched_sweep_cat_code',
+    
+    'batched_sweep_dressed_op',
+    'batched_sweep_jump_rates',
 
     'cat_real',
+    'cat_recipe',
     'cat_ideal',
     
     'QEC_graph',

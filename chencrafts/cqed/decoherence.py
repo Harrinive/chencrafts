@@ -8,6 +8,27 @@ from typing import Tuple, Callable, List
 from chencrafts.cqed.mode_assignment import single_mode_dressed_esys
 
 
+def thermal_ratio(
+    freq: float | np.ndarray, 
+    temp: float | np.ndarray,
+) -> float | np.ndarray:
+    """
+    Return the thermal ratio hbar * omega / k_B T.
+    
+    Parameters
+    ----------
+    freq: float | np.ndarray
+        The frequency of the interested transition, in GHz
+    temp: float | np.ndarray
+        The temperature of the environment, in Kelvin
+
+    Returns
+    -------
+    float | np.ndarray
+        Thermal ratio
+    """
+    return (h * freq * 1e9) / (k * temp)
+
 def n_th(
     freq: float | np.ndarray, 
     temp: float | np.ndarray, 
@@ -15,11 +36,12 @@ def n_th(
 ) -> float | np.ndarray:
     """
     Calculate the thermal occupation number of a mode at a given temperature.
+    Equals to thermal_factor(-freq, temp) or (thermal_factor(freq, temp) - 1)
     
     Parameters
     ----------
     freq: float | np.ndarray
-        The frequency of the interested transition, in GHz
+        The frequency of the interested transition, must be non-negative, in GHz
     temp: float | np.ndarray
         The temperature of the environment, in Kelvin
     n_th_base: float | np.ndarray
@@ -32,7 +54,32 @@ def n_th(
         Thermal occupation number
     
     """
-    return 1 / (np.exp(freq * h * 1e9 / temp / k) - 1) + n_th_base
+    assert np.all(freq >= 0), "Frequency must be non-negative"
+    return 1 / (np.exp(thermal_ratio(freq, temp)) - 1) + n_th_base
+
+def thermal_factor(omega, T):
+    """
+    Return the thermal factor in considering a decoherence rate.
+    Equals to (n_th(freq, temp) + 1) when freq is positive or 
+    n_th(abs(freq), temp) when freq is negative.
+    
+    Parameters
+    ----------
+    omega: float | np.ndarray
+        The frequency of the interested transition, in GHz
+    T: float | np.ndarray
+        The temperature of the environment, in Kelvin
+
+    Returns
+    -------
+    float | np.ndarray
+        Thermal factor
+    """
+    therm_ratio = thermal_ratio(omega, T)
+    return (
+        1 / np.tanh(0.5 * np.abs(therm_ratio))
+        / (1 + np.exp(-therm_ratio))
+    )
 
 def readout_error(
     n: float | np.ndarray, 
