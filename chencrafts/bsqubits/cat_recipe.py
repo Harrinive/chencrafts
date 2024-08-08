@@ -59,7 +59,8 @@ def get_jump_ops(
 def cavity_ancilla_me_ingredients(
     fsweep: FlexibleSweep,
     res_mode_idx: int, qubit_mode_idx: int, 
-    res_trunc_dim: int = 5, qubit_trunc_dim: int = 2, 
+    res_dim: int = 5, qubit_dim: int = 2, 
+    res_me_dim: int = 5, qubit_me_dim: int = 2, 
     in_rot_frame: bool = True,
 ) -> Tuple[qt.Qobj, List[qt.Qobj], Esys, qt.Qobj]:
     """
@@ -84,10 +85,11 @@ def cavity_ancilla_me_ingredients(
         the kwargs of this function. 
     init_qubit_state_index: int
         The initial state of the qubit. Usually 0.
-    qubit_truncated_dim: int | None
-        The truncated dimension of the qubit mode. If None, it will be set to
+    qubit_dim: int | None
+        The truncated dimension of the qubit mode in the . 
+        If None, it will be set to
         init_qubit_state_index + 2.
-    res_truncated_dim: int | None
+    res_dim: int | None
         The truncated dimension of the resonator mode. If None, the resonator mode will
         not be truncated unless a nan eigenvalue is found.
     in_rot_frame: bool
@@ -108,7 +110,7 @@ def cavity_ancilla_me_ingredients(
         The hamiltonian that defines a rotating frame transformation the hamiltonian TO the 
         current frame. H_new_frame = H_old_frame - frame_hamiltonian
     """
-    if not fsweep.sweep.all_params_fixed():
+    if not fsweep.sweep.all_params_fixed(fsweep.sweep._current_param_indices):
         raise ValueError("It's a multi-parameter sweep and the slice is not "
                          "specified. Please try a single-parameter sweep or "
                          "specify the slice.")
@@ -129,23 +131,18 @@ def cavity_ancilla_me_ingredients(
     truncated_evals, truncated_evecs = two_mode_dressed_esys(
         hilbertspace, res_mode_idx, qubit_mode_idx,
         state_label=list(np.zeros_like(dims).astype(int)),
-        res_truncated_dim=res_trunc_dim, qubit_truncated_dim=qubit_trunc_dim,
+        res_truncated_dim=res_dim, qubit_truncated_dim=qubit_dim,
         dressed_indices=fsweep["dressed_indices"], 
         eigensys=(fsweep["evals"], fsweep["evecs"]),
         adjust_phase=True,
     )
     truncated_dims = list(truncated_evals.shape)
-    res_trunc_dim = truncated_dims[res_mode_idx]    # it may be changed due to labeling issue
-    qubit_trunc_dim = truncated_dims[qubit_mode_idx]    # it may be changed
-
+    
     # hamiltonian in this basis
     flattend_evals = truncated_evals.ravel() - truncated_evals.ravel()[0]
     hamiltonian = qt.Qobj(np.diag(flattend_evals), dims=[truncated_dims, truncated_dims])
 
     if in_rot_frame:
-        if res_n_bar is None:
-            res_n_bar = 0
-
         # in the dispersice regime, the transformation hamiltonian is 
         # freq * a^dag a * identity_qubit + identity_res * freq_qubit * qubit^dag qubit
         mode0_freq = truncated_evals[1, 0] - truncated_evals[0, 0]
@@ -160,15 +157,21 @@ def cavity_ancilla_me_ingredients(
 
     hamiltonian -= rot_hamiltonian
 
-    jump_ops = get_jump_ops(res_mode_idx, res_trunc_dim, qubit_trunc_dim)
+    jump_ops = get_jump_ops(res_mode_idx, res_dim, qubit_dim)
     jump_ops_w_rate = {}
     for key, val in jump_ops.items():
         rate = fsweep[key]
-        jump_ops_w_rate[key] = val * np.sqrt(rate)
+        
+        if key.endswith("ij"):
+            for i, j in np.ndindex(qubit_me_dim, qubit_me_dim):
+                key = key[:-2] + f"{i}{j}"
+                jump_ops_w_rate[key] = val[i, j] * np.sqrt(rate[i, j])
+        else:
+            jump_ops_w_rate[key] = val * np.sqrt(rate)
         
     return (
         hamiltonian, 
-        jump_ops_w_rate, 
+        list(jump_ops_w_rate.values()), 
         (truncated_evals.ravel(), truncated_evecs.ravel()),
         rot_hamiltonian,
     )

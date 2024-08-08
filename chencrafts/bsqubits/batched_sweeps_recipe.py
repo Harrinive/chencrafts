@@ -21,7 +21,7 @@ TPHI_HI_FREQ_CUTOFF = 1e-8
 
 # When considering depolarization, we limit the lowest frequency, or the 
 # thermal factor blows up.
-T1_LO_FREQ_CUTOFF = 1e-3
+T1_LO_FREQ_CUTOFF = 1e-2
 
 # Step1: Transform the system-bath coupling operators ##################
 # ######################################################################
@@ -41,7 +41,7 @@ def sweep_organized_evecs(
     """
     hilbertspace = sweep.hilbertspace
 
-    _, evecs = two_mode_dressed_esys(
+    evals, evecs = two_mode_dressed_esys(
         hilbertspace=hilbertspace,
         res_mode_idx=res_mode_idx, qubit_mode_idx=qubit_mode_idx,
         state_label=(-1, -1),
@@ -939,7 +939,14 @@ def batched_sweep_jump_rates(
             res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
             op_name = op_name,
         )
-    
+        
+    # for fitting into `cat_tree.py`, we need to store some dict values 
+    # with a different name
+    sweep.store_data(
+        kappa_s = sweep["jump_a"],
+        K_s = sweep["kerr"][res_mode_idx, res_mode_idx] * np.pi * 2,
+    )
+
 # We can stop here and get the master equation and simulate it numerically
 
 # Step 3: Compute the grouped jump propability

@@ -328,6 +328,8 @@ class FullCatTreeBuilder(CatTreeBuilder):
     _qubit_mode_idx: int
     res_dim: int
     qubit_dim: int
+    res_me_dim: int
+    qubit_me_dim: int
 
     static_hamiltonian: qt.Qobj
     c_ops: List[qt.Qobj]
@@ -347,9 +349,47 @@ class FullCatTreeBuilder(CatTreeBuilder):
         self.new_recipe = new_recipe
 
         self._find_sim_param()
-
         self._generate_cat_ingredients()
+        
+    def _find_sim_param(
+        self,
+    ):
+        """
+        Find the resonator mode index and the truncated dimension
+        """
+        assert len(self.fsweep.hilbertspace.subsystem_list) == 2
 
+        # determine the resonator mode index
+        if type(self.fsweep.hilbertspace.subsystem_list[0]) == scq.Oscillator:
+            self._res_mode_idx = 0
+            self._qubit_mode_idx = 1
+        elif type(self.fsweep.hilbertspace.subsystem_list[1]) == scq.Oscillator:
+            self._res_mode_idx = 1
+            self._qubit_mode_idx = 0
+        else:
+            raise ValueError("The Hilbert space does not contain a resonator.")
+        
+        # determine the truncated dimension
+        self.res_dim = self.sim_para["res_dim"]
+        self.qubit_dim = self.sim_para["qubit_dim"]
+
+        # if exist, store the truncated dim for dynamical simulation
+        try:
+            self.res_me_dim = self.sim_para["res_me_dim"]
+            self.qubit_me_dim = self.sim_para["qubit_me_dim"]
+        except KeyError:
+            pass
+
+        # which qubit gate is used
+        # qubit = self.fsweep.hilbertspace.subsystem_list[self._qubit_mode_idx]
+        # if type(qubit) == scq.Transmon:
+        #     self._gate_axis = "x"
+        # elif type(qubit) == scq.Fluxonium:
+        #     self._gate_axis = "x"
+        # else:
+        #     raise ValueError("Unknown qubit type.")
+        self._gate_axis = "x"
+        
     def _generate_cat_ingredients(
         self,
     ):
@@ -386,46 +426,16 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 fsweep = self.fsweep, 
                 res_mode_idx=self._res_mode_idx,
                 qubit_mode_idx=self._qubit_mode_idx, 
-                res_trunc_dim=self.res_dim,
-                qubit_trunc_dim=self.qubit_dim, 
+                res_dim=self.res_dim,
+                qubit_dim=self.qubit_dim, 
+                res_me_dim=self.res_me_dim,
+                qubit_me_dim=self.qubit_me_dim,
                 in_rot_frame=True,
             )
 
         # change unit from GHz to rad / ns
         self.static_hamiltonian = self.static_hamiltonian * np.pi * 2
         self.frame_hamiltonian = self.frame_hamiltonian * np.pi * 2
-
-    def _find_sim_param(
-        self,
-    ):
-        """
-        Find the resonator mode index and the truncated dimension
-        """
-        assert len(self.fsweep.hilbertspace.subsystem_list) == 2
-
-        # determine the resonator mode index
-        if type(self.fsweep.hilbertspace.subsystem_list[0]) == scq.Oscillator:
-            self._res_mode_idx = 0
-            self._qubit_mode_idx = 1
-        elif type(self.fsweep.hilbertspace.subsystem_list[1]) == scq.Oscillator:
-            self._res_mode_idx = 1
-            self._qubit_mode_idx = 0
-        else:
-            raise ValueError("The Hilbert space does not contain a resonator.")
-        
-        # determine the truncated dimension
-        self.res_dim = self.sim_para["res_dim"]
-        self.qubit_dim = self.sim_para["qubit_dim"]
-
-        # which qubit gate is used
-        # qubit = self.fsweep.hilbertspace.subsystem_list[self._qubit_mode_idx]
-        # if type(qubit) == scq.Transmon:
-        #     self._gate_axis = "x"
-        # elif type(qubit) == scq.Fluxonium:
-        #     self._gate_axis = "x"
-        # else:
-        #     raise ValueError("Unknown qubit type.")
-        self._gate_axis = "x"
         
     # overall properties ################################################
     @property
