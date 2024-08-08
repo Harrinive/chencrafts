@@ -52,6 +52,7 @@ from chencrafts.toolbox.gadgets import (
     EJ_by_I_crit,
     display_expr,
     mod_c,
+    perturbative_inverse,
 )
 from chencrafts.cqed.decoherence import (
     n_th,
@@ -110,6 +111,7 @@ __all__ = [
     'EJ_by_I_crit',
     'display_expr',
     'mod_c',
+    'perturbative_inverse',
     
     'n_th',
     'thermal_ratio',

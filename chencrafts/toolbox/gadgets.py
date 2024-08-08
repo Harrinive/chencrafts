@@ -1,9 +1,11 @@
 import numpy as np
+import sympy as sp
 from scipy.constants import (
     h, hbar, pi, e, 
 )
 from IPython.display import display, Math
-from sympy import latex
+
+from typing import List
 
 
 # unit conversion ======================================================
@@ -139,11 +141,11 @@ def EJ_by_I_crit(I_crit):
     return EJ * 1e9
 
 # display ==============================================================
-def display_expr(expr):
+def display_expr(expr: sp.Expr):
     """
     Display sympy expression in LaTeX format in a Jupyter notebook.
     """
-    display(Math(latex(expr)))
+    display(Math(sp.latex(expr)))
     
 # math =================================================================
 def mod_c(a, b):
@@ -151,3 +153,35 @@ def mod_c(a, b):
     Modulo operation that always return a number in the range of [-b/2, b/2).
     """
     return (a + b/2) % b - b/2
+
+
+def perturbative_inverse(
+    M0: sp.Matrix, 
+    M1: sp.Matrix, 
+    order: int = 2
+) -> List[sp.Matrix]:
+    """
+    Perturbative inverse of a matrix M0 + M1.
+    
+    Parameters
+    ----------
+    M0: sp.Matrix
+        The matrix to be inverted.
+    M1: sp.Matrix
+        The perturbation matrix.
+    order: int
+        The order of the perturbative expansion.
+
+    Returns
+    -------
+    List[sp.Matrix]
+        The perturbative inverse of M0 + M1, order by order.
+    """
+    M0_inv = M0.inv()
+    result = [M0_inv]
+    
+    for i in range(1, order + 1):
+        term = (-1)**i * (M0_inv * M1)**i * M0_inv
+        result.append(term)
+    
+    return result
