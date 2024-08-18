@@ -148,18 +148,22 @@ def display_expr(expr: sp.Expr):
     display(Math(sp.latex(expr)))
     
 # math =================================================================
-def mod_c(a, b):
+def mod_c(
+    a, 
+    b = np.pi * 2, 
+    center = 0.0,
+):
     """
-    Modulo operation that always return a number in the range of [-b/2, b/2).
+    Modulo operation that always return a number in the range of 
+    [-b/2 + center, b/2 + center).
     """
-    return (a + b/2) % b - b/2
-
+    return ((a - center) + b/2) % b - b/2 + center
 
 def perturbative_inverse(
-    M0: sp.Matrix, 
-    M1: sp.Matrix, 
+    M0: sp.Matrix | np.ndarray | np.matrix, 
+    M1: sp.Matrix | np.ndarray | np.matrix, 
     order: int = 2
-) -> List[sp.Matrix]:
+) -> List[sp.Matrix | np.ndarray | np.matrix]:
     """
     Perturbative inverse of a matrix M0 + M1.
     
@@ -177,11 +181,22 @@ def perturbative_inverse(
     List[sp.Matrix]
         The perturbative inverse of M0 + M1, order by order.
     """
-    M0_inv = M0.inv()
+    if isinstance(M0, np.ndarray | np.matrix):
+        M0_inv = np.linalg.inv(M0)
+    elif isinstance(M0, sp.Matrix):
+        M0_inv = M0.inv()
+    else:
+        raise ValueError(f"Unsupported matrix type: {type(M0)}")
     result = [M0_inv]
     
     for i in range(1, order + 1):
-        term = (-1)**i * (M0_inv * M1)**i * M0_inv
+        if isinstance(M0, np.ndarray | np.matrix):
+            term = (-1)**i * (M0_inv @ M1)**i @ M0_inv
+        elif isinstance(M0, sp.Matrix):
+            term = (-1)**i * (M0_inv @ M1)**i @ M0_inv
+        else:
+            raise ValueError(f"Unsupported matrix type: {type(M0)}")
+        
         result.append(term)
     
     return result

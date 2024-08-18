@@ -45,7 +45,17 @@ from chencrafts.fluxonium.analyzer_frf import (
     freq_distance,
 )
 
+from chencrafts.fluxonium.batched_sweep_fif import (
+    batched_sweep_CR_static,
+    
+    batched_sweep_CR_ingredients,
+    
+    sweep_CR_propagator,
+    batched_sweep_CR,
+)
+
 __all__ = [
+    # batched_sweep_frf
     "sweep_comp_drs_indices",
     "sweep_comp_bare_overlap",
     "sweep_static_zzz",
@@ -86,7 +96,14 @@ __all__ = [
     
     "batched_sweep_frf_fidelity",
     
+    # analyzer_frf
     "CZ_analyzer",
     "set_diff",
     "freq_distance",
+    
+    # batched_sweep_fif
+    "batched_sweep_CR_static",
+    "batched_sweep_CR_ingredients",
+    "sweep_CR_propagator",
+    "batched_sweep_CR",
 ]

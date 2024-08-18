@@ -3,7 +3,6 @@ import scqubits as scq
 import qutip as qt
 import copy
 import warnings
-import time
 import sympy as sp
 
 from chencrafts.cqed.qt_helper import oprt_in_basis, process_fidelity
@@ -18,10 +17,15 @@ def sweep_comp_drs_indices(
     idx,
     comp_labels: List[Tuple[int, ...]]
 ):
-    comp_drs_indices = [
-        int(ps.dressed_index(label)[idx])
-        for label in comp_labels
-    ]
+    dims = ps.hilbertspace.subsystem_dims
+    drs_indices = ps["dressed_indices"][idx]
+    comp_drs_indices = []
+    for label in comp_labels:
+        raveled_label = np.ravel_multi_index(
+            label, dims
+        )
+        comp_drs_indices.append(drs_indices[raveled_label])
+    
     return np.array(comp_drs_indices)
 
 def sweep_comp_bare_overlap(
@@ -674,7 +678,6 @@ def sweep_ac_stark_shift(
             warnings.warn(f"Both of 'amp_{q1_idx}_{q2_idx}' and 'amp' are "
                           f"in the parameters, take 'amp_{q1_idx}_{q2_idx}' "
                           f"as the amplitude.")
-            amp = param_mesh["amp"][idx]
     except KeyError:
         amp = param_mesh["amp"][idx]
     ham_floquet = [
@@ -1035,11 +1038,17 @@ def sweep_CZ_comp(
 
 single_q_eye = qt.qeye(2)
 def eye2_wrap(op, which, num_q):
+    """
+    Tensor product of 2D identities around an operator.
+    """
     ops = [single_q_eye] * num_q
     ops[which] = op
     return qt.tensor(ops)
 
 def eye2_wrap_2q(op1, op2, which1, which2, num_q):
+    """
+    Tensor product of 2D identities around two operators.
+    """
     ops = [single_q_eye] * num_q
     ops[which1] = op1
     ops[which2] = op2
