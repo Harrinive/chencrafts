@@ -8,6 +8,7 @@ import warnings
 from qutip.solver.integrator.integrator import IntegratorException
 from chencrafts.cqed.floquet import FloquetBasis
 from chencrafts.cqed.qt_helper import oprt_in_basis
+from chencrafts.cqed.custom_sweeps.general import standardize_evec_sign
 from chencrafts.toolbox.gadgets import mod_c
 from chencrafts.fluxonium.batched_sweep_frf import single_q_eye, eye2_wrap
 
@@ -22,6 +23,12 @@ def sweep_sym_hamiltonian(
     ps: scq.ParameterSweep,
     **kwargs
 ):
+    """
+    Sweep the symbolic Hamiltonian and merge the kinetic and potential
+    parts.
+    
+    Must be stored with key "sym_ham".
+    """
     circ = ps.hilbertspace.subsystem_list[0].parent
     trans_mat = circ.transformation_matrix
     circ.configure(transformation_matrix=trans_mat) # recalc the hamiltonian
@@ -38,9 +45,9 @@ def sweep_1q_ham_params(
     **kwargs
 ):
     """
-    Must have "sym_ham" in the parameter sweep
-    
-    Order: EC, EL
+    Must have "sym_ham" in the parameter sweep. Calculate the 
+    Hamiltonian parameters for a single qubit, ordered by 
+    [EC, EL].
     """
     ham = ps["sym_ham"][idx]
     
@@ -58,9 +65,8 @@ def sweep_2q_ham_params(
     **kwargs
 ):
     """
-    Must have "sym_ham" in the parameter sweep
-    
-    Order: JC, JL
+    Must have "sym_ham" in the parameter sweep. Calculate the 
+    Hamiltonian parameters for two qubits, ordered by [JC, JL].
     """
     ham = ps["sym_ham"][idx]
     
@@ -82,8 +88,8 @@ def batched_sweep_CR_static(
     """
     Static properties:
     - sym_ham
-    - ham_param_Q{q_idx}
-    - ham_param_Q{q1_idx}_Q{q2_idx}
+    - ham_param_Q{q_idx}: [EC, EL]
+    - ham_param_Q{q1_idx}_Q{q2_idx}: [JC, JL]
     - comp_drs_indices: the dressed indices of the components
     - comp_bare_overlap: the minimal overlap on bare basis
     - static_zzz
@@ -246,7 +252,9 @@ def sweep_target_freq(
 ):
     """
     The target transition frequency, must be called after 
-    sweep_drs_target_trans.
+    sweep_drs_target_trans. 
+    
+    Must be saved with key f'target_freq_{q1_idx}_{q2_idx}'.
     """  
     drs_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
     evals = ps["evals"][idx]
@@ -270,6 +278,15 @@ def sweep_drive_freq(
     q1_idx,
     q2_idx,
 ):
+    """
+    maybe there will other methods to make drive freq more accurate
+    e.g. try to make the Floquet modes to be an equal superposition of 
+    the driven states. 
+    
+    For the moment, it's just the average of all bright transition freqs.
+    
+    Must be saved with key f'drive_freq_{q1_idx}_{q2_idx}'.
+    """
     # base drive freq = average of all bright transition freqs
     drive_freq = np.average(
         ps[f"target_freq_{q1_idx}_{q2_idx}"][idx][:, 0]
@@ -285,15 +302,23 @@ def sweep_drive_op(
     ps: scq.ParameterSweep,
     idx,
     q_idx,
+    num_q, 
+    num_r,
     trunc: int = 30,
+    **kwargs
 ):
+    """
+    Calculate the drive operator for a single qubit.
+    
+    Must be saved with key f'drive_op_{q_idx}'.
+    """
     qubit = ps.hilbertspace.subsystem_list[q_idx]
     
     try:
         qubit_n_op = qubit.n_operator()
     except AttributeError:
-        q_idx = q_idx + 1
-        Q_str = f"Q{q_idx}"
+        var_q_idx = q_idx + 1
+        Q_str = f"Q{var_q_idx}"
         op_name = str(f"{Q_str}_operator")
         qubit_n_op = getattr(qubit, op_name)()   
          
@@ -302,7 +327,20 @@ def sweep_drive_op(
         ps["evecs"][idx][:trunc]
     )
     
-    return drive_op
+    # standardize the sign: 0 -> 1 transition must be 1j (like sigma_y)
+    dims = tuple(ps.hilbertspace.subsystem_dims)
+    bare_label_0 = [0] * (num_q + num_r)
+    bare_label_1 = copy.copy(bare_label_0)
+    bare_label_1[q_idx] = 1
+    raveled_bare_label_0 = np.ravel_multi_index(bare_label_0, dims)
+    raveled_bare_label_1 = np.ravel_multi_index(bare_label_1, dims)
+    drs_label_0 = ps["dressed_indices"][idx][raveled_bare_label_0]
+    drs_label_1 = ps["dressed_indices"][idx][raveled_bare_label_1]
+    
+    drive_op_mat_elem = drive_op[drs_label_0, drs_label_1]
+    drive_op_phase = drive_op_mat_elem / np.abs(drive_op_mat_elem)
+
+    return drive_op / drive_op_phase * 1j
 
 def sweep_drive_mat_elem(
     ps: scq.ParameterSweep,
@@ -310,6 +348,16 @@ def sweep_drive_mat_elem(
     q1_idx,
     q2_idx,
 ):
+    """
+    A 2 * 2 matrix representing:
+    
+    [
+        [Q1_bright, Q2_bright],
+        [Q1_dark, Q2_dark]
+    ]
+    
+    Must be saved with key f'drive_mat_elem_{q1_idx}_{q2_idx}'.
+    """
     Q1_op = ps[f"drive_op_{q1_idx}"][idx]
     Q2_op = ps[f"drive_op_{q2_idx}"][idx]
     
@@ -341,6 +389,9 @@ def sweep_drive_amp(
     q1_idx,
     q2_idx,
 ):
+    """
+    Must be saved with key f'drive_amp_{q1_idx}_{q2_idx}'.
+    """
     param_mesh = ps.parameters.meshgrid_by_name()
     
     try:
@@ -369,6 +420,9 @@ def sweep_sum_drive_op(
     q1_idx,
     q2_idx,
 ):
+    """
+    Must be saved with key f'sum_drive_op_{q1_idx}_{q2_idx}'.
+    """
     drive_op1 = ps[f"drive_op_{q1_idx}"][idx]
     drive_op2 = ps[f"drive_op_{q2_idx}"][idx]
     amp_q1, amp_q2 = ps[f"drive_amp_{q1_idx}_{q2_idx}"][idx]
@@ -388,11 +442,20 @@ def batched_sweep_CR_ingredients(
     Get the target transition frequency, must be called after 
     sweep_drs_target_trans.
     """
+    # standardize the sign of eigenvectors
+    ps.add_sweep(
+        standardize_evec_sign,
+        sweep_name = "standardize_evec_sign",
+        state_labels = comp_labels,
+    )
+    
     for q_idx in range(num_q):
         ps.add_sweep(
             sweep_drive_op,
             sweep_name = f'drive_op_{q_idx}',
             q_idx = q_idx,
+            num_q = num_q,
+            num_r = num_r,
             trunc = trunc,
         )
         
