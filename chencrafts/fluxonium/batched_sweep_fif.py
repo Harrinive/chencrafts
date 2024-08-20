@@ -676,18 +676,14 @@ def sweep_pure_CR(
 
     return unitary
 
-def sweep_fidelity(
-    ps: scq.ParameterSweep, 
-    idx, 
-    q1_idx, 
+def sweep_target_unitary(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
     q2_idx,
     num_q,
 ):
     bare_trans = ps[f"target_transitions_{q1_idx}_{q2_idx}"][idx]
-    unitary = ps[f"pure_CR_{q1_idx}_{q2_idx}"][idx]
-    
-    if unitary is None:
-        return np.nan
     
     # let's contruct the target matrix element by matrix element
     target = np.zeros((2**num_q, 2**num_q), dtype=complex)
@@ -708,6 +704,21 @@ def sweep_fidelity(
         target[final_idx, init_idx] = 1j * sign
         
     target = qt.Qobj(target, dims=[[2] * num_q] * 2)
+    
+    return target
+
+def sweep_fidelity(
+    ps: scq.ParameterSweep, 
+    idx, 
+    q1_idx, 
+    q2_idx,
+    num_q,
+):
+    unitary = ps[f"pure_CR_{q1_idx}_{q2_idx}"][idx]
+    if unitary is None:
+        return np.nan
+    
+    target = ps[f"target_CR_{q1_idx}_{q2_idx}"][idx]
 
     # compute fidelity
     fidelity = qt.process_fidelity(
@@ -747,6 +758,13 @@ def batched_sweep_CR(
         ps.add_sweep(
             sweep_pure_CR,
             sweep_name = f'pure_CR_{q1_idx}_{q2_idx}',
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+            num_q = num_q,
+        )
+        ps.add_sweep(
+            sweep_target_unitary,
+            sweep_name = f'target_CR_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             num_q = num_q,
