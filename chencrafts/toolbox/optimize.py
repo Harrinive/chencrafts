@@ -1012,7 +1012,7 @@ class Optimization():
         check_kwargs: dict = {},
         file_name: str | None = None,
         fixed_para_file_name: str | None = None,
-    ):
+    ) -> OptTraj:
         """
         Run the optimization.
 
@@ -1139,6 +1139,12 @@ class MultiOpt():
         optimize: Optimization,
     ):
         """
+        Run the optimization multiple times. 
+        
+        Parameters
+        ----------
+        optimize : Optimization
+            The optimization object to be run.
         """
         self.optimize = optimize
 
