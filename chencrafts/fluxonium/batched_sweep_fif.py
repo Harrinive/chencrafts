@@ -445,7 +445,7 @@ def batched_sweep_CR_ingredients(
     # standardize the sign of eigenvectors
     ps.add_sweep(
         standardize_evec_sign,
-        sweep_name = "standardize_evec_sign",
+        sweep_name = "evecs",
         state_labels = comp_labels,
     )
     
@@ -542,10 +542,18 @@ def sweep_CR_propagator(
     # Floquet analysis and gate calibration ----------------------------
     T = np.pi * 2 / drive_freq
     try:
-        fbasis = FloquetBasis(ham_t, T)
-    except IntegratorException:
+        fbasis = FloquetBasis(
+            H = ham_t, 
+            T = T,
+            options = {
+                "rtol": 1e-10,
+                "atol": 1e-10,
+                "nsteps": 1000000,
+            }
+        )
+    except IntegratorException as e:
         warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
-                     "Floquet basis integration failed.")
+                     f"Floquet basis integration failed with error: {e}")
         return np.array([np.nan, None, None], dtype=object)
     
     fevals = fbasis.e_quasi
