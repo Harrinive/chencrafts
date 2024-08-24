@@ -34,7 +34,6 @@ def batched_sweep_general(
     n_th_a is missing
 
     """
-
     # Re-store the data from the sweep
     qubit_evals = sweep["bare_evals"][qubit_mode_idx]
     sweep.store_data(

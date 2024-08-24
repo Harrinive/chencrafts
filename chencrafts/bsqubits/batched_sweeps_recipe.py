@@ -12,6 +12,7 @@ from chencrafts.cqed.decoherence import thermal_ratio, thermal_factor
 from chencrafts.bsqubits import cat_ideal as cat_ideal
 from chencrafts.cqed.qt_helper import oprt_in_basis
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
+from chencrafts.bsqubits.cat_recipe import get_jump_ops
 
 from typing import List, Tuple, Any, Dict, Callable
 
@@ -951,3 +952,49 @@ def batched_sweep_jump_rates(
 
 # Step 3: Compute the grouped jump propability
 # #########################################################################
+def sweep_jump_ops(
+    sweep: ParameterSweep, idx,
+    res_mode_idx = 0,
+    res_trunc_dim = 5,
+    qubit_trunc_dim = 2,
+    **kwargs
+):
+    ops = get_jump_ops(
+        res_mode_idx = res_mode_idx,
+        res_trunc_dim = res_trunc_dim,
+        qubit_trunc_dim = qubit_trunc_dim,
+    )
+    
+    return ops
+
+
+def sweep_1jump_prob(
+    sweep: ParameterSweep, idx,
+    **kwargs
+):
+    jump_ops = sweep["jump_ops"][idx]
+    
+    
+    pass
+    
+    
+
+def batched_sweep_jump_prob(
+    sweep: ParameterSweep,
+    res_mode_idx = 0,
+    res_trunc_dim = 5,
+    qubit_trunc_dim = 2,
+    **kwargs
+):
+    sweep.add_sweep(
+        sweep_jump_ops,
+        sweep_name = "jump_ops",
+        res_mode_idx = res_mode_idx,
+        res_trunc_dim = res_trunc_dim,
+        qubit_trunc_dim = qubit_trunc_dim,
+    )
+    
+    sweep.add_sweep(
+        sweep_1jump_prob,
+        sweep_name = "1jump_prob",
+    )
