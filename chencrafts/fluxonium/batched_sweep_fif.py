@@ -847,3 +847,189 @@ def batched_sweep_CR(
             q2_idx = q2_idx,
             num_q = num_q,
         )
+        
+# Cost function... =====================================================
+from chencrafts.fluxonium.batched_sweep_frf import (
+    sweep_qubit_coherence, 
+    sweep_1Q_gate_time, 
+    sweep_1Q_error, 
+)
+
+def sweep_CR_incoh_infid(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+):
+    qubit_decay_rate = ps[f"qubit_decay"][idx]
+    gate_time = ps[f"gate_time_{q1_idx}_{q2_idx}"][idx]
+    
+    return (
+        (qubit_decay_rate[q1_idx] + qubit_decay_rate[q2_idx])
+        * gate_time 
+    )
+
+def batched_sweep_incoh_infid_CR(
+    ps: scq.ParameterSweep,
+    num_q,
+    CR_bright_map: Dict[Tuple[int, int], int],
+    Q_cap = 1e6,
+    Q_ind = 1e8,
+    T = 0.05,
+    cycle_per_gate = 4,
+    zz_penalty = 1,
+    sqg_tqg_ratio = 4,
+    **kwargs,
+):
+    """
+    Incoherent error infidility. Key:
+    - off_ZZ_{q1_idx}_{q2_idx}: the off-diagonal ZZ coupling strength
+    - qubit_decay: the qubit decay rate
+    - tgt_decay_{q1_idx}_{q2_idx}: the target decay rate
+    - CZ_incoh_infid_{q1_idx}_{q2_idx}: the incoherent error infidility of the CZ gate
+    - 1Q_incoh_infid_{q1_idx}: the incoherent error infidility of the 1Q gate
+    - error_{q1_idx}_{q2_idx}: the two-qubit error
+    - error: the total error
+    
+    Parameters
+    ----------
+    num_q: 
+        the number of qubits
+    CR_bright_map: Dict[Tuple[int, int], int]
+        Key: (q1_idx, q2_idx), drive q1 at q2's freq to realize a CR gate
+        Value: bright state index (0 or 1), at the other state, the transition
+        is selectively darkened
+    Q_cap: 
+        the qubit capacitive Q factor
+    Q_ind: 
+        the qubit inductive Q factor
+    T: 
+        the temperature
+    cycle_per_gate: 
+        the number of qubit Lamor cycles per single qubit gate
+    sqg_tqg_ratio: 
+        the ratio between the number of single qubit gates and the number of
+        two qubit gates in an quantum algorithm. Serves as a weight to balance
+        the error from single vs two qubit gates.
+    zz_penalty: 
+        the penalty for the ZZ coupling strength, turn zz in GHz to error
+    """
+    for q1_idx in range(num_q):
+        for q2_idx in range(q1_idx + 1, num_q):
+            ps.store_data(**{
+                f"off_ZZ_{q1_idx}_{q2_idx}": ps[f"kerr"][q1_idx, q2_idx][..., 1, 1]
+            })
+    ps.add_sweep(
+        sweep_qubit_coherence,
+        sweep_name = f'qubit_decay',
+        num_q = num_q,
+        Q_cap = Q_cap,
+        Q_ind = Q_ind,
+        T = T,
+    )
+    ps.add_sweep(
+        sweep_1Q_gate_time,
+        sweep_name = f'1Q_gate_time',
+        num_q = num_q,
+        cycle_per_gate = cycle_per_gate,
+        update_hilbertspace=False,
+    )
+    ps.add_sweep(
+        sweep_1Q_error,
+        sweep_name = f'1Q_error',
+        update_hilbertspace=False,
+        penalize_zz = False,
+    )
+        
+    for (q1_idx, q2_idx) in CR_bright_map.keys():
+        ps.add_sweep(
+            sweep_CR_incoh_infid,
+            sweep_name = f'CR_incoh_infid_{q1_idx}_{q2_idx}',
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+        )
+    
+    # summarize
+    # two qubit error
+    tot_error = 0
+    for (q1_idx, q2_idx) in CR_bright_map.keys():
+        two_q_error = (
+            1 - ps[f"fidelity_{q1_idx}_{q2_idx}"]
+            + ps[f"CR_incoh_infid_{q1_idx}_{q2_idx}"]
+        )
+        
+        tot_error += two_q_error
+        ps.store_data(**{f"error_{q1_idx}_{q2_idx}": two_q_error})
+        
+    tot_error /= len(CR_bright_map)     # average over all CZ gates
+    
+    # single qubit error
+    single_q_error = np.sum(ps[f"1Q_error"], axis=-1) / num_q * sqg_tqg_ratio
+    tot_error += single_q_error
+    
+    # penalize ZZ
+    abs_zz = 0
+    for q1_idx in range(num_q):
+        for q2_idx in range(q1_idx + 1, num_q):
+            abs_zz += np.abs(ps[f"off_ZZ_{q1_idx}_{q2_idx}"])
+    cnt = num_q * (num_q - 1) // 2
+    tot_error += abs_zz * zz_penalty / cnt
+    
+    ps.store_data(
+        error = tot_error,
+    )
+    
+# overall sweep
+def batched_sweep_fidelity_CR(
+    ps: scq.ParameterSweep,
+    num_q: int,
+    num_r: int,
+    comp_labels: List[Tuple[int, ...]],
+    CR_bright_map: Dict[Tuple[int, int], int],
+    sweep_ham_params: bool = False,
+    dynamical_truncation: int = 30,
+    Q_cap = 1e6,
+    Q_ind = 1e8,
+    T = 0.05,
+    cycle_per_gate = 4,
+    zz_penalty = 1,
+    **kwargs,
+):
+    batched_sweep_CR_static(
+        ps,
+        num_q = num_q,
+        comp_labels = comp_labels,
+        CR_bright_map = CR_bright_map,
+        sweep_ham_params = sweep_ham_params,
+    )
+    
+    batched_sweep_CR_ingredients(
+        ps,
+        num_q = num_q,
+        num_r = num_r,
+        trunc = dynamical_truncation,
+        CR_bright_map = CR_bright_map,
+        add_default_target = True,
+        comp_labels = comp_labels,
+    )
+    
+    batched_sweep_CR(
+        ps,
+        num_q = num_q,
+        num_r = num_r,
+        trunc = dynamical_truncation,
+        CR_bright_map = CR_bright_map,
+    )
+    
+    batched_sweep_incoh_infid_CR(
+        ps,
+        num_q = num_q,
+        CR_bright_map = CR_bright_map,
+        Q_cap = Q_cap,
+        Q_ind = Q_ind,
+        T = T,
+        cycle_per_gate = cycle_per_gate,
+        zz_penalty = zz_penalty,
+    )
+    
+    

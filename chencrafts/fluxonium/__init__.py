@@ -52,6 +52,9 @@ from chencrafts.fluxonium.batched_sweep_fif import (
     
     sweep_CR_propagator,
     batched_sweep_CR,
+    
+    batched_sweep_incoh_infid_CR,
+    batched_sweep_fidelity_CR,
 )
 
 __all__ = [
@@ -106,4 +109,6 @@ __all__ = [
     "batched_sweep_CR_ingredients",
     "sweep_CR_propagator",
     "batched_sweep_CR",
+    "batched_sweep_incoh_infid_CR",
+    "batched_sweep_fidelity_CR",
 ]

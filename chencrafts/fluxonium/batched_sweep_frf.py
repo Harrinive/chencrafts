@@ -1335,28 +1335,31 @@ def sweep_1Q_gate_time(
     return gate_time
 
 def sweep_1Q_error(
-    ps: scq.ParameterSweep, idx
+    ps: scq.ParameterSweep, idx, penalize_zz: bool = True
 ):
     gate_time = ps[f"1Q_gate_time"][idx]
     qubit_decay_rate = ps[f"qubit_decay"][idx]
     num_q = len(gate_time)
     
     # collect all ZZ for each qubit
-    zz_infid = []
-    for q1_idx in range(num_q):
-        zz_q1 = 0
-        for q2_idx in range(num_q):
-            if q1_idx >= q2_idx:
-                continue
-            
-            try:
-                zz_q1 += (
-                    np.pi * 2 
-                    * np.abs(ps[f"off_ZZ_{q1_idx}_{q2_idx}"][idx]) 
-                )
-            except KeyError:
-                pass  # ignore the mode that are not connected.
-        zz_infid.append(zz_q1)
+    if penalize_zz:
+        zz_infid = []
+        for q1_idx in range(num_q):
+            zz_q1 = 0
+            for q2_idx in range(num_q):
+                if q1_idx >= q2_idx:
+                    continue
+                
+                try:
+                    zz_q1 += (
+                        np.pi * 2 
+                        * np.abs(ps[f"off_ZZ_{q1_idx}_{q2_idx}"][idx]) 
+                    )
+                except KeyError:
+                    pass  # ignore the mode that are not connected.
+            zz_infid.append(zz_q1)
+    else:
+        zz_infid = np.zeros(num_q)
     
     # a very rough estimate, not actually fidelity, more like an error prob
     # need to be properly defined and re-calculated
