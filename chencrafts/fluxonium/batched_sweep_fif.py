@@ -9,10 +9,12 @@ from qutip.solver.integrator.integrator import IntegratorException
 from chencrafts.cqed.floquet import FloquetBasis
 from chencrafts.cqed.qt_helper import oprt_in_basis
 from chencrafts.cqed.custom_sweeps.general import standardize_evec_sign
+from chencrafts.cqed.pulses import Gaussian
 from chencrafts.toolbox.gadgets import mod_c
+from chencrafts.toolbox.optimize import Optimization
 from chencrafts.fluxonium.batched_sweep_frf import single_q_eye, eye2_wrap
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Literal
 
 # Static properties ====================================================
 from chencrafts.fluxonium.batched_sweep_frf import sweep_comp_drs_indices, sweep_comp_bare_overlap, sweep_static_zzz
@@ -605,6 +607,154 @@ def sweep_CR_propagator(
 
     return np.array([gate_time, fbasis, rot_prop], dtype=object)
 
+def CR_Gaussian_solve(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    gate_time,
+    detuning,
+    gate_time_by_sigma,
+    max_rabi_amp,
+    trunc: int = 30,
+    return_type: Literal["pop", "U"] = "pop",
+):
+    drs_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
+
+    # pulse parameters -------------------------------------------------
+    ham = qt.qdiags(ps["evals"][idx][:trunc], 0) * np.pi * 2
+    drive_freq = ps[f"drive_freq_{q1_idx}_{q2_idx}"][idx]
+    sum_drive_op = ps[f"sum_drive_op_{q1_idx}_{q2_idx}"][idx]
+    
+    # we just pick one of the bright transition that's going to be driven
+    init_drs_idx, final_drs_idx = drs_trans[0][0]
+
+    # construct a time-dependent hamiltonian
+    pulse = Gaussian(
+        base_angular_freq = drive_freq + detuning,
+        duration = gate_time,
+        sigma = gate_time / gate_time_by_sigma,
+        rotation_angle = np.pi,
+        tgt_mat_elem = sum_drive_op[final_drs_idx, init_drs_idx],
+    )
+    pulse.rabi_amp = max_rabi_amp    # rabi_amp ~ drive_amp * tgt_mat_elem
+    
+    ham_t = lambda t, *args: ham + pulse(t) * sum_drive_op
+    
+    # Time dynamical simulation ----------------------------------------
+    
+    if return_type == "pop":
+        # return the population of the final state, 
+        # for optimization
+        init_state = qt.basis(trunc, init_drs_idx)
+        final_state = qt.basis(trunc, final_drs_idx)
+        
+        res = qt.sesolve(
+            H = ham_t,
+            psi0 = init_state,
+            tlist = np.linspace(0, gate_time, 2),
+            e_ops = [final_state * final_state.dag()],
+            options = {"nsteps": 1000000}
+        )
+        
+        return res.expect[0][-1]
+    
+    else:
+        # return the propagator, for verification
+        res = qt.propagator(
+            H = ham_t,
+            t = gate_time,
+            options = {"nsteps": 1000000}
+        )
+        
+        # rotating frame
+        rot_unit = (-1j * ham * gate_time).expm()
+        rot_prop = rot_unit.dag() * res
+        
+        return rot_prop
+
+def sweep_Gaussian_params(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    gate_time_by_sigma = 4,
+    trunc: int = 30,
+):
+    # Since we specify the gate parameter using amp for a square pulse, 
+    # we borrow it to the Gaussian. We first calculate what is the gate 
+    # time for a square pulse and fix it.
+    param_mesh = ps.parameters.meshgrid_by_name()
+    try:
+        amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
+        if "amp" in param_mesh.keys():
+            warnings.warn(f"Both of 'amp_{q1_idx}_{q2_idx}' and 'amp' are "
+                          f"in the parameters, take 'amp_{q1_idx}_{q2_idx}' "
+                          f"as the amplitude.")
+    except KeyError:
+        amp = param_mesh["amp"][idx]
+    gate_time = np.pi / amp
+    
+    # construct optimization parameters
+    fixed_param = {
+        "gate_time": gate_time,
+        "gate_time_by_sigma": gate_time_by_sigma,
+        "detuning": 0,
+    }
+    
+    square_pulse_amp = np.pi / gate_time
+    free_param_range = {
+        "max_rabi_amp": [square_pulse_amp, 4 * square_pulse_amp],
+        # "detuning": [-1e-2, 1e-2],  # ns^-1
+    }
+    
+    def target(params):
+        return 1 - CR_Gaussian_solve(
+            ps = ps, 
+            idx = idx, 
+            q1_idx = q1_idx, 
+            q2_idx = q2_idx, 
+            gate_time = gate_time, 
+            gate_time_by_sigma = gate_time_by_sigma, 
+            trunc = trunc,
+            max_rabi_amp = params["max_rabi_amp"],
+            detuning = params["detuning"],
+            return_type = "pop",
+        )
+    
+    opt = Optimization(
+        fixed_variables = fixed_param,
+        free_variable_ranges = free_param_range,
+        target_func = target,
+        opt_options = {
+            "disp": False,
+        }
+    )
+    
+    traj = opt.run()
+    
+    return traj.final_full_para
+    
+def sweep_CR_propagator_Gaussian(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    trunc: int = 30,
+):
+    g_param = ps[f"gaussian_params_{q1_idx}_{q2_idx}"][idx]
+    prop = CR_Gaussian_solve(
+        ps = ps, 
+        idx = idx, 
+        q1_idx = q1_idx, 
+        q2_idx = q2_idx, 
+        return_type = "U",
+        trunc = trunc,
+        **g_param
+    )
+
+    return prop
+
 def sweep_CR_comp(
     ps: scq.ParameterSweep,
     idx,
@@ -783,13 +933,18 @@ def sweep_fidelity(
     idx, 
     q1_idx, 
     q2_idx,
-    num_q,
+    ignore_phase: bool = False,
 ):
     unitary = ps[f"pure_CR_{q1_idx}_{q2_idx}"][idx]
     if unitary is None:
         return np.nan
     
     target = ps[f"target_CR_{q1_idx}_{q2_idx}"][idx]
+    
+    if ignore_phase:
+        warnings.warn("Phase is ignored in fidelity calculation.")
+        unitary = qt.Qobj(np.abs(unitary.full()))
+        target = qt.Qobj(np.abs(target.full()))
 
     # compute fidelity
     fidelity = qt.process_fidelity(
@@ -804,22 +959,49 @@ def batched_sweep_CR(
     num_q: int,
     trunc: int,
     CR_bright_map: Dict[Tuple[int, int], int],
+    ignore_phase: bool = False,
+    gaussian_pulse: bool = False,
     **kwargs
 ):
     for (q1_idx, q2_idx), _ in CR_bright_map.items():
-        ps.add_sweep(
-            sweep_CR_propagator,
-            sweep_name = f'CR_results_{q1_idx}_{q2_idx}',
-            q1_idx = q1_idx,
-            q2_idx = q2_idx,
-            trunc = trunc,
-        )
+        # run the pulse
+        if gaussian_pulse:
+            ps.add_sweep(
+                sweep_Gaussian_params,
+                sweep_name = f'gaussian_params_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                trunc = trunc,
+                gate_time_by_sigma = 4,
+            )
+            
+            grab_gate_time = np.vectorize(lambda d: d['gate_time'])
+            ps.store_data(**{
+                f"gate_time_{q1_idx}_{q2_idx}": grab_gate_time(ps[f"gaussian_params_{q1_idx}_{q2_idx}"])
+            })
+            
+            ps.add_sweep(
+                sweep_CR_propagator_Gaussian,
+                sweep_name = f'full_CR_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                trunc = trunc,
+            )
+        else:
+            ps.add_sweep(
+                sweep_CR_propagator,
+                sweep_name = f'CR_results_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                trunc = trunc,
+            )
+            
+            ps.store_data(**{
+                f"gate_time_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 0].astype(float),
+                f"full_CR_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 2],
+            })
         
-        ps.store_data(**{
-            f"gate_time_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 0].astype(float),
-            f"full_CR_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 2],
-        })
-        
+        # process the propagator for further analysis
         ps.add_sweep(
             sweep_CR_comp,
             sweep_name = f'CR_{q1_idx}_{q2_idx}',
@@ -845,7 +1027,7 @@ def batched_sweep_CR(
             sweep_name = f'fidelity_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
-            num_q = num_q,
+            ignore_phase = ignore_phase,
         )
         
 # Cost function... =====================================================
@@ -988,11 +1170,13 @@ def batched_sweep_fidelity_CR(
     CR_bright_map: Dict[Tuple[int, int], int],
     sweep_ham_params: bool = False,
     dynamical_truncation: int = 30,
+    gaussian_pulse: bool = False,
     Q_cap = 1e6,
     Q_ind = 1e8,
     T = 0.05,
     cycle_per_gate = 4,
     zz_penalty = 1,
+    ignore_phase: bool = False,
     **kwargs,
 ):
     batched_sweep_CR_static(
@@ -1019,6 +1203,8 @@ def batched_sweep_fidelity_CR(
         num_r = num_r,
         trunc = dynamical_truncation,
         CR_bright_map = CR_bright_map,
+        ignore_phase = ignore_phase,
+        gaussian_pulse = gaussian_pulse,
     )
     
     batched_sweep_incoh_infid_CR(
