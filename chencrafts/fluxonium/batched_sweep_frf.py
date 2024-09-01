@@ -33,19 +33,29 @@ def sweep_comp_bare_overlap(
     idx,
     comp_labels: List[Tuple[int, ...]]
 ):
-    comp_drs_indices = ps["comp_drs_indices"][idx]
-    
+    hybr = ps["hybridization"][idx]
     overlaps = []
-    for raveled_comp_label, drs_idx in enumerate(comp_drs_indices):
-        dressed_states = ps["evecs"][idx][drs_idx]
-
-        # raveled_comp_label runs from 0 - 7
-        unraveled_bare_label = comp_labels[raveled_comp_label]
-        raveled_bare_label = np.ravel_multi_index(unraveled_bare_label, ps.hilbertspace.subsystem_dims)
-
-        overlaps.append(np.abs(dressed_states.full()[raveled_bare_label, 0])**2)
-
+    for unraveled_bare_label in comp_labels:
+        overlaps.append(hybr[unraveled_bare_label])
+        
     return np.array(overlaps)
+
+def sweep_hybridization(
+    ps: scq.ParameterSweep,
+    idx,
+):
+    dims = tuple(ps.hilbertspace.subsystem_dims)
+    overlaps = np.zeros(dims)
+    for unraveled_bare_label in np.ndindex(dims):
+        raveled_bare_label = np.ravel_multi_index(unraveled_bare_label, ps.hilbertspace.subsystem_dims)
+        drs_label = ps["dressed_indices"][idx][raveled_bare_label]
+        if drs_label is None:
+            overlaps[unraveled_bare_label] = np.nan
+        else:
+            dressed_states = ps["evecs"][idx][drs_label]
+            overlaps[unraveled_bare_label] = np.abs(dressed_states.full()[raveled_bare_label, 0])**2
+
+    return overlaps
 
 def sweep_static_zz(
     ps: scq.ParameterSweep,
@@ -190,6 +200,11 @@ def batched_sweep_static(
             sweep_static_zzz,
             sweep_name = 'static_zzz',
             comp_labels = comp_labels,
+        )
+    if "hybridization" not in ps.keys():
+        ps.add_sweep(
+            sweep_hybridization,
+            sweep_name = 'hybridization',
         )
     if "comp_bare_overlap" not in ps.keys():
         ps.add_sweep(

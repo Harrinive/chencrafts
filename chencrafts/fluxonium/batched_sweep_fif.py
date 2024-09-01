@@ -17,7 +17,12 @@ from chencrafts.fluxonium.batched_sweep_frf import single_q_eye, eye2_wrap
 from typing import List, Tuple, Dict, Literal
 
 # Static properties ====================================================
-from chencrafts.fluxonium.batched_sweep_frf import sweep_comp_drs_indices, sweep_comp_bare_overlap, sweep_static_zzz
+from chencrafts.fluxonium.batched_sweep_frf import (
+    sweep_comp_drs_indices, 
+    sweep_comp_bare_overlap, 
+    sweep_static_zzz,
+    sweep_hybridization,
+)
 
 Q1, Q2, Q3, θ1, θ2, θ3 = sp.symbols("Q1 Q2 Q3 θ1 θ2 θ3")
 
@@ -111,6 +116,11 @@ def batched_sweep_CR_static(
             sweep_comp_drs_indices,
             sweep_name = 'comp_drs_indices',
             comp_labels = comp_labels,
+        )
+    if "hybridization" not in ps.keys():
+        ps.add_sweep(
+            sweep_hybridization,
+            sweep_name = 'hybridization',
         )
     if "comp_bare_overlap" not in ps.keys():
         ps.add_sweep(
