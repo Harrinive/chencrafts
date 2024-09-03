@@ -285,3 +285,30 @@ def purcell_factor(
         )
 
     return factor_list
+
+def driven_osc_steady_alpha(
+    drive_strength: float,
+    drive_detuning: float,
+    decay_rate: float,
+) -> float:
+    """
+    Steady state displacement of a driven oscillator.
+    
+    Parameters
+    ----------
+    drive_strength: float
+        Drive strength of the oscillator, in GHz
+    drive_detuning: float
+        Drive_freq - osc_freq, in GHz
+    decay_rate: float
+        Decay rate of the oscillator, in GHz. Note that it is 1 / T1 / 2pi.
+
+    Returns
+    -------
+    float
+        Steady state displacement of the oscillator
+    """
+    return (
+        - drive_strength 
+        / (drive_detuning - 1j * decay_rate / 2)
+    )
