@@ -666,6 +666,8 @@ def branch_analysis(
 ) -> NamedSlotsNdarray:
     """
     Perform a full branch analysis for all parameter points.
+    
+    ... Docstrings ...
     """
     dressed_indices = np.empty(shape=self._parameters.counts, dtype=object)
 
