@@ -18,6 +18,7 @@ from chencrafts.cqed.qt_helper import (
     superop_evolve,
     projected_superop,
     evecs_2_transformation,
+    qobj_submatrix,
 
     normalization_factor,
     direct_sum,
@@ -26,6 +27,7 @@ from chencrafts.cqed.qt_helper import (
     ave_fid_2_proc_fid,
     proc_fid_2_ave_fid,
     fid_in_dim,
+    leakage_amount,
 )
 
 from chencrafts.cqed.custom_sweeps import (
@@ -109,6 +111,7 @@ __all__ = [
     "superop_evolve",
     "projected_superop",
     "evecs_2_transformation",
+    "qobj_submatrix",
 
     "normalization_factor",
     "direct_sum",
@@ -116,6 +119,7 @@ __all__ = [
     "ave_fid_2_proc_fid",
     "proc_fid_2_ave_fid",
     "fid_in_dim",
+    "leakage_amount",
 
     "n_crit_by_diag",
     "sweep_n_crit_by_diag",

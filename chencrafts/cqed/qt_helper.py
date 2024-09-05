@@ -249,6 +249,47 @@ def evecs_2_transformation(evecs: List[qt.Qobj]) -> qt.Qobj:
 
     return qt.Qobj(data)
 
+def qobj_submatrix(self: qt.Qobj, states_inds, normalize=False):
+    """
+    Qobj with states in state_inds only. It's a copy of the deleted (maybe??)
+    function in qutip (qutip.Qobj.extract_states). 
+    It works similar to oprt_in_basis and ket_in_basis, while it takes in a list 
+    of indices instead of a Qobj basis.
+
+    Parameters
+    ----------
+    states_inds : list of integer
+        The states that should be kept.
+
+    normalize : True / False
+        Weather or not the new Qobj instance should be normalized (default
+        is False). For Qobjs that represents density matrices or state
+        vectors normalized should probably be set to True, but for Qobjs
+        that represents operators in for example an Hamiltonian, normalize
+        should be False.
+
+    Returns
+    -------
+    q : Qobj
+        A new instance of :class:`qutip.Qobj` that contains only the states
+        corresponding to the indices in `state_inds`.
+
+    Notes
+    -----
+    Experimental.
+    """
+    if self.isoper:
+        q = qt.Qobj(self.full()[states_inds, :][:, states_inds])
+    elif self.isket:
+        q = qt.Qobj(self.full()[states_inds, :])
+    elif self.isbra:
+        q = qt.Qobj(self.full()[:, states_inds])
+    else:
+        raise TypeError("Can only eliminate states from operators or " +
+                        "state vectors")
+
+    return q.unit() if normalize else q
+
 
 # ##############################################################################
 def superop_evolve(superop: qt.Qobj, state: qt.Qobj) -> qt.Qobj:
@@ -411,3 +452,11 @@ def fid_in_dim(fid, d0, d1, type="ave"):
         fid = proc_fid
 
     return fid
+
+# #############################################################################
+def leakage_amount(U: qt.Qobj) -> float:
+    """
+    Calculate the leakage of a quantum channel.
+    """
+    dim = U.shape[0]
+    return 1 - np.abs((U * U.dag()).tr()) / dim

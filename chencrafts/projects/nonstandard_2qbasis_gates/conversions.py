@@ -1,3 +1,5 @@
+# code adapted from https://github.com/SophLin/nonstandard_2qbasis_gates
+
 import numpy as np
 import cmath
 

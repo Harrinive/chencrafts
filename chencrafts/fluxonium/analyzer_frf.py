@@ -136,6 +136,7 @@ def CR_analyzer(
     q2_idx: int, 
     param_indices: np.ndarray, 
     comp_labels: List[Tuple[int, ...]], 
+    destination_counts: int = 3,
 ):
     """
     fs must have the following keys:
@@ -167,7 +168,7 @@ def CR_analyzer(
         
         # leakage destination by propagator
         dest_drs_list = np.argsort(np.abs(pure_CR.full())[:, drs_idx])[::-1]
-        for dest in dest_drs_list[1:3]:
+        for dest in dest_drs_list[:destination_counts]:
             trans_prob = np.abs(pure_CR.full())[dest, drs_idx]**2
             dest_bare_comp, occ_prob = fs.sweep.dressed_state_component(
                 dest, truncate=3, param_npindices = full_indices

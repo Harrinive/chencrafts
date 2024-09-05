@@ -43,6 +43,7 @@ from chencrafts.fluxonium.analyzer_frf import (
     CZ_analyzer,
     set_diff,
     freq_distance,
+    CR_analyzer,
 )
 
 from chencrafts.fluxonium.batched_sweep_fif import (
@@ -103,6 +104,7 @@ __all__ = [
     "CZ_analyzer",
     "set_diff",
     "freq_distance",
+    "CR_analyzer",
     
     # batched_sweep_fif
     "batched_sweep_CR_static",
