@@ -8,7 +8,7 @@ from chencrafts.projects.protomon_full_disorder import (
     DisorderFullProtomon,
 )
 
-from chencrafts.projects.nonstandard_2qbasis_gates.synthesis import (
+from chencrafts.projects.nonstandard_2qbasis_gates.check_synth import (
     check_synth_weyl, 
     check_synth_CNOT,
     check_synth_SWAP,
@@ -16,6 +16,9 @@ from chencrafts.projects.nonstandard_2qbasis_gates.synthesis import (
     synth_SWAP_in_3,
     in_not_synth_swapin3_region,
     in_not_synth_czin2_region,
+)
+from chencrafts.projects.nonstandard_2qbasis_gates.synth import (
+    OneLayerSynth,
 )
 
 
@@ -33,4 +36,6 @@ __all__ = [
     'synth_SWAP_in_3',
     'in_not_synth_swapin3_region',
     'in_not_synth_czin2_region',
+    
+    'OneLayerSynth',
 ]

@@ -17,6 +17,13 @@ def sweep_comp_drs_indices(
     idx,
     comp_labels: List[Tuple[int, ...]]
 ):
+    # check comp_labels satisfy the "last goes fast" rule
+    # by converting the labels to binary code and check it's increasing 
+    vals = [int("".join(map(str, label)), 2) for label in comp_labels]
+    if not np.all(np.diff(vals) > 0):
+        raise ValueError("comp_labels must satisfy the 'last goes fast' rule.")
+    
+    # calculate the dressed indices
     dims = ps.hilbertspace.subsystem_dims
     drs_indices = ps["dressed_indices"][idx]
     comp_drs_indices = []

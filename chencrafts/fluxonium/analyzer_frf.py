@@ -1,8 +1,7 @@
 import numpy as np
 from scqubits.core.hilbert_space import HilbertSpace
 from chencrafts.cqed.flexible_sweep import FlexibleSweep
-
-from typing import List, Tuple
+from typing import List, Tuple, Literal
 
 # CZ, FTF ==============================================================
 def CZ_analyzer(
@@ -137,6 +136,7 @@ def CR_analyzer(
     param_indices: np.ndarray, 
     comp_labels: List[Tuple[int, ...]], 
     destination_counts: int = 3,
+    result_type: Literal['synth', 'pure'] = 'pure',
 ):
     """
     fs must have the following keys:
@@ -147,9 +147,9 @@ def CR_analyzer(
     full_indices = fs.full_slice(param_indices)
     
     if len(fs.swept_para) > 0:
-        pure_CR = fs[f"pure_CR_{q1_idx}_{q2_idx}"][param_indices]
+        pure_CR = fs[f"{result_type}_CR_{q1_idx}_{q2_idx}"][param_indices]
     else:
-        pure_CR = fs[f"pure_CR_{q1_idx}_{q2_idx}"]
+        pure_CR = fs[f"{result_type}_CR_{q1_idx}_{q2_idx}"]
     hspace = fs.sweep.hilbertspace
     
     # subspace info

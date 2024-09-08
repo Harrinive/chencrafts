@@ -7,12 +7,13 @@ import warnings
 
 from qutip.solver.integrator.integrator import IntegratorException
 from chencrafts.cqed.floquet import FloquetBasis
-from chencrafts.cqed.qt_helper import oprt_in_basis
+from chencrafts.cqed.qt_helper import oprt_in_basis, qobj_submatrix
 from chencrafts.cqed.custom_sweeps.general import standardize_evec_sign
 from chencrafts.cqed.pulses import Gaussian
 from chencrafts.toolbox.gadgets import mod_c
 from chencrafts.toolbox.optimize import Optimization
 from chencrafts.fluxonium.batched_sweep_frf import single_q_eye, eye2_wrap
+from chencrafts.projects.nonstandard_2qbasis_gates.synth import OneLayerSynth
 
 from typing import List, Tuple, Dict, Literal
 
@@ -964,6 +965,28 @@ def sweep_fidelity(
 
     return fidelity
 
+def sweep_CR_synthesis(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+):
+    original_U = ps[f"pure_CR_{q1_idx}_{q2_idx}"][idx]
+    target_U = ps[f"target_CR_{q1_idx}_{q2_idx}"][idx]
+    synth = OneLayerSynth(original_U, target_U)
+    synth.run()
+    return synth
+
+def sweep_synth_params(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+):
+    # this one can't be vectorized like grabing other synth attributes
+    synth = ps[f"synth_{q1_idx}_{q2_idx}"][idx]
+    return synth.params
+
 def batched_sweep_CR(
     ps: scq.ParameterSweep,
     num_q: int,
@@ -1040,6 +1063,34 @@ def batched_sweep_CR(
             ignore_phase = ignore_phase,
         )
         
+        # synthesize a better 2-qubit gate with 4 single-qubit gates and 
+        # the original gate
+        ps.add_sweep(
+            sweep_CR_synthesis,
+            sweep_name = f'synth_{q1_idx}_{q2_idx}',
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+        )
+        grab_leakage = np.vectorize(lambda synth: synth.leakage)
+        grab_synth_CR = np.vectorize(
+            lambda synth: qt.Qobj(
+                synth.synth_U, dims=[[2] * num_q] * 2
+            )
+        )
+        grab_synth_fidelity = np.vectorize(lambda synth: synth.synth_fidelity)
+        ps.store_data(**{
+            f"synth_CR_{q1_idx}_{q2_idx}": grab_synth_CR(ps[f"synth_{q1_idx}_{q2_idx}"]),
+            f"leakage_{q1_idx}_{q2_idx}": grab_leakage(ps[f"synth_{q1_idx}_{q2_idx}"]),
+            f"synth_fidelity_{q1_idx}_{q2_idx}": grab_synth_fidelity(ps[f"synth_{q1_idx}_{q2_idx}"]),
+        })
+        
+        ps.add_sweep(
+            sweep_synth_params,
+            sweep_name = f'synth_params_{q1_idx}_{q2_idx}',
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+        )
+            
 # Cost function... =====================================================
 from chencrafts.fluxonium.batched_sweep_frf import (
     sweep_qubit_coherence, 
@@ -1210,7 +1261,6 @@ def batched_sweep_fidelity_CR(
     batched_sweep_CR(
         ps,
         num_q = num_q,
-        num_r = num_r,
         trunc = dynamical_truncation,
         CR_bright_map = CR_bright_map,
         ignore_phase = ignore_phase,
