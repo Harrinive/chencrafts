@@ -28,6 +28,8 @@ from chencrafts.cqed.qt_helper import (
     proc_fid_2_ave_fid,
     fid_in_dim,
     leakage_amount,
+    
+    Stinespring_to_Kraus,
 )
 
 from chencrafts.cqed.custom_sweeps import (
@@ -120,6 +122,8 @@ __all__ = [
     "proc_fid_2_ave_fid",
     "fid_in_dim",
     "leakage_amount",
+
+    "Stinespring_to_Kraus",
 
     "n_crit_by_diag",
     "sweep_n_crit_by_diag",
