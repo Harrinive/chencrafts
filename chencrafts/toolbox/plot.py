@@ -40,6 +40,10 @@ color_iters = dict([
 def set_color_cycler(
     cycler_name: str | List[str]
 ):
+    """
+    Available cycler names: 
+    PGL, green_to_red, sunset, hotel_70s, blue_to_red, colorblind_1, C2QA
+    """
     if isinstance(cycler_name, str):
         mpl.rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]
         plt.rcParams["axes.prop_cycle"] = color_cyclers[cycler_name]

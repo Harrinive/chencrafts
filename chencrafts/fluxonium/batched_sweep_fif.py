@@ -7,7 +7,7 @@ import warnings
 
 from qutip.solver.integrator.integrator import IntegratorException
 from chencrafts.cqed.floquet import FloquetBasis
-from chencrafts.cqed.qt_helper import oprt_in_basis, qobj_submatrix
+from chencrafts.cqed.qt_helper import oprt_in_basis, qobj_submatrix, Stinespring_to_Kraus
 from chencrafts.cqed.custom_sweeps.general import standardize_evec_sign
 from chencrafts.cqed.pulses import Gaussian
 from chencrafts.toolbox.gadgets import mod_c
@@ -542,6 +542,12 @@ def sweep_CR_propagator(
     ham = qt.qdiags(ps["evals"][idx][:trunc], 0) * np.pi * 2
     drive_freq = ps[f"drive_freq_{q1_idx}_{q2_idx}"][idx]
     sum_drive_op = ps[f"sum_drive_op_{q1_idx}_{q2_idx}"][idx]
+    
+    if drive_freq < 0:
+        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+                      f"Found negative drive freqs, potentially due to "
+                      f"wrong dressed label assignment.")
+        return np.array([np.nan, None, None], dtype=object) 
 
     # construct a time-dependent hamiltonian
     ham_t = [
@@ -561,7 +567,7 @@ def sweep_CR_propagator(
             options = {
                 "rtol": 1e-10,
                 "atol": 1e-10,
-                "nsteps": 1000000,
+                "nsteps": 10000000,
             }
         )
     except IntegratorException as e:
@@ -610,7 +616,12 @@ def sweep_CR_propagator(
     gate_time = np.pi / np.average(Rabi_amp_list)
     
     # full unitary -----------------------------------------------------
-    unitary = fbasis.propagator(gate_time)
+    try:
+        unitary = fbasis.propagator(gate_time)
+    except IntegratorException as e:
+        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+                     f"Floquet propagator integration failed with error: {e}")
+        return np.array([np.nan, None, None], dtype=object) 
     
     # rotating frame
     rot_unit = (-1j * ham * gate_time).expm()
@@ -965,15 +976,75 @@ def sweep_fidelity(
 
     return fidelity
 
-def sweep_CR_synthesis(
+def sweep_unitarity(
     ps: scq.ParameterSweep,
     idx,
     q1_idx,
     q2_idx,
 ):
+    pure_CR = ps[f"pure_CR_{q1_idx}_{q2_idx}"][idx]
+    if pure_CR is None:
+        return np.nan
+    return qt.unitarity(pure_CR)
+
+def sweep_reduced_CR(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    num_q,
+):
+    pure_CR = ps[f"pure_CR_{q1_idx}_{q2_idx}"][idx]
+    num_spectators = num_q - 2
+    if pure_CR is None:
+        if num_spectators == 0:
+            return np.array(None, dtype=object)
+        res = np.ndarray((2,) * num_spectators, dtype=object)
+        return res
+    
+    if num_spectators == 0:
+        return np.array(pure_CR, dtype=object)
+    
+    reduced_CR = np.ndarray((2,) * num_spectators, dtype=object)
+    for spec_state_label in np.ndindex((2,) * num_spectators):
+        Kraus_ops = Stinespring_to_Kraus(
+            sys_env_prop = pure_CR,
+            sys_indices = [q1_idx, q2_idx],
+            env_state_label = spec_state_label,
+        )
+        reduced_CR[spec_state_label] = sum([qt.to_super(kop) for kop in Kraus_ops])
+    
+    return reduced_CR
+
+def sweep_reduced_unitarity(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+):
+    reduced_CR = ps[f"reduced_CR_{q1_idx}_{q2_idx}"][idx].ravel()
+    if reduced_CR[0] is None:
+        return np.nan
+    unitarity = np.array([qt.unitarity(op) for op in reduced_CR])
+    return np.mean(unitarity)
+
+def sweep_CR_synthesis(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    num_q,
+):
     original_U = ps[f"pure_CR_{q1_idx}_{q2_idx}"][idx]
     target_U = ps[f"target_CR_{q1_idx}_{q2_idx}"][idx]
-    synth = OneLayerSynth(original_U, target_U)
+    if original_U is None:
+        return None
+    
+    synth = OneLayerSynth(
+        original_U, target_U,
+        qubit_pair = (q1_idx, q2_idx),
+        num_qubits = num_q,
+    )
     synth.run()
     return synth
 
@@ -985,6 +1056,8 @@ def sweep_synth_params(
 ):
     # this one can't be vectorized like grabing other synth attributes
     synth = ps[f"synth_{q1_idx}_{q2_idx}"][idx]
+    if synth is None:
+        return np.zeros(8)
     return synth.params
 
 def batched_sweep_CR(
@@ -1062,6 +1135,25 @@ def batched_sweep_CR(
             q2_idx = q2_idx,
             ignore_phase = ignore_phase,
         )
+        ps.add_sweep(
+            sweep_unitarity,
+            f"unitarity_{q1_idx}_{q2_idx}",
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+        )
+        ps.add_sweep(
+            sweep_reduced_CR,
+            f"reduced_CR_{q1_idx}_{q2_idx}",
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+            num_q = 3,
+        )
+        ps.add_sweep(
+            sweep_reduced_unitarity,
+            f"reduced_unitarity_{q1_idx}_{q2_idx}",
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+        )
         
         # synthesize a better 2-qubit gate with 4 single-qubit gates and 
         # the original gate
@@ -1070,14 +1162,21 @@ def batched_sweep_CR(
             sweep_name = f'synth_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            num_q = num_q,
         )
-        grab_leakage = np.vectorize(lambda synth: synth.leakage)
+        grab_leakage = np.vectorize(
+            lambda synth: synth.leakage 
+            if synth is not None else np.nan
+        )
         grab_synth_CR = np.vectorize(
             lambda synth: qt.Qobj(
                 synth.synth_U, dims=[[2] * num_q] * 2
-            )
+            ) if synth is not None else None
         )
-        grab_synth_fidelity = np.vectorize(lambda synth: synth.synth_fidelity)
+        grab_synth_fidelity = np.vectorize(
+            lambda synth: synth.synth_fidelity 
+            if synth is not None else np.nan
+        )
         ps.store_data(**{
             f"synth_CR_{q1_idx}_{q2_idx}": grab_synth_CR(ps[f"synth_{q1_idx}_{q2_idx}"]),
             f"leakage_{q1_idx}_{q2_idx}": grab_leakage(ps[f"synth_{q1_idx}_{q2_idx}"]),

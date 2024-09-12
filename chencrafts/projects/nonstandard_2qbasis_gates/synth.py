@@ -44,7 +44,7 @@ class SynthBase:
         self.leakage = leakage_amount(qt.Qobj(self.original_U))
 
     @staticmethod
-    def _stack_tensor(nd_list: List) -> torch.Tensor:
+    def _stack_tensor(nd_list: List) -> "torch.Tensor":
         """
         Stack a nD list of 0D torch tensor into a nD torch tensor.
         
@@ -74,7 +74,7 @@ class SynthBase:
         return tensor
     
     @staticmethod
-    def _su2_matrix(theta: torch.Tensor, phi: torch.Tensor) -> torch.Tensor:
+    def _su2_matrix(theta: "torch.Tensor", phi: "torch.Tensor") -> "torch.Tensor":
         """
         Generate the SU(2) matrix for a single qubit.
         
@@ -104,7 +104,7 @@ class SynthBase:
         ])
 
     @staticmethod
-    def _kron_multi(*matrices: List[torch.Tensor]) -> torch.Tensor:
+    def _kron_multi(*matrices: List["torch.Tensor"]) -> "torch.Tensor":
         """
         Compute the Kronecker product of multiple matrices.
         
@@ -125,11 +125,11 @@ class SynthBase:
 
     @staticmethod
     def _su2_matrix_kron(
-        theta: torch.Tensor, 
-        phi: torch.Tensor, 
+        theta: "torch.Tensor", 
+        phi: "torch.Tensor", 
         num_qubits: int, 
         which_qubit: int,
-    ) -> torch.Tensor:
+    ) -> "torch.Tensor":
         """
         Generate the SU(2) matrix for a single qubit in the Kronecker product 
         basis of multi-qubit system.
@@ -163,9 +163,9 @@ class SynthBase:
     
     @staticmethod
     def _process_fidelity(
-        oprt: torch.Tensor, 
-        tgt: torch.Tensor,
-    ) -> torch.Tensor:
+        oprt: "torch.Tensor", 
+        tgt: "torch.Tensor",
+    ) -> "torch.Tensor":
         """
         Compute the process fidelity between two matrices.
         
@@ -232,8 +232,8 @@ class OneLayerSynth(SynthBase):
         
     def _synth_1layer(
         self,
-        params: torch.Tensor, 
-        original_U: torch.Tensor,
+        params: "torch.Tensor", 
+        original_U: "torch.Tensor",
     ):
         """
         Synthesize the 1-layer gate.
@@ -258,9 +258,9 @@ class OneLayerSynth(SynthBase):
 
     def _cost_1layer(
         self,
-        params: torch.Tensor, 
-        original_U: torch.Tensor,
-        target_U: torch.Tensor,
+        params: "torch.Tensor", 
+        original_U: "torch.Tensor",
+        target_U: "torch.Tensor",
     ):
         """
         Compute the cost function for the 1-layer gate, which is 1 - process_fidelity.

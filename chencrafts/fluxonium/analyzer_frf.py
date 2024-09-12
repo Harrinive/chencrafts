@@ -134,6 +134,7 @@ def CR_analyzer(
     q1_idx: int, 
     q2_idx: int, 
     param_indices: np.ndarray, 
+    num_q: int,
     comp_labels: List[Tuple[int, ...]], 
     destination_counts: int = 3,
     result_type: Literal['synth', 'pure'] = 'pure',
@@ -148,33 +149,33 @@ def CR_analyzer(
     
     if len(fs.swept_para) > 0:
         pure_CR = fs[f"{result_type}_CR_{q1_idx}_{q2_idx}"][param_indices]
+        dressed_indices = fs[f"dressed_indices"][param_indices]
     else:
         pure_CR = fs[f"{result_type}_CR_{q1_idx}_{q2_idx}"]
+        dressed_indices = fs[f"dressed_indices"]
     hspace = fs.sweep.hilbertspace
     
     # subspace info
     print("Subspace diagonal: ")
     print(np.diag(pure_CR.full()), "\n")
     
-    # leakage 
+    # leakage / unwanted transition
+    comp_dims = (2,) * num_q      # (2, 2, 2, ...)
     for bare_label in comp_labels:
-        ravel_idx = np.ravel_multi_index(bare_label, hspace.subsystem_dims)
-        
-        if len(fs.swept_para) > 0:
-            drs_idx = fs[f"dressed_indices"][param_indices][ravel_idx]
-        else:
-            drs_idx = fs[f"dressed_indices"][ravel_idx]
-        print(f"Leakage from {bare_label}:")
+        ravel_idx = np.ravel_multi_index(bare_label, comp_dims)
+        print(f"Transition from {bare_label}:")
         
         # leakage destination by propagator
-        dest_drs_list = np.argsort(np.abs(pure_CR.full())[:, drs_idx])[::-1]
-        for dest in dest_drs_list[:destination_counts]:
-            trans_prob = np.abs(pure_CR.full())[dest, drs_idx]**2
+        dest_idx_list = np.argsort(np.abs(pure_CR.full())[:, ravel_idx])[::-1]
+        for dest in dest_idx_list[:destination_counts]:
+            trans_prob = np.abs(pure_CR.full())[dest, ravel_idx]**2
+            
+            unraveled_dest = np.unravel_index(dest, comp_dims)
             dest_bare_comp, occ_prob = fs.sweep.dressed_state_component(
-                dest, truncate=3, param_npindices = full_indices
+                unraveled_dest, truncate=3, param_npindices = full_indices
             )
             print(
-                f"\t{trans_prob:.4f} --> drs state {dest}.",
+                f"\t{trans_prob:.4f} --> drs state {unraveled_dest}.",
                 "Compoent:", dest_bare_comp, 
                 "Probability:", [f"{p:.3f}" for p in occ_prob],
             )
