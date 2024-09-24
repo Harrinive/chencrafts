@@ -433,11 +433,19 @@ def sweep_drive_op(
     num_q,
     trunc: int = 30,
 ):
-    res = ps.hilbertspace.subsystem_list[num_q + r_idx]
-    
     try:
-        res_n_op = res.n_operator()
+        res = ps.hilbertspace.subsystem_list[num_q + r_idx]
+        res_n_op_bare = res.n_operator()
+        res_n_op = scq.identity_wrap(res_n_op_bare, res, ps.hilbertspace.subsystem_list),
     except AttributeError:
+        # obtain the opertor directly from the circuit
+        # NOTE: DO NOT OBTAIN THE OPERATOR FROM THE SUBSYSTEM:
+        #       e.g. hspace.subsystem_list[q_idx].Q1_operator() is not 
+        #       updated during the sweep
+        hspace = ps.hilbertspace
+        circ = hspace.subsystem_list[0].parent
+        dims = hspace.subsystem_dims
+        
         res_idx = r_idx + num_q + 1
         if res_idx in res.var_categories["periodic"]:
             # transmon coupler
@@ -446,9 +454,11 @@ def sweep_drive_op(
             # fluxonium / resonator coupler
             Qr_str = f"Q{res_idx}"
         op_name = str(f"{Qr_str}_operator")
-        res_n_op = getattr(res, op_name)()    
+        res_n_op_sparse = getattr(circ, op_name)() 
+        res_n_op = qt.Qobj(res_n_op_sparse, dims = [dims, dims])
+        
     drive_op = oprt_in_basis(
-        scq.identity_wrap(res_n_op, res, ps.hilbertspace.subsystem_list),
+        res_n_op,
         ps["evecs"][idx][:trunc]
     ) * np.pi * 2
     

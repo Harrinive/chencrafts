@@ -325,18 +325,30 @@ def sweep_drive_op(
     
     Must be saved with key f'drive_op_{q_idx}'.
     """
-    qubit = ps.hilbertspace.subsystem_list[q_idx]
-    
     try:
-        qubit_n_op = qubit.n_operator()
+        qubit = ps.hilbertspace.subsystem_list[q_idx]
+        qubit_n_op_bare = qubit.n_operator()
+        qubit_n_op = scq.identity_wrap(
+            qubit_n_op_bare, qubit, ps.hilbertspace.subsystem_list
+        ),
     except AttributeError:
+        # obtain the opertor directly from the circuit
+        # NOTE: DO NOT OBTAIN THE OPERATOR FROM THE SUBSYSTEM:
+        #       e.g. hspace.subsystem_list[q_idx].Q1_operator() is not 
+        #       updated during the sweep
+        hspace = ps.hilbertspace
+        circ = hspace.subsystem_list[0].parent
+        dims = hspace.subsystem_dims
+        
         var_q_idx = q_idx + 1
         Q_str = f"Q{var_q_idx}"
         op_name = str(f"{Q_str}_operator")
-        qubit_n_op = getattr(qubit, op_name)()   
-         
+        qubit_n_op_sparse = getattr(circ, op_name)()  
+        
+        qubit_n_op = qt.Qobj(qubit_n_op_sparse, dims = [dims, dims])
+        
     drive_op = oprt_in_basis(
-        scq.identity_wrap(qubit_n_op, qubit, ps.hilbertspace.subsystem_list),
+        qubit_n_op,
         ps["evecs"][idx][:trunc]
     )
     
