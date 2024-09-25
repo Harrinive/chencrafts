@@ -729,6 +729,16 @@ def sweep_Gaussian_params(
         amp = param_mesh["amp"][idx]
     gate_time = np.pi / amp
     
+    # to get a sense of the max_rabi_amp, we can integrate the area under the
+    # pulse envelope. It's realized in Gaussian pulse class already:
+    temp_pulse = Gaussian(
+        base_angular_freq = 1,
+        duration = gate_time,
+        sigma = gate_time / gate_time_by_sigma,
+        rotation_angle = np.pi,
+    )
+    approx_gaussian_amp = temp_pulse.rabi_amp
+    
     # construct optimization parameters
     fixed_param = {
         "gate_time": gate_time,
@@ -736,9 +746,8 @@ def sweep_Gaussian_params(
         "detuning": 0,
     }
     
-    square_pulse_amp = np.pi / gate_time
     free_param_range = {
-        "max_rabi_amp": [square_pulse_amp, 4 * square_pulse_amp],
+        "max_rabi_amp": [0.95*approx_gaussian_amp, 1.05*approx_gaussian_amp],       
         # "detuning": [-1e-2, 1e-2],  # ns^-1
     }
     
