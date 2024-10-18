@@ -85,6 +85,80 @@ def sweep_2q_ham_params(
     
     return np.array([JCAB, JLAB])
 
+def sweep_dressed_freq_diff(
+    ps: scq.ParameterSweep,
+    idx,
+    q_idx: int,
+    num_q: int,
+    num_r: int,
+):
+    """
+    Get the dressed frequency difference between the ground state and the first
+    excited state of qubit q_idx.
+    
+    must be stored with key f"dressed_freq_{q_idx}"
+    """
+    dims = ps.hilbertspace.subsystem_dims  
+    bare_init = [0] * (num_q + num_r)
+    raveled_init = np.ravel_multi_index(bare_init, tuple(dims))
+    drs_label = ps["dressed_indices"][idx][raveled_init]
+    eval_init = ps["evals"][idx][drs_label]
+    
+    bare_final = [0] * (num_q + num_r)
+    bare_final[q_idx] = 1
+    raveled_final = np.ravel_multi_index(bare_final, tuple(dims))
+    drs_label = ps["dressed_indices"][idx][raveled_final]
+    eval_final = ps["evals"][idx][drs_label]
+    
+    return eval_final - eval_init
+
+def sweep_freq_diff(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx: int,
+    q2_idx: int,
+    mode: str = "dressed",
+):
+    if mode == "bare":
+        evals_q1 = ps[f"bare_evals"][q1_idx][idx]
+        evals_q2 = ps[f"bare_evals"][q2_idx][idx]
+        freq_q1 = evals_q1[1] - evals_q1[0]
+        freq_q2 = evals_q2[1] - evals_q2[0]
+    elif mode == "dressed":
+        freq_q1 = ps[f"dressed_freq_{q1_idx}"][idx]
+        freq_q2 = ps[f"dressed_freq_{q2_idx}"][idx]
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+    
+    return freq_q1 - freq_q2
+
+def sweep_diff_of_freq_diff(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx: int,
+    q2_idx: int,
+    q3_idx: int,
+    mode: str = "dressed",
+):
+    if mode == "bare":
+        evals_q1 = ps[f"bare_evals"][q1_idx][idx]
+        evals_q2 = ps[f"bare_evals"][q2_idx][idx]
+        evals_q3 = ps[f"bare_evals"][q3_idx][idx]
+        
+        freq_q1 = evals_q1[1] - evals_q1[0]
+        freq_q2 = evals_q2[1] - evals_q2[0]
+        freq_q3 = evals_q3[1] - evals_q3[0]
+        
+    elif mode == "dressed":
+        freq_q1 = ps[f"dressed_freq_{q1_idx}"][idx]
+        freq_q2 = ps[f"dressed_freq_{q2_idx}"][idx]
+        freq_q3 = ps[f"dressed_freq_{q3_idx}"][idx]
+        
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+    
+    return freq_q1 + freq_q3 - 2 * freq_q2
+
 def batched_sweep_CR_static(
     ps: scq.ParameterSweep,
     num_q: int,
@@ -135,6 +209,51 @@ def batched_sweep_CR_static(
             sweep_name = 'static_zzz',
             comp_labels = comp_labels,
         )
+    
+    for q_idx in range(num_q):
+        ps.add_sweep(
+            sweep_dressed_freq_diff,
+            sweep_name = f"dressed_freq_{q_idx}",
+            q_idx = q_idx,
+            num_q = num_q,
+            num_r = num_r,  
+        )
+
+    for q1_idx, q2_idx in CR_bright_map.keys():
+        ps.add_sweep(
+            sweep_freq_diff,
+            sweep_name = f"freq_diff_{q1_idx}_{q2_idx}",
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+            mode = "dressed",
+        )
+        
+    # find all three-qubit chains
+    for q_c in range(num_q):
+        for q_l in range(num_q):
+            for q_r in range(num_q):
+                if (
+                    (q_l, q_c) in CR_bright_map.keys() 
+                    or (q_c, q_l) in CR_bright_map.keys() 
+                ) and (
+                    (q_c, q_r) in CR_bright_map.keys() 
+                    or (q_r, q_c) in CR_bright_map.keys()
+                ):
+                    if (
+                        f"diff_of_freq_diff_{q_l}_{q_c}_{q_r}" in ps.keys()
+                        or f"diff_of_freq_diff_{q_r}_{q_c}_{q_l}" in ps.keys()
+                    ):
+                        continue
+                
+                    ps.add_sweep(
+                        sweep_diff_of_freq_diff,
+                        sweep_name = f"diff_of_freq_diff_{q_l}_{q_c}_{q_r}",
+                        q1_idx = q_l,
+                        q2_idx = q_c,
+                        q3_idx = q_r,
+                        mode = "dressed",
+                    )
+
         
 # Gate ingredients =====================================================
 from chencrafts.fluxonium.batched_sweep_frf import fill_in_target_transitions
@@ -539,6 +658,127 @@ def batched_sweep_CR_ingredients(
             q1_idx = q1_idx,
             q2_idx = q2_idx,
         )   
+        
+
+# single qubit gate =======================================================
+def sweep_single_qubit_gate(
+    ps: scq.ParameterSweep,
+    idx,
+    q_idx,
+    num_q: int,
+    num_r: int,
+    trunc: int = 30,
+    max_amp_1Q: float = 0.1,    # the maximum amplitude of the drive pulse
+    min_larmor_period: int = 5,  # the minimum number of qubit larmor periods in a gate
+):
+    # transition to drive ----------------------------------------------
+    dims = ps.hilbertspace.subsystem_dims  
+    bare_init = [0] * (num_q + num_r)
+    raveled_init = np.ravel_multi_index(bare_init, tuple(dims))
+    drs_init = ps["dressed_indices"][idx][raveled_init]
+    eval_init = ps["evals"][idx][drs_init]
+    
+    bare_final = [0] * (num_q + num_r)
+    bare_final[q_idx] = 1
+    raveled_final = np.ravel_multi_index(bare_final, tuple(dims))
+    drs_final = ps["dressed_indices"][idx][raveled_final]
+    eval_final = ps["evals"][idx][drs_final]
+
+    # pulse parameters -------------------------------------------------
+    ham = qt.qdiags(ps["evals"][idx][:trunc], 0) * np.pi * 2
+    drive_freq = eval_final - eval_init
+    drive_op = ps[f"drive_op_{q_idx}"][idx]
+    drive_amp = np.min([drive_freq / min_larmor_period, max_amp_1Q])
+    
+    drive_op = drive_op / np.abs(drive_op[drs_init, drs_final]) * drive_amp
+    
+    # construct a time-dependent hamiltonian
+    ham_t = [
+        ham,
+        [
+            sum_drive_op, 
+            f"cos({drive_freq}*t)"
+        ]
+    ]
+    
+    # Floquet analysis and gate calibration ----------------------------
+    T = np.pi * 2 / drive_freq
+    try:
+        fbasis = FloquetBasis(
+            H = ham_t, 
+            T = T,
+            options = {
+                "rtol": 1e-10,
+                "atol": 1e-10,
+                "nsteps": 10000000,
+            }
+        )
+    except IntegratorException as e:
+        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+                     f"Floquet basis integration failed with error: {e}")
+        return np.array([np.nan, None, None], dtype=object)
+    
+    fevals = fbasis.e_quasi
+    fevecs = fbasis.mode(0)
+    
+    # Rabi amplitude for bright states
+    Rabi_amp_list = []
+
+    for init, final in drs_trans[:, 0, :]:
+        drs_state_init = qt.basis(ham.shape[0], init)
+        drs_state_final = qt.basis(ham.shape[0], final)
+        drs_plus = (drs_state_init + 1j * drs_state_final).unit()   # 1j comes from driving charge matrix (sigma_y)
+        drs_minus = (drs_state_init - 1j * drs_state_final).unit()
+        f_idx_plus, _ = fbasis._closest_state(fevecs, drs_plus)  # we put the |+> state in the qubit state list
+        f_idx_minus, _ = fbasis._closest_state(fevecs, drs_minus) # we put the |1> state in the resonator list 
+        
+        if (
+            init is None 
+            or final is None 
+            or f_idx_plus is None 
+            or f_idx_minus is None
+        ):
+            warnings.warn(
+                f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, init "
+                "state: {init}, final state: {final}. "
+                "Driven state identification failed. It's usually due to "
+                "strongly driving / coupling to the unwanted transitions. Please check "
+                "the system config."
+            )
+            Rabi_amp_list.append(np.nan)
+            continue
+        
+        # it could be used to calibrate a gate time to complete a rabi cycle
+        Rabi_amp = mod_c(
+            fevals[f_idx_minus] - fevals[f_idx_plus],
+            drive_freq
+        )
+        Rabi_amp_list.append(np.abs(Rabi_amp))
+        
+    # gate time
+    gate_time = np.pi / np.average(Rabi_amp_list)
+    
+    # full unitary -----------------------------------------------------
+    try:
+        unitary = fbasis.propagator(gate_time)
+    except IntegratorException as e:
+        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
+                     f"Floquet propagator integration failed with error: {e}")
+        return np.array([np.nan, None, None], dtype=object) 
+    
+    # rotating frame
+    rot_unit = (-1j * ham * gate_time).expm()
+    rot_prop = rot_unit.dag() * unitary
+
+    return np.array([gate_time, fbasis, rot_prop], dtype=object)
+
+
+def batched_sweep_1Q_gate(
+    ps: scq.ParameterSweep,
+    num_q: int,
+    num_r: int,
+):
+    pass
 
 # CR gate ==============================================================
 def sweep_CR_propagator(
