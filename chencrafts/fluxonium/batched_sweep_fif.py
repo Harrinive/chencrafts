@@ -162,6 +162,7 @@ def sweep_diff_of_freq_diff(
 def batched_sweep_CR_static(
     ps: scq.ParameterSweep,
     num_q: int,
+    num_r: int,
     comp_labels: List[Tuple[int, ...]],
     CR_bright_map: Dict[Tuple[int, int], int],
     sweep_ham_params: bool = True,
@@ -239,22 +240,36 @@ def batched_sweep_CR_static(
                     (q_c, q_r) in CR_bright_map.keys() 
                     or (q_r, q_c) in CR_bright_map.keys()
                 ):
-                    if (
-                        f"diff_of_freq_diff_{q_l}_{q_c}_{q_r}" in ps.keys()
-                        or f"diff_of_freq_diff_{q_r}_{q_c}_{q_l}" in ps.keys()
+                    if not (
+                        f"diff_of_freq_diff_{q_c}_{q_l}_{q_r}" in ps.keys()
+                        or f"diff_of_freq_diff_{q_r}_{q_l}_{q_c}" in ps.keys()
                     ):
-                        continue
-                
-                    ps.add_sweep(
-                        sweep_diff_of_freq_diff,
-                        sweep_name = f"diff_of_freq_diff_{q_l}_{q_c}_{q_r}",
-                        q1_idx = q_l,
-                        q2_idx = q_c,
-                        q3_idx = q_r,
-                        mode = "dressed",
-                    )
+                        # drive the q_c at q_l's freq may cause two-photon process:
+                        # 2 * q_l = q_c + q_r
+                        ps.add_sweep(
+                            sweep_diff_of_freq_diff,
+                            sweep_name = f"diff_of_freq_diff_{q_c}_{q_l}_{q_r}",
+                            q1_idx = q_c,
+                            q2_idx = q_l,
+                            q3_idx = q_r,
+                            mode = "dressed",
+                        )
+                    
+                    if not (
+                        f"diff_of_freq_diff_{q_c}_{q_r}_{q_l}" in ps.keys()
+                        or f"diff_of_freq_diff_{q_l}_{q_r}_{q_c}" in ps.keys()
+                    ):
+                        # drive the q_c at q_r's freq may cause two-photon process:
+                        # 2 * q_r = q_c + q_l
+                        ps.add_sweep(
+                            sweep_diff_of_freq_diff,
+                            sweep_name = f"diff_of_freq_diff_{q_c}_{q_r}_{q_l}",
+                            q1_idx = q_c,
+                            q2_idx = q_r,
+                            q3_idx = q_l,
+                            mode = "dressed",
+                        )
 
-        
 # Gate ingredients =====================================================
 from chencrafts.fluxonium.batched_sweep_frf import fill_in_target_transitions
 
@@ -1603,6 +1618,7 @@ def batched_sweep_fidelity_CR(
     batched_sweep_CR_static(
         ps,
         num_q = num_q,
+        num_r = num_r,
         comp_labels = comp_labels,
         CR_bright_map = CR_bright_map,
         sweep_ham_params = sweep_ham_params,
