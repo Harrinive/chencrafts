@@ -82,9 +82,9 @@ class FlexibleSweep():
         
         # Parameter setup
         self._complete_param_dict = self._get_complete_param_dict()
-        _parameters = self._order_swept_para()
-        self._swept_para_meshgrids = meshgrid_by_name(_parameters)
-        self.dims = _parameters.counts
+        self._ordered_swept_parameters = self._order_swept_para()
+        self._swept_para_meshgrids = meshgrid_by_name(self._ordered_swept_parameters)
+        self.dims = self._ordered_swept_parameters.counts
         self.hilbertspace = hilbertspace
         self._subsys_update_info = self._all_subsys_update_info(subsys_update_info, default_update_info)
         self._update_hilbertspace_by_keyword = update_hilbertspace_by_keyword
@@ -262,7 +262,7 @@ def update(ps, {arg_name_str}):
         elif key in self.para.keys():
             return NamedSlotsNdarray(
                 np.ones(self.dims) * self.para[key],
-                self.swept_para
+                self._ordered_swept_parameters.paramvals_by_name
             )
         
         else:
