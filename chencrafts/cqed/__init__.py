@@ -53,6 +53,9 @@ from chencrafts.cqed.decoherence import (
     qubit_shot_noise_dephasing_w_res,
     purcell_factor,
     driven_osc_steady_alpha,
+    qubit_relax_from_drive_port,
+    S_quantum_johnson_nyquist,
+    t1_charge_line_impedance,
 )
 
 from chencrafts.cqed.mode_assignment import (
@@ -144,6 +147,9 @@ __all__ = [
     "qubit_shot_noise_dephasing_w_res",
     "purcell_factor",
     "driven_osc_steady_alpha",
+    "qubit_relax_from_drive_port",
+    "S_quantum_johnson_nyquist",
+    "t1_charge_line_impedance",
     
     "label_convert",
     "organize_dressed_esys",
