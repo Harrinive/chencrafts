@@ -1,8 +1,10 @@
 import numpy as np
 import qutip as qt
 from scqubits.core.hilbert_space import HilbertSpace
+from scqubits.core.qubit_base import QubitBaseClass
 from scipy.special import erfc
-from scipy.constants import h, k
+from scipy.constants import h, k, hbar, e
+from numpy.typing import ArrayLike
 
 from typing import Tuple, Callable, List
 from chencrafts.cqed.mode_assignment import single_mode_dressed_esys
@@ -35,7 +37,8 @@ def n_th(
     n_th_base: float | np.ndarray = 0.0
 ) -> float | np.ndarray:
     """
-    Calculate the thermal occupation number of a mode at a given temperature.
+    Calculate the thermal occupation number of a mode at a given temperature
+    (Bose-Einstein factor).
     Equals to thermal_factor(-freq, temp) or (thermal_factor(freq, temp) - 1)
     
     Parameters
@@ -59,9 +62,9 @@ def n_th(
 
 def thermal_factor(omega, T):
     """
-    Return the thermal factor in considering a decoherence rate.
+    Return the Boltzmann thermal factor in considering a decoherence rate.
     Equals to (n_th(freq, temp) + 1) when freq is positive or 
-    n_th(abs(freq), temp) when freq is negative.
+    n_th(abs(freq), temp) = - (n_th(freq, temp) + 1) when freq is negative.
     
     Parameters
     ----------
@@ -312,3 +315,125 @@ def driven_osc_steady_alpha(
         - drive_strength 
         / (drive_detuning - 1j * decay_rate / 2)
     )
+
+# Drive port noise induced qubit relaxation
+def qubit_relax_from_drive_port(
+    f_q: float,
+    chi: ArrayLike,
+    matelem: ArrayLike,
+    S_V: Callable,
+) -> float:
+    """
+    General expression for decay rate.
+
+    Parameters
+    ----------
+    f_q : float
+        The qubit frequency in GHz.
+    chi : ArrayLike
+        The susceptibility of the qubit drive parameter g wrt the input voltage. Unit of g is defined such that
+        g * matelem has dimension of energy.
+    matelem : ArrayLike
+        The matrix element of the qubit operator. The unit of g*matelem is energy.
+    S_V : Callable
+        The voltage noise spectral density in V^2/GHz, should be a function of frequency in GHz, i.e. S_V(f).
+
+    Returns
+    -------
+    The decay rate in GHz
+    """
+    matelem = np.array(matelem)
+    chi = np.array(chi)
+    gamma = (
+        (1 / hbar**2) 
+        * np.abs(np.sum(chi * matelem)) ** 2 
+        * S_V(f_q) / 1e9    # V^2/GHz ---> V^2/Hz
+    ) / 1e9                # Hz ---> GHz
+    return gamma
+
+def S_quantum_johnson_nyquist(f: float, T: float, Z_0: float) -> float:
+    """
+    The quantum Johnson-Nyquist noise spectral density.
+
+    Parameters
+    ----------
+    f : float
+        The frequency in GHz.
+    T : float
+        The temperature in K.
+    Z_0 : float
+        The impedance in Ohm.
+
+    Returns
+    -------
+    The spectral density in V^2/GHz
+    """
+    return (
+        2 * h 
+        * np.abs(f) * 1e9   # GHz ---> Hz
+        * Z_0 
+        * thermal_factor(f, T)
+    ) * 1e9        # V^2/Hz --> V^2/GHz
+
+def t1_charge_line_impedance(
+    qubit: QubitBaseClass,
+    i: int,
+    j: int,
+    Z0: float,
+    T: float,
+    C_g: float,
+    C_f: float,
+    total_rate: bool = True,
+    get_rate: bool = False,
+):
+    """ 
+    Calculate the relaxation time T1 due to charge line for a qubit.
+
+    Parameters
+    ----------
+    i : int
+        The index of the initial state.
+    j : int
+        The index of the final state.
+    qubit : QubitBaseClass
+        The qubit object.
+    Z0 : float
+        The impedance of the port in Ohm.
+    T : float
+        The temperature in K.
+    C_g : float
+        The gate capacitance in fF.
+    C_f : float
+        The qubit (fluxonium) capacitance in fF.
+    total_rate : bool
+        If True, the total rate is calculated. If False, only the rate from i to j is calculated.
+    get_rate : bool
+        If True, return the rate. If False, return the relaxation time T1.
+    
+    Returns
+    -------
+        The relaxation time T1 in ns, or the rate in GHz.
+    """
+    n_matelem = qubit.matrixelement_table("n_operator", evals_count=max(i, j) + 1)
+    n_matelem_ij = n_matelem[j, i]
+    eigenvals = qubit.eigenvals(evals_count=max(i, j) + 1)
+    freq_ij = eigenvals[i] - eigenvals[j]
+    chi = 2 * e * C_g / C_f
+    rate_ij = qubit_relax_from_drive_port(
+        f_q=freq_ij,
+        chi=chi,
+        matelem=n_matelem_ij,
+        S_V=lambda f, T=T, Z0=Z0: S_quantum_johnson_nyquist(f, T, Z0),
+    )
+    rate_final = rate_ij
+    if total_rate:
+        rate_ji = qubit_relax_from_drive_port(
+            f_q=-freq_ij,
+            chi=chi,
+            matelem=n_matelem[i, j],
+            S_V=lambda f, T=T, Z0=Z0: S_quantum_johnson_nyquist(f, T, Z0),
+        )
+        rate_final += rate_ji
+    if get_rate:
+        return rate_final
+    return 1 / rate_final

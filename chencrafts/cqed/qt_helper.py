@@ -322,6 +322,10 @@ def projected_superop(
     else:   
         # calculate the matrix elements of the superoperator in the new basis
         return superop_in_basis(superop, subspace_basis)
+    
+
+# ##############################################################################
+
 
 # ##############################################################################
 def normalization_factor(ket_or_dm: qt.Qobj):

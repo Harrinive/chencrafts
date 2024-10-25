@@ -47,6 +47,7 @@ from chencrafts.cqed.custom_sweeps import (
 
 from chencrafts.cqed.decoherence import (
     n_th,
+    thermal_factor,
     readout_error,
     qubit_addi_energy_relax_w_res,
     qubit_shot_noise_dephasing_w_res,
@@ -137,6 +138,7 @@ __all__ = [
     "sweep_convergence",
 
     "n_th",
+    "thermal_factor",
     "readout_error",
     "qubit_addi_energy_relax_w_res",
     "qubit_shot_noise_dephasing_w_res",

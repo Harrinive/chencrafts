@@ -357,7 +357,7 @@ def _excite_op(
         # annhilation operator
         # return hilbertspace.annihilate(mode).dag()
         
-        # a sum of |j>+1<j|
+        # a sum of |j+1><j|
         dims = hilbertspace.subsystem_dims
         eyes = [qt.qeye(dim) for dim in dims]
         eyes[mode_idx] = qt.qdiags(
