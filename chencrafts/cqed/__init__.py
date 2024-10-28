@@ -100,6 +100,11 @@ from chencrafts.cqed.block_diag import (
     block_diagonalize_pymablock,
 )
 
+from chencrafts.cqed.dynamics import (
+    find_rotating_frame,
+    H_in_rotating_frame,
+)
+
 # specify private/public modules
 __all__ = [
     "GeneralPulse",
@@ -176,4 +181,7 @@ __all__ = [
 
     "block_diagonalize",
     "block_diagonalize_pymablock",
+
+    "find_rotating_frame",
+    "H_in_rotating_frame",
 ]
