@@ -65,6 +65,7 @@ from chencrafts.cqed.mode_assignment import (
     two_mode_dressed_esys,
     dressed_state_component,
     branch_analysis,
+    visualize_branches,
 )
 
 from chencrafts.cqed.special_states import (
@@ -162,6 +163,7 @@ __all__ = [
     "two_mode_dressed_esys",
     "dressed_state_component",
     "branch_analysis",
+    "visualize_branches",
 
     "coherent",
     "cat",

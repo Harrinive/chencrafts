@@ -5,6 +5,7 @@ from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.qubit_base import QuantumSystem
 from scqubits.core.spec_lookup import MixinCompatible, SpectrumLookupMixin
 from scqubits.core.namedslots_array import NamedSlotsNdarray
+from scqubits.utils.spectrum_utils import identity_wrap
 
 import copy
 from warnings import warn
@@ -690,3 +691,68 @@ def branch_analysis(
     parameter_dict = self._parameters.ordered_dict.copy()
     return NamedSlotsNdarray(dressed_indices, parameter_dict)
 
+def visualize_branches(
+    self: SpectrumLookupMixin,   # hilbertspace, parametersweep
+    primary_mode_idx: int,
+    y_mode: Literal["E", "N", "EM"] = "E",
+    param_ndindices: Tuple[int | slice, ...] = None,
+):
+    """
+    Visualize spectrum from branch analysis. X axis will be the branch index
+    for the primary mode (the last mode in mode_priority). The y-axis will be
+    the energy / occupation number / energy modulo the energy of the primary mode.
+
+    Parameters
+    ----------
+    branch_indices: np.ndarray
+        Array of branch indices from branch_analysis. 
+    y_mode: Literal["E", "N", "EM"]
+        The y-axis of the plot. 
+        "E" for energy, "N" for occupation number, "EM" for energy modulo
+        the energy of the primary mode.
+
+    Returns
+    -------
+    array
+        The y values of the eigenstates organized by the branch indices.
+
+    """
+    if not self.all_params_fixed(param_ndindices):
+        raise ValueError("Not all parameters are fixed.")
+    
+    # transpose back to the original order
+    dims = self.hilbertspace.subsystem_dims
+    branch_indices = self["dressed_indices"][param_ndindices].reshape(dims)
+
+    # necessary ingredients
+    primary_mode = self.hilbertspace.subsystem_list[primary_mode_idx]
+    if y_mode == "N":
+        N_ops = [
+            identity_wrap(
+                qt.num(subsys.truncated_dim), 
+                subsys, 
+                self.hilbertspace.subsystem_list
+            )
+            for subsys in self.hilbertspace.subsystem_list
+            if subsys != primary_mode
+        ]
+        N_op = sum(N_ops)
+    elif y_mode == "EM":
+        E_mod_arr = self["bare_evals"][primary_mode_idx][param_ndindices]
+        E_mod = E_mod_arr[1] - E_mod_arr[0]
+
+    # calculate y values
+    y_list = np.zeros_like(branch_indices, dtype=float)
+    evals = self["evals"][param_ndindices]
+    evecs = self["evecs"][param_ndindices]
+    for idx, drs_idx in np.ndenumerate(branch_indices):
+        if y_mode == "E":
+            y_value = evals[drs_idx]
+        elif y_mode == "N":
+            y_value = qt.expect(N_op, evecs[drs_idx])
+        elif y_mode == "EM":
+            y_value = evals[drs_idx] % E_mod
+
+        y_list[idx] = y_value
+
+    return y_list
