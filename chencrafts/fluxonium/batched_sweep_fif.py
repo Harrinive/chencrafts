@@ -14,6 +14,7 @@ from chencrafts.toolbox.gadgets import mod_c
 from chencrafts.toolbox.optimize import Optimization
 from chencrafts.fluxonium.batched_sweep_frf import single_q_eye, eye2_wrap
 from chencrafts.projects.nonstandard_2qbasis_gates.synth import OneLayerSynth
+from chencrafts.cqed.dynamics import H_in_rotating_frame
 
 from typing import List, Tuple, Dict, Literal
 
@@ -672,8 +673,7 @@ def batched_sweep_CR_ingredients(
             sweep_name = f'drive_freq_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
-        )   
-        
+        )           
 
 # single qubit gate =======================================================
 def sweep_single_qubit_gate(
@@ -711,82 +711,13 @@ def sweep_single_qubit_gate(
     ham_t = [
         ham,
         [
-            sum_drive_op, 
+            drive_op, 
             f"cos({drive_freq}*t)"
         ]
     ]
     
-    # Floquet analysis and gate calibration ----------------------------
-    T = np.pi * 2 / drive_freq
-    try:
-        fbasis = FloquetBasis(
-            H = ham_t, 
-            T = T,
-            options = {
-                "rtol": 1e-10,
-                "atol": 1e-10,
-                "nsteps": 10000000,
-            }
-        )
-    except IntegratorException as e:
-        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
-                     f"Floquet basis integration failed with error: {e}")
-        return np.array([np.nan, None, None], dtype=object)
+    pass
     
-    fevals = fbasis.e_quasi
-    fevecs = fbasis.mode(0)
-    
-    # Rabi amplitude for bright states
-    Rabi_amp_list = []
-
-    for init, final in drs_trans[:, 0, :]:
-        drs_state_init = qt.basis(ham.shape[0], init)
-        drs_state_final = qt.basis(ham.shape[0], final)
-        drs_plus = (drs_state_init + 1j * drs_state_final).unit()   # 1j comes from driving charge matrix (sigma_y)
-        drs_minus = (drs_state_init - 1j * drs_state_final).unit()
-        f_idx_plus, _ = fbasis._closest_state(fevecs, drs_plus)  # we put the |+> state in the qubit state list
-        f_idx_minus, _ = fbasis._closest_state(fevecs, drs_minus) # we put the |1> state in the resonator list 
-        
-        if (
-            init is None 
-            or final is None 
-            or f_idx_plus is None 
-            or f_idx_minus is None
-        ):
-            warnings.warn(
-                f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, init "
-                "state: {init}, final state: {final}. "
-                "Driven state identification failed. It's usually due to "
-                "strongly driving / coupling to the unwanted transitions. Please check "
-                "the system config."
-            )
-            Rabi_amp_list.append(np.nan)
-            continue
-        
-        # it could be used to calibrate a gate time to complete a rabi cycle
-        Rabi_amp = mod_c(
-            fevals[f_idx_minus] - fevals[f_idx_plus],
-            drive_freq
-        )
-        Rabi_amp_list.append(np.abs(Rabi_amp))
-        
-    # gate time
-    gate_time = np.pi / np.average(Rabi_amp_list)
-    
-    # full unitary -----------------------------------------------------
-    try:
-        unitary = fbasis.propagator(gate_time)
-    except IntegratorException as e:
-        warnings.warn(f"At idx: {idx}, q1_idx: {q1_idx}, q2_idx: {q2_idx}, "
-                     f"Floquet propagator integration failed with error: {e}")
-        return np.array([np.nan, None, None], dtype=object) 
-    
-    # rotating frame
-    rot_unit = (-1j * ham * gate_time).expm()
-    rot_prop = rot_unit.dag() * unitary
-
-    return np.array([gate_time, fbasis, rot_prop], dtype=object)
-
 
 def batched_sweep_1Q_gate(
     ps: scq.ParameterSweep,
@@ -1053,6 +984,122 @@ def sweep_CR_propagator_Gaussian(
 
     return prop
 
+def sweep_RWA_ops(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    num_q,
+    trunc: int = 4,
+    ratio_threshold: float = 30,
+):
+    """
+    Transform the Hamiltonian and drive operator into the rotating frame.
+    
+    It also returns a tuple of frame transformation frequencies, which determines 
+    the frame we want to go to, i.e. U = sum_i exp(-i * omega_i * t), which 
+    transforms a matrix element by: U.dag * |i><j| * U = |i><j| * exp(i * 
+    (omega_i - omega_j) * t)
+    
+    must be saved with name "RWA_ops_{q1_idx}_{q2_idx}"
+    """
+    if not trunc == 2**num_q: 
+        warnings.warn("Calculation with RWA only supports truncation "
+                      "to computational basis, otherwise RWA may break.")
+    
+    dims = tuple(ps.hilbertspace.subsystem_dims)
+    num_r = len(dims) - num_q
+    evals = ps["evals"][idx][:trunc] * np.pi * 2
+    sum_drive_op = ps[f"sum_drive_op_{q1_idx}_{q2_idx}"][idx]
+    drive_op_q1 = ps[f"drive_op_{q1_idx}"][idx]
+    drive_op_q2 = ps[f"drive_op_{q2_idx}"][idx]
+    drive_freq = ps[f"drive_freq_{q1_idx}_{q2_idx}"][idx]
+    
+    
+    # use frame_omega_vec to specify the rotating frame transformation
+    # for the control and target qubits, rotate at the drive frequency
+    # for spectator and other spurious modes, rotate at their eigenfrequencies
+    # To do this, we modify evals and change the the control and target qubits'
+    # eigenfrequencies. E.g. (1, 0, x) and (0, 0, x)'s freq difference is drive_freq.
+    frame_omega_vec = np.zeros_like(evals)
+    for bare_label in np.ndindex((2,) * num_q):
+        bare_label = bare_label + (0,) * num_r
+        raveled_bare_label = np.ravel_multi_index(bare_label, dims)
+        drs_label = ps["dressed_indices"][idx][raveled_bare_label]
+        
+        if bare_label[q1_idx] == 0 and bare_label[q2_idx] == 0:
+            # it's a reference level
+            frame_omega_vec[drs_label] = evals[drs_label]
+            continue
+        
+        reference_level = list(bare_label)
+        reference_level[q1_idx] = 0
+        reference_level[q2_idx] = 0
+        raveled_reference_level = np.ravel_multi_index(reference_level, dims)
+        reference_drs_level = ps["dressed_indices"][idx][raveled_reference_level]
+        
+        frame_omega_vec[drs_label] = evals[reference_drs_level] 
+        if bare_label[q1_idx] == 1:
+            frame_omega_vec[drs_label] += drive_freq
+        if bare_label[q2_idx] == 1:
+            frame_omega_vec[drs_label] += drive_freq
+            
+    frame_omega_vec = np.array(frame_omega_vec, dtype=float)
+    
+    H_RWA, drive_op_RWA, _ = H_in_rotating_frame(
+        evals,      # should not use ORDERED eigenenergies (H is already diagonal)
+        sum_drive_op, 
+        drive_freq, 
+        frame_omega_vec = frame_omega_vec,
+        ratio_threshold=ratio_threshold,
+    )
+    
+    _, drive_op_q1_RWA, _ = H_in_rotating_frame(
+        evals,      # should not use ORDERED eigenenergies (H is already diagonal)
+        drive_op_q1, 
+        drive_freq, 
+        frame_omega_vec = frame_omega_vec,
+        ratio_threshold=ratio_threshold,
+    )
+    
+    _, drive_op_q2_RWA, _ = H_in_rotating_frame(
+        evals,      # should not use ORDERED eigenenergies (H is already diagonal)
+        drive_op_q2, 
+        drive_freq, 
+        frame_omega_vec = frame_omega_vec,
+        ratio_threshold=ratio_threshold,
+    )
+    
+    return np.array([H_RWA, drive_op_RWA, drive_op_q1_RWA, drive_op_q2_RWA, frame_omega_vec], dtype=object)
+
+def sweep_CR_propagator_RWA(
+    ps: scq.ParameterSweep,
+    idx,
+    q1_idx,
+    q2_idx,
+    trunc: int = 4,
+):
+    evals = ps["evals"][idx][:trunc] * np.pi * 2
+    drs_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
+    H_RWA, drive_op_RWA, _, _, frame_omega_vec = ps[f"RWA_ops_{q1_idx}_{q2_idx}"][idx]
+    drive_mat_elems = []
+    for init, final in drs_trans[:, 0, :]:
+        drive_mat_elems.append(np.abs(drive_op_RWA[init, final]))
+
+    # gate time
+    gate_time = (np.pi / 2) / (np.average(drive_mat_elems))
+    
+    # full unitary
+    unitary = (-1j * (H_RWA + drive_op_RWA) * gate_time).expm()
+    
+    # rotating frame
+    rot_unit = qt.qdiags(np.exp(
+        -1j * (evals - frame_omega_vec) * gate_time
+    ), 0)
+    rot_prop = rot_unit.dag() * unitary
+
+    return np.array([gate_time, rot_prop], dtype=object)
+
 def sweep_CR_comp(
     ps: scq.ParameterSweep,
     idx,
@@ -1079,20 +1126,10 @@ def sweep_CR_comp(
 
     return trunc_rot_unitary
 
-def sweep_pure_CR(
-    ps: scq.ParameterSweep, 
-    idx, 
-    q1_idx, 
-    q2_idx,
+def CR_phase_correction(
+    unitary,
     num_q,
 ):
-    unitary = ps[f"CR_{q1_idx}_{q2_idx}"][idx]
-    if unitary is None:
-        # some error occured in fbasis calculation
-        return None
-    
-    unitary.dims = [[2] * num_q] * 2
-    
     eye_full = qt.tensor([single_q_eye] * num_q)
     phase_ops = [eye2_wrap(qt.projection(2, 1, 1), q_idx, num_q) for q_idx in range(num_q)]
     
@@ -1193,6 +1230,23 @@ def sweep_pure_CR(
             (-1j * bright_phase * bright_op).expm() * unitary
         )
 
+    return unitary
+
+def sweep_pure_CR(
+    ps: scq.ParameterSweep, 
+    idx, 
+    q1_idx, 
+    q2_idx,
+    num_q,
+):
+    unitary = ps[f"CR_{q1_idx}_{q2_idx}"][idx]
+    if unitary is None:
+        # some error occured in fbasis calculation
+        return None
+    
+    unitary.dims = [[2] * num_q] * 2
+    unitary = CR_phase_correction(unitary, num_q)
+    
     return unitary
 
 def sweep_target_unitary(
@@ -1343,11 +1397,13 @@ def batched_sweep_CR(
     CR_bright_map: Dict[Tuple[int, int], int],
     ignore_phase: bool = False,
     gaussian_pulse: bool = False,
+    lab_frame: bool = True,
+    RWA_ratio_threshold: float = 30,
     **kwargs
 ):
     for (q1_idx, q2_idx), _ in CR_bright_map.items():
         # run the pulse
-        if gaussian_pulse:
+        if gaussian_pulse and lab_frame:
             ps.add_sweep(
                 sweep_Gaussian_params,
                 sweep_name = f'gaussian_params_{q1_idx}_{q2_idx}',
@@ -1369,7 +1425,7 @@ def batched_sweep_CR(
                 q2_idx = q2_idx,
                 trunc = trunc,
             )
-        else:
+        elif not gaussian_pulse and lab_frame:
             ps.add_sweep(
                 sweep_CR_propagator,
                 sweep_name = f'CR_results_{q1_idx}_{q2_idx}',
@@ -1382,7 +1438,28 @@ def batched_sweep_CR(
                 f"gate_time_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 0].astype(float),
                 f"full_CR_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 2],
             })
-        
+        elif not gaussian_pulse and not lab_frame:
+            ps.add_sweep(
+                sweep_RWA_ops,
+                sweep_name = f'RWA_ops_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                num_q = num_q,
+                trunc = trunc, 
+                ratio_threshold = RWA_ratio_threshold,
+            )
+            ps.add_sweep(
+                sweep_CR_propagator_RWA,
+                sweep_name = f'CR_RWA_results_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                trunc = trunc,
+            )
+            ps.store_data(**{
+                f"gate_time_{q1_idx}_{q2_idx}": ps[f"CR_RWA_results_{q1_idx}_{q2_idx}"][..., 0].astype(float),
+                f"full_CR_{q1_idx}_{q2_idx}": ps[f"CR_RWA_results_{q1_idx}_{q2_idx}"][..., 1],
+            })
+            
         # process the propagator for further analysis
         ps.add_sweep(
             sweep_CR_comp,
@@ -1607,6 +1684,8 @@ def batched_sweep_fidelity_CR(
     sweep_ham_params: bool = False,
     dynamical_truncation: int = 30,
     gaussian_pulse: bool = False,
+    lab_frame: bool = True,
+    RWA_ratio_threshold: float = 30,
     Q_cap = 1e6,
     Q_ind = 1e8,
     T = 0.05,
@@ -1641,6 +1720,8 @@ def batched_sweep_fidelity_CR(
         CR_bright_map = CR_bright_map,
         ignore_phase = ignore_phase,
         gaussian_pulse = gaussian_pulse,
+        lab_frame = lab_frame,
+        RWA_ratio_threshold = RWA_ratio_threshold,
     )
     
     batched_sweep_incoh_infid_CR(

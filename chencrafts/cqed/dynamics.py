@@ -70,6 +70,9 @@ def find_rotating_frame(
         if evals[idx_i] >= evals[idx_j]:
             continue
         
+        if current_eq_num == op_shape[0]:
+            break
+        
         eq_set[current_eq_num, idx_i] = 1
         eq_set[current_eq_num, idx_j] = -1
         
@@ -82,9 +85,6 @@ def find_rotating_frame(
             # linear dependent, reset this equation
             eq_set[current_eq_num, idx_i] = 0
             eq_set[current_eq_num, idx_j] = 0
-            
-        if current_eq_num == op_shape[0]:
-            break
         
         if np.allclose(drive_op[idx_i, idx_j], 0):
             continue
@@ -102,9 +102,10 @@ def H_in_rotating_frame(
     manual_constraints: Dict[Tuple[int, int], float] = None,
     frame_omega_vec = None,
     ratio_threshold = 20,
-) -> Tuple[qt.Qobj, qt.Qobj]:
+) -> Tuple[qt.Qobj, qt.Qobj, np.ndarray]:
     """
     Transform the Hamiltonian and drive operator into the rotating frame.
+    We assume the original drive term is drive_op * cos(drive_freq * t).
     
     Parameters
     ----------
@@ -119,16 +120,23 @@ def H_in_rotating_frame(
         E.g. {(0, 1): 1.0, (1, 2): 2.0} indicates two following constraints:
         omega_0 - omega_1 + 1.0 = 0, omega_1 - omega_2 + 2.0 = 0
     frame_omega_vec: np.ndarray, optional
-        The list of frame transformation frequencies. If not provided, will be calculated.
+        The list of frame transformation frequencies. It determines the frame 
+        we want to go to, i.e. U = sum_i exp(-i * omega_i * t), which transforms 
+        a matrix element by: U.dag * |i><j| * U = |i><j| * exp(i * (omega_i - 
+        omega_j) * t)
     ratio_threshold: float, optional
         RWA is applicable if remaining frequency component/ matrix element > ratio_threshold.
         
     Returns
     -------
     h_rwa: qt.Qobj
-        The transformed Hamiltonian in
+        The transformed Hamiltonian in the rotating frame.
+    drive_op_rwa: qt.Qobj
         The transformed drive operator in the rotating frame.
+    frame_omega_vec: np.ndarray
+        The list of frame transformation frequencies.
     """
+    drive_freq = np.abs(drive_freq)
 
     H_shape = drive_op.shape
     drive_op_sort_idx = np.argsort(np.abs(drive_op.full().ravel()))[::-1]
@@ -138,20 +146,28 @@ def H_in_rotating_frame(
         frame_omega_vec, _ = find_rotating_frame(evals, drive_op, drive_freq, manual_constraints)
 
     # check RWA applicability and get the drive term without fast rotating components
-    sum_drive_op_rwa = np.zeros_like(drive_op.full())
+    drive_op_rwa = np.zeros_like(drive_op.full())
     for (idx_i, idx_j) in drive_op_sort_2d_idx.T:
         if idx_i == idx_j:
-            sum_drive_op_rwa[idx_i, idx_j] = drive_op[idx_i, idx_j]
+            drive_op_rwa[idx_i, idx_j] = drive_op[idx_i, idx_j]
             continue
         
         energy_diff = evals[idx_i] - evals[idx_j]
         if energy_diff > 0:
+            # the positive energy difference matrix elements
+            # are included by doing hermitian conjugate later
             continue
         
         # check if we have matrix element ~> omega_i - omega_j + drive_freq
         mat_elem = drive_op[idx_i, idx_j]
-        remaining_freq_diff = np.abs(frame_omega_vec[idx_i] - frame_omega_vec[idx_j]) - drive_freq
-        remaining_freq_sum = np.abs(frame_omega_vec[idx_i] - frame_omega_vec[idx_j]) + drive_freq
+        remaining_freq_diff = np.abs(
+            np.abs(frame_omega_vec[idx_i] - frame_omega_vec[idx_j]) 
+            - drive_freq
+        )
+        remaining_freq_sum = (
+            np.abs(frame_omega_vec[idx_i] - frame_omega_vec[idx_j]) 
+            + drive_freq
+        )
         
         if mat_elem == 0:
             ratio_diff = np.inf
@@ -161,29 +177,40 @@ def H_in_rotating_frame(
             ratio_sum = np.abs(remaining_freq_sum) / np.abs(mat_elem)
         
         if np.allclose(remaining_freq_diff, 0):
-            # fully canceled out the time-dependent part of the drive, good
+            # fully canceled out the time-dependent part of the drive, good.
+            # It is divided by 2 because cosine(x) = (exp(ix) + exp(-ix))/2
+            drive_op_rwa[idx_i, idx_j] = mat_elem / 2
+            drive_op_rwa[idx_j, idx_i] = mat_elem.conjugate() / 2
+            
             # check counter-rotating term
-            if ratio_sum > ratio_threshold:
-                # counter-rotating term is fast rotating, RWA is valid, discard it
-                sum_drive_op_rwa[idx_i, idx_j] = mat_elem
-                sum_drive_op_rwa[idx_j, idx_i] = mat_elem.conjugate()
-                continue
-            else:
+            if ratio_sum <= ratio_threshold:
                 # counter-rotating term is not fast rotating, RWA is not valid
-                print(f"Counter-rotating term at |{idx_i}><{idx_j}| is not RWA-applicable, with")
+                # warn the user (but still include the term)
+                print(
+                    f"Counter-rotating term at |{idx_i}><{idx_j}| is not "
+                    "fast rotating, thus the RWA is not applicable. "
+                    "The matrix element is still included, though it's "
+                    "potentially inaccurate. Here:"
+                )
                 print(f"\t energy difference: {energy_diff:.2e}")
-                print(f"\t matrix element: {np.abs(mat_elem):.2e}, remaining freq: {remaining_freq_sum:.2f}, ratio: {ratio_sum:.2f}")
+                print(f"\t matrix element: {np.abs(mat_elem):.2e}, remaining freq: {remaining_freq_sum:.2f}, ratio: {ratio_sum:.2f} (< {ratio_threshold})")
                 
         elif ratio_diff > ratio_threshold:
-            # this term is fast rotating, RWA valid, discard it
+            # this rotating term is already fast rotating, RWA valid, discard
+            # everything
             continue
         else:
-            print(f"Term |{idx_i}><{idx_j}| is not RWA-applicable, with")
+            print(
+                f"The rotating part of the drive operator |{idx_i}><{idx_j}| "
+                "is time dependent and not fast enough to be discarded with "
+                "RWA. The matrix element is discarded, though it's potentially "
+                "inaccurate. Here:"
+            )
             print(f"\t energy difference: {energy_diff:.2e}")
-            print(f"\t matrix element: {np.abs(mat_elem):.2e}, remaining freq: {remaining_freq_diff:.2f}, ratio: {ratio_diff:.2f}")
+            print(f"\t matrix element: {np.abs(mat_elem):.2e}, remaining freq: {remaining_freq_diff:.2f}, ratio: {ratio_diff:.2f} (< {ratio_threshold})")
 
-    sum_drive_op_rwa = qt.Qobj(sum_drive_op_rwa)
+    drive_op_rwa = qt.Qobj(drive_op_rwa)
     
     h_rwa = qt.qdiags(evals - frame_omega_vec, 0) 
     
-    return h_rwa, sum_drive_op_rwa
+    return h_rwa, drive_op_rwa, frame_omega_vec
