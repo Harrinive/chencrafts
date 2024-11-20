@@ -102,6 +102,7 @@ def H_in_rotating_frame(
     manual_constraints: Dict[Tuple[int, int], float] = None,
     frame_omega_vec = None,
     ratio_threshold = 20,
+    slow_term_threshold = 1e-6,
 ) -> Tuple[qt.Qobj, qt.Qobj, np.ndarray]:
     """
     Transform the Hamiltonian and drive operator into the rotating frame.
@@ -126,6 +127,9 @@ def H_in_rotating_frame(
         omega_j) * t)
     ratio_threshold: float, optional
         RWA is applicable if remaining frequency component/ matrix element > ratio_threshold.
+    slow_term_threshold: float, optional
+        The threshold for the frequency of the drive term. We regard a term is 
+        slow-rotating if its frequency is smaller than slow_term_threshold.
         
     Returns
     -------
@@ -176,7 +180,7 @@ def H_in_rotating_frame(
             ratio_diff = np.abs(remaining_freq_diff) / np.abs(mat_elem)
             ratio_sum = np.abs(remaining_freq_sum) / np.abs(mat_elem)
         
-        if np.allclose(remaining_freq_diff, 0):
+        if np.allclose(remaining_freq_diff, 0, atol=slow_term_threshold):
             # fully canceled out the time-dependent part of the drive, good.
             # It is divided by 2 because cosine(x) = (exp(ix) + exp(-ix))/2
             drive_op_rwa[idx_i, idx_j] = mat_elem / 2

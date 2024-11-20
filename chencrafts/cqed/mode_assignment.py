@@ -706,6 +706,8 @@ def visualize_branches(
     ----------
     branch_indices: np.ndarray
         Array of branch indices from branch_analysis. 
+    primary_mode_idx: int
+        The index of the primary mode (the mode that forms the branches).
     y_mode: Literal["E", "N", "EM"]
         The y-axis of the plot. 
         "E" for energy, "N" for occupation number, "EM" for energy modulo
