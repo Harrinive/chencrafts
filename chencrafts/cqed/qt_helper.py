@@ -84,6 +84,7 @@ def _oprt_in_basis(
     oprt: np.ndarray | qt.Qobj | csc_matrix, 
     bra_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
     ket_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None,
+    to_sparse: bool = True,
 ) -> Tuple[qt.Qobj, List[qt.Qobj], List[qt.Qobj], List[int]]:
     """
     Internal function to realize oprt_in_basis, which returns more things 
@@ -162,12 +163,17 @@ def _oprt_in_basis(
     ket_trans = trans_by_kets(ket_basis)
     
     data = np.conj(bra_trans.T) @ oprt @ ket_trans
+    
+    if to_sparse:
+        data = csc_matrix(data)
+        
     return qt.Qobj(data)
 
 def oprt_in_basis(
     oprt: np.ndarray | qt.Qobj | csc_matrix,
     bra_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
     ket_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None,
+    to_sparse: bool = True,
 ) -> qt.Qobj:
     """
     Convert an operator to a matrix representation described by a given set of basis.
@@ -191,7 +197,7 @@ def oprt_in_basis(
     qt.Qobj
         the operator in the new basis
     """
-    oprt = _oprt_in_basis(oprt, bra_basis, ket_basis)
+    oprt = _oprt_in_basis(oprt, bra_basis, ket_basis, to_sparse)
 
     return oprt
 

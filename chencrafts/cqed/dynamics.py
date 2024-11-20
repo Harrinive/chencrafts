@@ -1,5 +1,6 @@
 import numpy as np
 import qutip as qt
+from scipy.sparse import csc_matrix
 
 from typing import Tuple, Dict
 
@@ -150,7 +151,7 @@ def H_in_rotating_frame(
         frame_omega_vec, _ = find_rotating_frame(evals, drive_op, drive_freq, manual_constraints)
 
     # check RWA applicability and get the drive term without fast rotating components
-    drive_op_rwa = np.zeros_like(drive_op.full())
+    drive_op_rwa = csc_matrix(np.zeros_like(drive_op.full()))
     for (idx_i, idx_j) in drive_op_sort_2d_idx.T:
         if idx_i == idx_j:
             drive_op_rwa[idx_i, idx_j] = drive_op[idx_i, idx_j]
