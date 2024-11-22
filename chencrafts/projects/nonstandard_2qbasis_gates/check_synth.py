@@ -1,7 +1,17 @@
-# code adapted from https://github.com/SophLin/nonstandard_2qbasis_gates
+__all__ = [
+    'check_synth_weyl', 
+    'check_synth_CNOT',
+    'check_synth_SWAP',
+    'synth_complement',
+    'synth_SWAP_in_3',
+    'in_not_synth_swapin3_region',
+    'in_not_synth_czin2_region',
+]
+
+# code copied from https://github.com/SophLin/nonstandard_2qbasis_gates
 
 import numpy as np
-from chencrafts.projects.nonstandard_2qbasis_gates.conversions import (
+from .conversions import (
     weyl_to_logspec, rotate
 )
 

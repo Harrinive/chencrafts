@@ -1,3 +1,15 @@
+__all__ = [
+    'color_palettes',
+    'color_cyclers',
+    'color_iters',
+    'set_color_cycler',
+    'PiecewiseLinearNorm',
+    'remove_repeated_legend',
+    'filter',
+    'bar_plot_compare',
+    'plot_dictionary_2d',
+]
+
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib.axes import Axes

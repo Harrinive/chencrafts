@@ -1,3 +1,7 @@
+__all__ = [
+    'DisorderFullProtomon',
+]
+
 # code from Xinyuan
 
 import matplotlib.pyplot as plt

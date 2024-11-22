@@ -46,6 +46,14 @@ _mpl.rcParams["font.family"] = font_selected
 import numpy as _np
 _np.set_printoptions(precision=6, linewidth=130)
 
+# scqubits settings
+import scqubits as scq
+scq.set_units('GHz')
+scq.settings.T1_DEFAULT_WARNING = False
+scq.settings.PROGRESSBAR_DISABLED = True
+scq.settings.FUZZY_SLICING = True
+scq.settings.OVERLAP_THRESHOLD = 0.853
+
 # public modules
 __all__ = [
     "bsq", "cqed", "prj", "sf", "tb", "fx",

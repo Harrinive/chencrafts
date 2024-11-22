@@ -1,3 +1,8 @@
+__all__ = [
+    'block_diagonalize',
+    'block_diagonalize_pymablock',
+]
+
 import qutip as qt
 import numpy as np
 from scipy.linalg import expm, block_diag

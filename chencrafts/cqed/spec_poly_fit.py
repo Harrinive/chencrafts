@@ -1,3 +1,7 @@
+__all__ = [
+    'spec_poly_fit',
+]
+
 # fitting the resonator frequency to determine the chi and kerr
 
 import numpy as np

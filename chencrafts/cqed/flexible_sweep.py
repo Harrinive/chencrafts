@@ -1,3 +1,7 @@
+__all__ = [
+    'FlexibleSweep',
+]
+
 import scqubits as scq
 
 from scqubits.core.hilbert_space import HilbertSpace

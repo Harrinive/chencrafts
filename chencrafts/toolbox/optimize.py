@@ -1,3 +1,15 @@
+__all__ = [
+    'nan_2_flat_val', 
+    # 'nan_2_constr', 
+    'softplus',
+    'OptTraj',
+    'MultiTraj',
+    'Optimization', 
+    'MultiOpt',
+    'promote_RUNNING_to_csv',
+    'randomize',
+]
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import (

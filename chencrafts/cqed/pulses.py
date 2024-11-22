@@ -1,3 +1,10 @@
+__all__ = [
+    'GeneralPulse',
+    'Gaussian',
+    'DRAGGaussian',
+    'Interpolated',
+]
+
 import numpy as np
 from scipy.integrate import odeint
 from scipy.interpolate import interp1d
@@ -8,8 +15,6 @@ from typing import Tuple, List
 
 # ##############################################################################
 class PulseBase:
-    """
-    """
     def __init__(
         self,
         base_angular_freq: float,
