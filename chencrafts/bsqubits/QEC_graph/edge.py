@@ -210,6 +210,45 @@ class EvolutionEdge(EdgeBase):
     
     def __repr__(self) -> str:
         return self.__str__()
+    
+    def effective_logical_process(self):
+        """
+        The effective logical process of the edge in the computational basis.
+        
+        Note that the initial and final states may be in multiple logical subspaces,
+        say the initial node have i subspaces and the final node have f subspaces.
+        Then the effective logical process is a f*i matrix, with each element being
+        a superoperator representation of the logical process.
+        """
+        len_init_subspace = self.init_state.ideal_logical_states.shape[0]
+        len_final_subspace = self.final_state.ideal_logical_states.shape[0]
+        
+        init_encoders = self.init_state.ideal_encoder()
+        final_encoders = self.final_state.ideal_encoder()
+        
+        init_encoders_superop = [
+            qt.sprepost(enc, enc.dag()) for enc in init_encoders
+        ]
+        final_decoders_superop = [
+            qt.sprepost(enc.dag(), enc) for enc in final_encoders
+        ]
+        
+        if isinstance(self.real_map, qt.Qobj):
+            map_superop = self.real_map
+        else:
+            map_superop = self.real_map(self.init_state.meas_record) 
+
+        effective_logical_process = np.ndarray(
+            (len_final_subspace, len_init_subspace), 
+            dtype=qt.Qobj
+        )
+        
+        for idx_final, idx_init in np.ndindex(*effective_logical_process.shape):
+            effective_logical_process[idx_final, idx_init] = (
+                final_decoders_superop[idx_final] * map_superop * init_encoders_superop[idx_init]
+            )
+
+        return effective_logical_process
 
 
 class PropagatorEdge(EvolutionEdge):

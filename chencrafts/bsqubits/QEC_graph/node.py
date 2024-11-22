@@ -141,7 +141,7 @@ class StateNode(NodeBase):
         - meas_record: the measurement record
         - state: the state after the evolution
         - prob_amp_01: the probability amplitude of |0> and |1>
-        - ideal_logical_states: the ideal logical states
+        - ideal_logical_states: N*2 array of the ideal logical states
         """
         # basic type checks:
         for ideal_state in ideal_logical_states.ravel():
@@ -476,6 +476,37 @@ class StateNode(NodeBase):
         return np.array([
             self.expect(op) for op in op_list
         ])
+        
+    def ideal_encoder(self):
+        """
+        The ideal decoder for the state - map the state to a two-level system.
+        
+        Note that the state may have multiple logical subspaces, so there
+        are multiple possible decoders.
+        """
+        len_subspace = self.ideal_logical_states.shape[0]
+        decoders = np.ndarray(len_subspace, dtype=qt.Qobj)
+        
+        # a list like [1, 1, ..., 1], to make the dimensions consistent
+        subsys_ones = self.ideal_logical_states[0, 0].dims[1]
+        logical_0 = qt.basis(2, 0)
+        logical_0.dims = [[2], subsys_ones]
+        logical_1 = qt.basis(2, 1)
+        logical_1.dims = [[2], subsys_ones]
+        
+        # orthogonalize the logical states
+        if self.ORTHOGONALIZE_LOGICAL_STATES:
+            logical_states = self._orthogonalize(self.ideal_logical_states)
+        else:
+            logical_states = self.ideal_logical_states
+        
+        for idx in range(len_subspace):
+            decoders[idx] = (
+                logical_states[idx, 0] * logical_0.dag()
+                + logical_states[idx, 1] * logical_1.dag()
+            )
+            
+        return decoders
     
 
 Node = StateNode    # for now, the only node type is StateNode
