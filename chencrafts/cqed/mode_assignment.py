@@ -9,6 +9,7 @@ __all__ = [
 ]
 
 import qutip as qt
+import numpy as np
 
 from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.qubit_base import QuantumSystem

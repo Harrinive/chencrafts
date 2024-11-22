@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 __all__ = [
     'ErrorChannel', 
     'ErrorRate', 
     'basic_channels',
     'flxn_hf_flx_channels',
 ]
-
-from __future__ import annotations
 
 import numpy as np
 import matplotlib.pyplot as plt
