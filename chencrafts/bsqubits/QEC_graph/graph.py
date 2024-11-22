@@ -168,3 +168,4 @@ class EvolutionTree(EvolutionGraph):
                 break
             
         return attr_by_stp
+    
