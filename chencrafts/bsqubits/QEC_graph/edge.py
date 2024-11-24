@@ -10,16 +10,18 @@ import qutip as qt
 import numpy as np
 from warnings import warn
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict, overload
+from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict, Literal
 
 from chencrafts.cqed.qt_helper import (
     superop_evolve,
     normalization_factor,
+    proc_fid_2_ave_fid,
 )
-import chencrafts.bsqubits.QEC_graph.settings as settings
+from . import settings
+from .node import effective_logical_process, target_process_for_dnorm
 
 if TYPE_CHECKING:
-    from chencrafts.bsqubits.QEC_graph.node import (
+    from .node import (
         Node,
         MeasurementRecord,
     )
@@ -115,6 +117,8 @@ class EvolutionEdge(EdgeBase):
         self.ideal_maps = ideal_maps
         
         self.to_ensemble = to_ensemble
+        if self.to_ensemble:
+            raise NotImplementedError("to_ensemble = True is deprecated.")
 
     def evolve(self):
         """
@@ -132,6 +136,7 @@ class EvolutionEdge(EdgeBase):
             self.init_state.state
             self.init_state.prob_amp_01
             self.init_state.ideal_logical_states
+            self.init_state.process
         except AttributeError:
             raise AttributeError("The initial state are not evolved.")
 
@@ -143,6 +148,9 @@ class EvolutionEdge(EdgeBase):
         final_state = superop_evolve(
             map_superop, self.init_state.state
         )
+        
+        # evolve the process using the real map
+        final_process = map_superop * self.init_state.process
 
         # evolve the ideal states using the ideal maps
         if isinstance(self.ideal_maps, list):
@@ -199,18 +207,23 @@ class EvolutionEdge(EdgeBase):
         # feed the result to the final state
         if not self.to_ensemble:
             self.final_state.accept(
-                meas_record = copy.copy(self.init_state.meas_record), 
+                meas_record = copy.deepcopy(self.init_state.meas_record), 
                 state = final_state, 
-                prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
+                prob_amp_01 = copy.deepcopy(self.init_state._prob_amp_01),
                 ideal_logical_states = new_ideal_logical_state_array,
+                process = final_process,
+                init_encoders = copy.deepcopy(self.init_state.init_encoders),
             )
         else:
-            self.final_state.join(
-                meas_record = copy.copy(self.init_state.meas_record), 
-                state = final_state, 
-                prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
-                ideal_logical_states = new_ideal_logical_state_array,
-            )
+            # deprecated now !!!!
+            
+            # self.final_state.join(
+            #     meas_record = copy.copy(self.init_state.meas_record), 
+            #     state = final_state, 
+            #     prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
+            #     ideal_logical_states = new_ideal_logical_state_array,
+            # )
+            pass
 
     def __str__(self) -> str:
         return f"{self.name}"
@@ -218,7 +231,10 @@ class EvolutionEdge(EdgeBase):
     def __repr__(self) -> str:
         return self.__str__()
     
-    def effective_logical_process(self):
+    def effective_logical_process(
+        self,
+        repr: Literal["super", "choi", "chi", "orth_chi"] = "super",
+    ):
         """
         The effective logical process of the edge in the computational basis.
         
@@ -227,36 +243,62 @@ class EvolutionEdge(EdgeBase):
         Then the effective logical process is a f*i matrix, with each element being
         a superoperator representation of the logical process.
         """
-        len_init_subspace = self.init_state.ideal_logical_states.shape[0]
-        len_final_subspace = self.final_state.ideal_logical_states.shape[0]
-        
-        init_encoders = self.init_state.ideal_encoder()
-        final_encoders = self.final_state.ideal_encoder()
-        
-        init_encoders_superop = [
-            qt.sprepost(enc, enc.dag()) for enc in init_encoders
-        ]
-        final_decoders_superop = [
-            qt.sprepost(enc.dag(), enc) for enc in final_encoders
-        ]
+        init_encoders = self.init_state.ideal_encoders()
+        final_encoders = self.final_state.ideal_encoders()
         
         if isinstance(self.real_map, qt.Qobj):
             map_superop = self.real_map
         else:
             map_superop = self.real_map(self.init_state.meas_record) 
-
-        effective_logical_process = np.ndarray(
-            (len_final_subspace, len_init_subspace), 
-            dtype=qt.Qobj
+            
+        return effective_logical_process(
+            process = map_superop,
+            init_encoders = init_encoders,
+            final_encoders = final_encoders,
+            repr = repr,
         )
         
-        for idx_final, idx_init in np.ndindex(*effective_logical_process.shape):
-            effective_logical_process[idx_final, idx_init] = (
-                final_decoders_superop[idx_final] * map_superop * init_encoders_superop[idx_init]
-            )
+    def fidelity_by_process(self, type: Literal["avg", "etg"] = "avg"):
+        """
+        The fidelity of the processes on the edge.
+        
+        Type:
+            "avg": average fidelity
+            "etg": enranglement fidelity
+        """
+        realized_process = self.effective_logical_process()
+        
+        fidelity = np.zeros(realized_process.shape)
+        for idx, proc in np.ndenumerate(realized_process):
+            process_fidelity = qt.process_fidelity(proc, qt.qeye_like(proc))
+            
+            if type == "avg":
+                raise NotImplementedError(
+                    "Average fidelity is not implemented. As the conversion "
+                    "from process fidelity isn't clear when the process isn't "
+                    "CPTP."
+                )
+                # wrong when the process is not TP
+                # fidelity[idx] = proc_fid_2_ave_fid(process_fidelity, 2)
+            elif type == "etg":
+                fidelity[idx] = process_fidelity
+            else:
+                raise ValueError("The type of fidelity should be either 'avg' or 'etg'.")
 
-        return effective_logical_process
-
+        return fidelity
+        
+    def process_dnorm(self):
+        """
+        The diamond norm of the processes on the edge.
+        """
+        processes = self.effective_logical_process()
+        dnorms = np.zeros(processes.shape)
+        
+        for idx, process in np.ndenumerate(processes):
+            dnorms[idx] = process.dnorm(target_process_for_dnorm(process))
+        
+        return dnorms
+        
 
 class PropagatorEdge(EvolutionEdge):
     pass
@@ -322,18 +364,27 @@ class CheckPointEdge(EdgeBase):
         except AttributeError:
             raise AttributeError("The initial state are not evolved.")
 
-        # project the state onto the logical subspace
-        state = self.init_state.state
+        # process: a projection on to the logical subspace or its complement
         projector = self.init_state.ideal_projector
-        success_state = projector * state * projector.dag()
-        failure_state = state - success_state
+        if self.success:
+            map_op = projector
+        else:
+            eye_op = qt.qeye_like(projector)
+            map_op = eye_op - projector
+        map_superop = qt.sprepost(map_op, map_op.dag())
+        
+        # evolve the state and the process
+        process = map_superop * self.init_state.process
+        final_state = superop_evolve(map_superop, self.init_state.state)
 
         # feed the result to the final state
         self.final_state.accept(
             meas_record = copy.copy(self.init_state.meas_record), 
-            state = success_state if self.success else failure_state, 
+            state = final_state, 
             prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
             ideal_logical_states = copy.deepcopy(self.init_state.ideal_logical_states),
+            process = process,
+            init_encoders = copy.deepcopy(self.init_state.init_encoders),
         )
 
     def __str__(self) -> str:

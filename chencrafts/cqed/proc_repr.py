@@ -13,18 +13,24 @@ import qutip as qt
 from typing import List
 
 # Pauli basis, but normalized according to Hilbert-Schmidt inner product
-pauli_basis = np.array([
+pauli_basis: np.ndarray[qt.Qobj] = np.array([
     qt.qeye(2), 
     qt.sigmax(), 
     qt.sigmay(), 
     qt.sigmaz()
 ], dtype=qt.Qobj) / np.sqrt(2)
 
-pauli_col_vec_basis = np.array([qt.operator_to_vector(pauli) for pauli in pauli_basis], dtype=qt.Qobj)
-pauli_row_vec_basis = np.array([qt.operator_to_vector(pauli.trans()) for pauli in pauli_basis], dtype=qt.Qobj)
+pauli_col_vec_basis: np.ndarray[qt.Qobj] = np.array([
+    qt.operator_to_vector(pauli) for pauli in pauli_basis
+], dtype=qt.Qobj)
+pauli_row_vec_basis: np.ndarray[qt.Qobj] = np.array([
+    qt.operator_to_vector(pauli.trans()) for pauli in pauli_basis
+], dtype=qt.Qobj)
 
 # |i><j| basis
-ij_col_vec_basis = [qt.operator_to_vector(qt.basis(2, j) * qt.basis(2, i).dag()) for i in range(2) for j in range(2)]   # column stacking
+ij_col_vec_basis: np.ndarray[qt.Qobj] = np.array([
+    qt.operator_to_vector(qt.basis(2, j) * qt.basis(2, i).dag()) for i in range(2) for j in range(2)
+], dtype=qt.Qobj)   # column stacking
 
 # structure constant, determines the multiplication of Pauli operators
 # \sigma_a \sigma_b = f_{abc} \sigma_c

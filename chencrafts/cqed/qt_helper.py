@@ -420,6 +420,8 @@ def process_fidelity(
         process_fidelity * d + 1 = (d + 1) * qt.average_gate_fidelity
     where d is the dimension of the Hilbert space.
     """
+    assert super_propagator_1.type == "super" and super_propagator_2.type == "super", "The input should be superoperators."
+    
     if subspace_basis is not None:
         # write the superoperators in the new basis to reduce the dimension and speed up 
         # the calculation

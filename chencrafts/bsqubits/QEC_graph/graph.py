@@ -5,13 +5,13 @@ __all__ = [
 
 import qutip as qt
 
-from chencrafts.bsqubits.QEC_graph.node import StateEnsemble
+from .node import StateEnsemble
 
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from chencrafts.bsqubits.QEC_graph.node import Node
-    from chencrafts.bsqubits.QEC_graph.edge import Edge
+    from .node import Node
+    from .edge import Edge
 
 class EvolutionGraph:
     def __init__(self):
@@ -173,4 +173,3 @@ class EvolutionTree(EvolutionGraph):
                 break
             
         return attr_by_stp
-    

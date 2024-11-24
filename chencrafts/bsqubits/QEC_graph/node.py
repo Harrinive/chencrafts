@@ -12,19 +12,129 @@ from chencrafts.cqed.qt_helper import (
     projector_w_basis,
     normalization_factor,
     evecs_2_transformation,
+    proc_fid_2_ave_fid,
+)
+from chencrafts.cqed.proc_repr import (
+    pauli_col_vec_basis, pauli_basis, to_orth_chi
 )
 
-from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Callable, Literal
-from abc import ABC, abstractmethod, abstractproperty
+from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Literal
+from abc import ABC, abstractmethod
 
 if TYPE_CHECKING:
-    from chencrafts.bsqubits.QEC_graph.edge import Edge
+    from .edge import Edge
 
 MeasurementRecord = List[Tuple[int, ...]]
+
+
+def effective_logical_process(
+    process: qt.Qobj,
+    init_encoders: np.ndarray[qt.Qobj] | List[qt.Qobj],
+    final_encoders: np.ndarray[qt.Qobj] | List[qt.Qobj],
+    repr: Literal["super", "choi", "chi", "orth_chi"] = "super",
+) -> np.ndarray[qt.Qobj]:
+    """
+    The effective logical process in the computational basis.
+    
+    Note that the initial and final states may be in multiple logical subspaces,
+    say the initial node have i subspaces and the final node have f subspaces.
+    Then the effective logical process is a f*i matrix, with each element being
+    a superoperator representation of the logical process.
+    """
+    len_init_subspace = len(init_encoders)
+    len_final_subspace = len(final_encoders)
+    
+    init_encoders_superop = [
+        qt.sprepost(enc, enc.dag()) for enc in init_encoders
+    ]
+    final_decoders_superop = [
+        qt.sprepost(enc.dag(), enc) for enc in final_encoders
+    ]
+
+    effective_logical_process = np.ndarray(
+        (len_final_subspace, len_init_subspace), 
+        dtype=qt.Qobj
+    )
+    
+    for idx_final, idx_init in np.ndindex(*effective_logical_process.shape):
+        proc = (
+            final_decoders_superop[idx_final] * process * init_encoders_superop[idx_init]
+        )
+        
+        if repr == "super":
+            pass
+        elif repr == "choi":
+            proc = qt.to_choi(proc)
+        elif repr == "chi":
+            proc = qt.to_chi(proc)
+        elif repr == "orth_chi":
+            proc = to_orth_chi(proc)
+        else:
+            raise ValueError("The type of effective logical process should be "
+                             "either 'super', 'choi', 'chi', or 'orth_chi'.")
+        
+        effective_logical_process[idx_final, idx_init] = proc
+
+    return effective_logical_process
+
+
+def target_process_for_dnorm(
+    process: qt.Qobj,
+    I_prob: float | None = None,
+) -> qt.Qobj:
+    """
+    To calculate the diamond norm of the a process, we need to
+    specify the target process to compare to. It's typically a scaled 
+    identity process.
+    
+    I_prob: the probability of having I * rho * I in the compared process. 
+    If not specified, it will be calculated from the process.
+    """
+    
+    if I_prob is None:
+        # choi matrix is a unitary transformation of the orth_chi matrix
+        # if it's CPTP, the trace of choi matrix is 2 (dimension)
+        choi = qt.to_choi(process)
+        I_prob = choi.tr()
+    else:
+        # we need to scale the give I prob as I_op has a normalization factor 
+        # of sqrt(2)
+        I_prob = I_prob * 2
+        
+    I_op = pauli_basis[0]   # I operator / sqrt(2)
+    
+    # find the superoperator representation of I*rho*I
+    I_super = qt.sprepost(I_op, I_op)
+    
+    return I_prob * I_super
+
+
+class TerminationError(Exception):
+    """
+    Error raised when trying to perform operations on a terminated node.
+    
+    This typically happens when trying to:
+    - Calculate effective logical process
+    - Calculate process fidelity
+    - Calculate process diamond norm
+    - Or other operations that require valid process information
+    """
+    def __init__(self, message: str = "Operations not allowed on terminated node"):
+        self.message = message
+        super().__init__(self.message)
+
 
 class NodeBase(ABC):
     # current state as a density matrix
     state: qt.Qobj
+    
+    # process that evolves the initial node to the current node
+    process: qt.Qobj
+    
+    # initial encoders that encode the logical states to the physical states    
+    # it is used for calculating the effective logical process
+    init_encoders: np.ndarray[qt.Qobj]
+    
     index: int
 
     def __init__(
@@ -35,7 +145,8 @@ class NodeBase(ABC):
         """
         self.out_edges: List["Edge"] = []
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def fidelity(self) -> float:
         """
         Calculate the fidelity of the state
@@ -100,6 +211,28 @@ class NodeBase(ABC):
         state (if exists)
         """
         pass
+    
+    def effective_logical_process(self):
+        """
+        The effective logical process of the node in the computational basis.
+        """
+        pass
+    
+    def fidelity_by_process(self):
+        """
+        The fidelity of the process since the initial node to the current node
+        by comparing the effective logical process with the ideal logical process
+        (identity superoperator)
+        """
+        pass
+
+    def error_rate_by_process(self):
+        """
+        The error rate of the process since the initial node to the current node
+        by comparing the effective logical process with the ideal logical process
+        (identity superoperator)
+        """
+        pass
 
     
 class StateNode(NodeBase):
@@ -136,6 +269,8 @@ class StateNode(NodeBase):
         state: qt.Qobj,
         prob_amp_01: Tuple[float, float],
         ideal_logical_states: np.ndarray[qt.Qobj],
+        process: qt.Qobj,
+        init_encoders: np.ndarray[qt.Qobj],
         **kwargs,
     ):
         """
@@ -147,17 +282,29 @@ class StateNode(NodeBase):
         - state: the state after the evolution
         - prob_amp_01: the probability amplitude of |0> and |1>
         - ideal_logical_states: N*2 array of the ideal logical states
+        - process: the process that evolves the initial node to the current node
+        - init_encoders: the initial encoders that encode the logical states to the
+        initial physical states
         """
-        # basic type checks:
+        # basic type and validity checks:
         for ideal_state in ideal_logical_states.ravel():
             assert ideal_state.type == "ket"
             assert np.allclose(normalization_factor(ideal_state), 1)
         assert np.allclose(np.sum(np.abs(prob_amp_01)**2), 1)
+        assert process.type == "super"
+        
+        # shape consistency:
+        subsys_dims = state.dims[0]
+        assert process.dims == [[subsys_dims] * 2] * 2
+        for ideal_state in ideal_logical_states.ravel():
+            assert ideal_state.dims[0] == subsys_dims
 
         self.meas_record = meas_record
         self.state = state
         self._prob_amp_01 = prob_amp_01
         self.ideal_logical_states = ideal_logical_states
+        self.process = process
+        self.init_encoders = init_encoders
 
     @property
     def prob_amp_01(self) -> Tuple[float, float]:
@@ -251,7 +398,6 @@ class StateNode(NodeBase):
             func = StateNode._GS_orthogonalize
         elif StateNode.ORTHOGONALIZE_METHOD == "symm":
             func = StateNode._symmtrized_orthogonalize
-
 
         new_state_arr = np.empty_like(state_arr)
         for i in range(len(state_arr)):
@@ -392,14 +538,22 @@ class StateNode(NodeBase):
                 init_prob_amp_01[0] * logical_state_arr[0, 0] 
                 + init_prob_amp_01[1] * logical_state_arr[0, 1]
             ).unit()
+        state_dm = qt.ket2dm(state)
+        
+        # initial process is identity
+        eye_op = qt.qeye_like(state_dm)
+        eye_super = qt.sprepost(eye_op, eye_op)
         
         init_node = cls()
         init_node.accept(
             meas_record = [], 
-            state = qt.ket2dm(state),
+            state = state_dm,
             prob_amp_01 = init_prob_amp_01,
             ideal_logical_states = logical_state_arr,
+            process = eye_super,
+            init_encoders = np.array([]),  # add in the next line
         )
+        init_node.init_encoders = init_node.ideal_encoders()
 
         return init_node
 
@@ -482,7 +636,7 @@ class StateNode(NodeBase):
             self.expect(op) for op in op_list
         ])
         
-    def ideal_encoder(self):
+    def ideal_encoders(self) -> np.ndarray[qt.Qobj]:
         """
         The ideal decoder for the state - map the state to a two-level system.
         
@@ -512,6 +666,74 @@ class StateNode(NodeBase):
             )
             
         return decoders
+    
+    def effective_logical_process(
+        self,
+        repr: Literal["super", "choi", "chi", "orth_chi"] = "super",
+    ) -> np.ndarray[qt.Qobj]:
+        """
+        Calculate the effective logical process since the initial state
+        to the current state.
+        """
+        if self.terminated:
+            raise TerminationError("The node is terminated. No effective logical process.")
+        
+        return effective_logical_process(
+            process = self.process, 
+            init_encoders = self.init_encoders, 
+            final_encoders = self.ideal_encoders(), 
+            repr = repr
+        )
+        
+    def fidelity_by_process(
+        self, 
+        type: Literal["avg", "etg"] = "etg",
+    ) -> np.ndarray[float]:
+        """
+        The fidelity of the process since the initial node to the current node.
+        
+        Type:
+            "avg": average fidelity
+            "etg": enranglement fidelity
+        """
+        if self.terminated:
+            raise TerminationError("The node is terminated. No effective logical process.")
+        
+        realized_process = self.effective_logical_process()
+        
+        fidelity = np.zeros(realized_process.shape)
+        for idx, proc in np.ndenumerate(realized_process):
+            process_fidelity = qt.process_fidelity(proc, qt.qeye_like(proc))
+            
+            if type == "avg":
+                raise NotImplementedError(
+                    "Average fidelity is not implemented. As the conversion "
+                    "from process fidelity isn't clear when the process isn't "
+                    "CPTP."
+                )
+                # wrong when the process is not TP
+                # fidelity[idx] = proc_fid_2_ave_fid(process_fidelity, 2)
+            elif type == "etg":
+                fidelity[idx] = process_fidelity
+            else:
+                raise ValueError("The type of fidelity should be either 'avg' or 'etg'.")
+
+        return fidelity
+        
+    def process_dnorm(self) -> np.ndarray[float]:
+        """
+        The diamond norm of the processes since the initial node to the current node.
+        """
+        if self.terminated:
+            raise TerminationError("The node is terminated. No effective logical process.")
+        
+        processes = self.effective_logical_process()
+        dnorms = np.zeros(processes.shape)
+        
+        for idx, process in np.ndenumerate(processes):
+            dnorms[idx] = process.dnorm(target_process_for_dnorm(process))
+        
+        return dnorms
     
 
 Node = StateNode    # for now, the only node type is StateNode
@@ -680,3 +902,93 @@ class StateEnsemble:
         return np.sum([
             node.bloch_vector() for node in self.nodes
         ], axis=0)
+        
+    def process(self,) -> qt.Qobj:
+        """
+        Calculate the ensemble averaged process starting from the initial state
+        to the ensemble.
+        """
+        return sum([node.process for node in self.nodes])
+
+    def effective_logical_process(
+        self,
+        repr: Literal["super", "choi", "chi", "orth_chi"] = "super",
+        force_sum: bool = False,
+    ) -> qt.Qobj:
+        """
+        Calculate the effective logical process since the initial state
+        to the current state.
+        
+        If force_sum is True and the effective process is not unique, we will
+        sum over all the decoded processes, as if they are all decoded right 
+        after the step.
+        """
+        processes = []
+        for node in self.active_nodes():
+            proc = node.effective_logical_process(repr)
+
+            if proc.shape != (1, 1) and not force_sum:
+                raise ValueError(
+                    "To get the effective logical process for an ensemble, "
+                    "the effective logical process for each node should be "
+                    "unique / well defined, or in other words, the ideal "
+                    "final decoders should be unique."
+                )
+            else:
+                processes.append(np.sum(proc))
+
+        return sum(processes)
+
+    def fidelity_by_process(
+        self,
+        type: Literal["avg", "etg"] = "etg",
+        force_sum: bool = False,
+    ) -> float:
+        """
+        The fidelity of the process since the initial node to the current node.
+        
+        Type:
+            "avg": average fidelity
+            "etg": enranglement fidelity
+        """
+        fids = []
+        for node in self.active_nodes():
+            fid = node.fidelity_by_process(type)
+
+            if fid.shape != (1, 1) and not force_sum:
+                raise ValueError(
+                    "To get the fidelity by process for an ensemble, the fidelity "
+                    "by process for each node should be unique / well defined."
+                )
+            else:
+                fids.append(np.sum(fid))
+            
+        ensemble_fid = sum(fids)
+        
+        # double check, the fidelity calculation is linear w.r.t. the actual process
+        eff_proc = self.effective_logical_process("super", force_sum)
+        fid_compare = qt.process_fidelity(eff_proc, qt.qeye_like(eff_proc))
+        assert np.abs(fid_compare - ensemble_fid) < 1e-6, "The fidelity by process should be equal to the process fidelity."
+        
+        return ensemble_fid
+    
+    def process_dnorm(
+        self,
+        force_sum: bool = False,
+    ) -> float:
+        """
+        The diamond norm of the processes since the initial node to the current node.
+        """
+        dnorms = []
+        for node in self.active_nodes():
+            dn = node.process_dnorm()
+
+            if dn.shape != (1, 1) and not force_sum:
+                raise ValueError(
+                    "To get the process dnorm for an ensemble, the process "
+                    "dnorm for each node should be unique / well defined."
+                )
+            else:
+                dnorms.append(np.sum(dn))
+
+        return sum(dnorms)

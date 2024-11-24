@@ -15,16 +15,16 @@ import scqubits as scq
 
 from chencrafts.cqed import FlexibleSweep, superop_evolve
 
-from chencrafts.bsqubits.QEC_graph.node import StateNode, StateEnsemble, MeasurementRecord
-from chencrafts.bsqubits.QEC_graph.edge import (
-    PropagatorEdge, MeasurementEdge, Edge, CheckPointEdge)
-from chencrafts.bsqubits.QEC_graph.graph import EvolutionGraph, EvolutionTree
-
 import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.cat_recipe as cat_recipe
 import chencrafts.bsqubits.cat_real as cat_real
 import chencrafts.settings as settings
 
+
+from .node import StateNode, StateEnsemble, MeasurementRecord
+from .edge import (
+    PropagatorEdge, MeasurementEdge, Edge, CheckPointEdge)
+from .graph import EvolutionGraph, EvolutionTree
 
 class CatTreeBuilder(ABC):
 
