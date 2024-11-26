@@ -298,7 +298,18 @@ class EvolutionEdge(EdgeBase):
             dnorms[idx] = process.dnorm(target_process_for_dnorm(process))
         
         return dnorms
+    
+    def process_fidelity(self):
+        """
+        The process fidelity of the processes on the edge.
+        """
+        processes = self.effective_logical_process(repr="chi") / 4
+        fidelities = np.zeros(processes.shape)
         
+        for idx, process in np.ndenumerate(processes):
+            fidelities[idx] = process[0, 0].real
+        
+        return fidelities
 
 class PropagatorEdge(EvolutionEdge):
     pass

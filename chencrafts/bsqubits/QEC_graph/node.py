@@ -15,7 +15,7 @@ from chencrafts.cqed.qt_helper import (
     proc_fid_2_ave_fid,
 )
 from chencrafts.cqed.proc_repr import (
-    pauli_col_vec_basis, pauli_basis, to_orth_chi
+    pauli_col_vec_basis, pauli_basis, to_orth_chi, orth_chi_to_choi
 )
 
 from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Literal
@@ -25,6 +25,13 @@ if TYPE_CHECKING:
     from .edge import Edge
 
 MeasurementRecord = List[Tuple[int, ...]]
+
+
+to_choi_vec = np.vectorize(qt.to_choi)
+to_chi_vec = np.vectorize(qt.to_chi)
+to_orth_chi_vec = np.vectorize(to_orth_chi)
+to_super_vec = np.vectorize(qt.to_super)
+orth_chi_to_choi_vec = np.vectorize(orth_chi_to_choi)
 
 
 def effective_logical_process(
@@ -61,22 +68,21 @@ def effective_logical_process(
             final_decoders_superop[idx_final] * process * init_encoders_superop[idx_init]
         )
         
-        if repr == "super":
-            pass
-        elif repr == "choi":
-            proc = qt.to_choi(proc)
-        elif repr == "chi":
-            proc = qt.to_chi(proc)
-        elif repr == "orth_chi":
-            proc = to_orth_chi(proc)
-        else:
-            raise ValueError("The type of effective logical process should be "
-                             "either 'super', 'choi', 'chi', or 'orth_chi'.")
-        
         effective_logical_process[idx_final, idx_init] = proc
-
-    return effective_logical_process
-
+        
+    if repr == "super":
+        return effective_logical_process
+    elif repr == "choi":
+        return to_choi_vec(effective_logical_process)
+    elif repr == "chi":
+        return to_chi_vec(effective_logical_process)
+    elif repr == "orth_chi":
+        return to_orth_chi_vec(effective_logical_process)
+    else:
+        raise ValueError(
+            "The type of effective logical process should be "
+            "either 'super', 'choi', 'chi', or 'orth_chi'."
+        )
 
 def target_process_for_dnorm(
     process: qt.Qobj,
@@ -86,28 +92,44 @@ def target_process_for_dnorm(
     To calculate the diamond norm of the a process, we need to
     specify the target process to compare to. It's typically a scaled 
     identity process.
+    It supports super, choi, chi, and orth_chi representations.
     
     I_prob: the probability of having I * rho * I in the compared process. 
     If not specified, it will be calculated from the process.
     """
+    assert process.shape == (4, 4), "Only support single qubit process for now."
     
     if I_prob is None:
         # choi matrix is a unitary transformation of the orth_chi matrix
         # if it's CPTP, the trace of choi matrix is 2 (dimension)
-        choi = qt.to_choi(process)
+        if process.superrep == "orth_chi":
+            choi = orth_chi_to_choi(process)
+        else:
+            choi = qt.to_choi(process)
         I_prob = choi.tr()
     else:
         # we need to scale the give I prob as I_op has a normalization factor 
         # of sqrt(2)
-        I_prob = I_prob * 2
+        I_prob = I_prob * 2 
         
     I_op = pauli_basis[0]   # I operator / sqrt(2)
     
     # find the superoperator representation of I*rho*I
-    I_super = qt.sprepost(I_op, I_op)
+    I_super = qt.sprepost(I_op, I_op) * I_prob
     
-    return I_prob * I_super
+    if process.superrep == "orth_chi":
+        I_super = to_orth_chi(I_super)
+    elif process.superrep == "choi":
+        I_super = qt.to_choi(I_super)
+    elif process.superrep == "chi":
+        I_super = qt.to_chi(I_super)
+    elif process.superrep == "super":
+        pass
+    else:
+        raise ValueError("The superoperator representation of the process should be "
+                         "either 'super', 'choi', 'chi', or 'orth_chi'.")
 
+    return I_super
 
 class TerminationError(Exception):
     """
@@ -253,6 +275,7 @@ class StateNode(NodeBase):
     # the first dimension counts the number of correctable errors
     # the second dimension enumerates: logical state 0 and logical state 1
     ideal_logical_states: np.ndarray[qt.Qobj]
+    _effective_logical_process: np.ndarray[qt.Qobj] | None  # store for efficiency, always a choi matrix representation
 
     # mark that the node will not be further evolved and reduce the compu
     # time. It does not mean that the node is a final state in the diagram,
@@ -262,6 +285,15 @@ class StateNode(NodeBase):
     # fidelity warning issued when the fidelity is larger than 0 in a 
     # terminated branch
     term_fid_warning_issued = False
+    
+    # accumulated fidelity, calculated by the sum of the process
+    # fidelity of all the edges leading to the node. It is an upper bound of
+    # the fidelity of the full process.
+    # accum_infid: np.ndarray[float] | None = None
+    
+    # accumulated dnorm, calculated by the sum of the dnorm of all the edges
+    # leading to the node. It is an upper bound of the dnorm of the full process.
+    # accum_dnorm: np.ndarray[float] | None = None
 
     def accept(
         self, 
@@ -291,7 +323,7 @@ class StateNode(NodeBase):
             assert ideal_state.type == "ket"
             assert np.allclose(normalization_factor(ideal_state), 1)
         assert np.allclose(np.sum(np.abs(prob_amp_01)**2), 1)
-        assert process.type == "super"
+        assert process.type == "super" and process.superrep == "super"
         
         # shape consistency:
         subsys_dims = state.dims[0]
@@ -305,6 +337,9 @@ class StateNode(NodeBase):
         self.ideal_logical_states = ideal_logical_states
         self.process = process
         self.init_encoders = init_encoders
+        
+        # reset and wait for calculation
+        self._effective_logical_process = None      
 
     @property
     def prob_amp_01(self) -> Tuple[float, float]:
@@ -398,6 +433,11 @@ class StateNode(NodeBase):
             func = StateNode._GS_orthogonalize
         elif StateNode.ORTHOGONALIZE_METHOD == "symm":
             func = StateNode._symmtrized_orthogonalize
+        else:
+            raise ValueError(
+                "The orthogonalization method should be either "
+                "'GS' or 'symm'."
+            )
 
         new_state_arr = np.empty_like(state_arr)
         for i in range(len(state_arr)):
@@ -674,16 +714,32 @@ class StateNode(NodeBase):
         """
         Calculate the effective logical process since the initial state
         to the current state.
+        
+        If there is already a cached result, return it.
         """
         if self.terminated:
             raise TerminationError("The node is terminated. No effective logical process.")
         
-        return effective_logical_process(
-            process = self.process, 
-            init_encoders = self.init_encoders, 
-            final_encoders = self.ideal_encoders(), 
-            repr = repr
-        )
+        # if there is no cached result, calculate it
+        # the cache is reset when `accept` is called
+        if self._effective_logical_process is None:
+            self._effective_logical_process = effective_logical_process(
+                process = self.process, 
+                init_encoders = self.init_encoders, 
+                final_encoders = self.ideal_encoders(), 
+                repr = "choi",
+            )
+            
+        if repr == "super":
+            return to_super_vec(self._effective_logical_process)
+        elif repr == "choi":
+            return self._effective_logical_process
+        elif repr == "chi":
+            return to_chi_vec(self._effective_logical_process)
+        elif repr == "orth_chi":
+            return to_orth_chi_vec(self._effective_logical_process)
+        else:
+            raise ValueError(f"The representation {repr} is not supported.")
         
     def fidelity_by_process(
         self, 
@@ -720,20 +776,41 @@ class StateNode(NodeBase):
 
         return fidelity
         
-    def process_dnorm(self) -> np.ndarray[float]:
+    def process_dnorm(
+        self,
+    ) -> np.ndarray[float]:
         """
         The diamond norm of the processes since the initial node to the current node.
+        
+        For each process, we compare it with a scaled identity process
+        (compare_process = I_prob * internal_ratio * identity),
+        where the scaling factor can be determined by the trace of 
+        the overall choi matrix. 
+        """        
+        if self.terminated:
+            raise TerminationError("The node is terminated. No effective logical process.")
+        
+        processes = self.effective_logical_process(repr = "choi")
+        dnorms = np.zeros(processes.shape)
+        for idx, process in np.ndenumerate(processes):
+            compare_process = target_process_for_dnorm(process)
+            dnorms[idx] = process.dnorm(compare_process)
+            
+        return dnorms
+    
+    def process_choi_trace(self) -> float:
+        """
+        The trace of the choi matrix of the effective logical processes
         """
         if self.terminated:
             raise TerminationError("The node is terminated. No effective logical process.")
         
-        processes = self.effective_logical_process()
-        dnorms = np.zeros(processes.shape)
-        
+        processes = self.effective_logical_process(repr = "choi")
+        traces = np.zeros(processes.shape)
         for idx, process in np.ndenumerate(processes):
-            dnorms[idx] = process.dnorm(target_process_for_dnorm(process))
-        
-        return dnorms
+            traces[idx] = process.tr()
+            
+        return traces
     
 
 Node = StateNode    # for now, the only node type is StateNode
@@ -817,6 +894,23 @@ class StateEnsemble:
         Calculate the total fidelity
         """
         return sum([node.fidelity for node in self.nodes])
+    
+    # @property
+    # def accum_infid(self) -> np.ndarray[float]:
+    #     """
+    #     The accumulated fidelity of the nodes
+    #     """
+    #     raise NotImplementedError(
+    #         "The current implementation of the accumulated fidelity is wrong."
+    #     )
+    #     # return np.sum(sum([node.accum_infid for node in self.active_nodes()]))
+    
+    # @property
+    # def accum_dnorm(self) -> np.ndarray[float]:
+    #     """
+    #     The accumulated dnorm of the nodes
+    #     """
+    #     return np.sum(sum([node.accum_dnorm for node in self.active_nodes()]))
 
     def deepcopy(self):
         """
@@ -977,7 +1071,52 @@ class StateEnsemble:
         force_sum: bool = False,
     ) -> float:
         """
-        The diamond norm of the processes since the initial node to the current node.
+        The diamond norm of the processes since the initial node to the 
+        current ensemble.
+        
+        dnorm(sum_i E_i - I), where E_i is the process of the i-th node.
+        """
+        proc = self.effective_logical_process(repr="super", force_sum=force_sum)
+        return (proc - qt.qeye_like(proc)).dnorm()
+    
+    def process_choi_trace(
+        self,
+        force_sum: bool = False,
+    ) -> float:
+        """
+        The trace of the choi matrix of the effective logical processes
+        from the initial node to the current ensemble.
+        """
+        traces = []
+        for node in self.active_nodes():
+            tr = node.process_choi_trace()
+
+            if tr.shape != (1, 1) and not force_sum:
+                raise ValueError(
+                    "To get the process choi trace for an ensemble, the process "
+                    "choi trace for each node should be unique / well defined."
+                )
+            else:
+                traces.append(np.sum(tr))
+                
+        return sum(traces)
+    
+    def process_dnorm_by_sum(
+        self,
+        force_sum: bool = False,
+    ) -> float:
+        """
+        The diamond norm of the processes since the initial node to the 
+        current ensemble.
+        
+        Say the process is sum_i E_i, where E_i is the process of the i-th node.
+        Then the diamond norm is calculated as   
+        dnorm(sum_i E_i - I) 
+        = dnorm(sum_i (E_i - p_i*I) + p_leak*I)
+        >= sum_i dnorm(E_i - p_i*I) + p_leak*dnorm(I)   (triangle inequality)
+        
+        where p_i is the probability (trace of the choi matrix) of the i-th node,
+        and p_leak is the probability of the leakage process.
         """
         dnorms = []
         for node in self.active_nodes():
@@ -990,5 +1129,8 @@ class StateEnsemble:
                 )
             else:
                 dnorms.append(np.sum(dn))
-
-        return sum(dnorms)
+        
+        # tackel the leakage
+        p_leak = 1 - self.process_choi_trace(force_sum) / 2
+        
+        return sum(dnorms) + p_leak
