@@ -20,7 +20,8 @@ import warnings
 
 from qutip.solver.integrator.integrator import IntegratorException
 from chencrafts.cqed.floquet import FloquetBasis
-from chencrafts.cqed.qt_helper import oprt_in_basis, qobj_submatrix, Stinespring_to_Kraus
+from chencrafts.cqed.qt_helper import oprt_in_basis, qobj_submatrix
+from chencrafts.cqed.proc_repr import Stinespring_to_Kraus
 from chencrafts.cqed.custom_sweeps.general import standardize_evec_sign
 from chencrafts.cqed.pulses import Gaussian
 from chencrafts.toolbox.gadgets import mod_c
