@@ -18,7 +18,11 @@ from chencrafts.cqed.qt_helper import (
     proc_fid_2_ave_fid,
 )
 from . import settings
-from .node import effective_logical_process, target_process_for_dnorm
+from .node import (
+    effective_logical_process, 
+    target_process_for_dnorm, 
+    TerminationError,
+)
 
 if TYPE_CHECKING:
     from .node import (
@@ -34,13 +38,7 @@ class EdgeBase(ABC):
     final_state: "Node"
 
     index: int
-
-    # deprecated now !!!!
-    # if the evolved states are added to an ensemble (for example, trash bin)
-    # represents an ensemble (for example, trash bin)
-    # it should be True
-    to_ensemble: bool
-
+    
     def connect(self, init_state: "Node", final_state: "Node"):
         """
         Connect the edge to the initial state and the final state
@@ -85,6 +83,12 @@ class EdgeBase(ABC):
         """
         return self.final_state.probability / self.init_state.probability     
 
+    @property
+    def terminated(self) -> bool:
+        """
+        Whether the edge is linked to a terminated state
+        """
+        return self.final_state.terminated
 
 class EvolutionEdge(EdgeBase):
 
@@ -135,7 +139,7 @@ class EvolutionEdge(EdgeBase):
         try:
             self.init_state.state
             self.init_state.prob_amp_01
-            self.init_state.ideal_logical_states
+            self.init_state._raw_ideal_logical_states
             self.init_state.process
         except AttributeError:
             raise AttributeError("The initial state are not evolved.")
@@ -210,7 +214,7 @@ class EvolutionEdge(EdgeBase):
                 meas_record = copy.deepcopy(self.init_state.meas_record), 
                 state = final_state, 
                 prob_amp_01 = copy.deepcopy(self.init_state._prob_amp_01),
-                ideal_logical_states = new_ideal_logical_state_array,
+                raw_ideal_logical_states = new_ideal_logical_state_array,
                 process = final_process,
                 init_encoders = copy.deepcopy(self.init_state.init_encoders),
             )
@@ -266,7 +270,7 @@ class EvolutionEdge(EdgeBase):
             "avg": average fidelity
             "etg": enranglement fidelity
         """
-        realized_process = self.effective_logical_process()
+        realized_process = self.effective_logical_process("super")
         
         fidelity = np.zeros(realized_process.shape)
         for idx, proc in np.ndenumerate(realized_process):
@@ -291,7 +295,7 @@ class EvolutionEdge(EdgeBase):
         """
         The diamond norm of the processes on the edge.
         """
-        processes = self.effective_logical_process()
+        processes = self.effective_logical_process("super")
         dnorms = np.zeros(processes.shape)
         
         for idx, process in np.ndenumerate(processes):
@@ -310,6 +314,18 @@ class EvolutionEdge(EdgeBase):
             fidelities[idx] = process[0, 0].real
         
         return fidelities
+    
+    def process_choi_trace(self) -> float:
+        """
+        The trace of the choi matrix of the effective logical processes
+        """
+        processes = self.effective_logical_process(repr = "choi")
+        traces = np.zeros(processes.shape)
+        for idx, process in np.ndenumerate(processes):
+            traces[idx] = process.tr()
+            
+        return traces
+    
 
 class PropagatorEdge(EvolutionEdge):
     pass
@@ -371,7 +387,7 @@ class CheckPointEdge(EdgeBase):
         try:
             self.init_state.state
             self.init_state.prob_amp_01
-            self.init_state.ideal_logical_states
+            self.init_state._raw_ideal_logical_states
         except AttributeError:
             raise AttributeError("The initial state are not evolved.")
 
@@ -393,7 +409,7 @@ class CheckPointEdge(EdgeBase):
             meas_record = copy.copy(self.init_state.meas_record), 
             state = final_state, 
             prob_amp_01 = copy.copy(self.init_state._prob_amp_01),
-            ideal_logical_states = copy.deepcopy(self.init_state.ideal_logical_states),
+            raw_ideal_logical_states = copy.deepcopy(self.init_state._raw_ideal_logical_states),
             process = process,
             init_encoders = copy.deepcopy(self.init_state.init_encoders),
         )

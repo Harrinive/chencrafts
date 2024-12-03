@@ -472,7 +472,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
             res_mode_idx=self._res_mode_idx,
             static_hamiltonian=self.static_hamiltonian,
             time=time,
-            decay_rate=self.fsweep["kappa_s"],
+            decay_rate=self.fsweep["jump_a"] if self.new_recipe else self.fsweep["kappa_s"],
             self_Kerr=self.fsweep["K_s"],
         )
     
@@ -974,7 +974,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
         init_state_node = StateNode.initial_note(
             init_prob_amp_01, logical_0, logical_1,
         )
-        init_state_node.ideal_logical_states = logical_states
+        init_state_node._raw_ideal_logical_states = logical_states
         graph.add_node(init_state_node)
 
         # current ensemble

@@ -175,58 +175,60 @@ class EvolutionTree(EvolutionGraph):
             
         return attr_by_stp
     
-    # def traverse_and_bound_error(self) -> None:
-    #     """
-    #     Make use of the process fidelity of the edges, compute the upper bound
-    #     of the fidelity of the full process, using the chain rule and triangle
-    #     inequality.
+    def traverse_and_approx(self) -> None:
+        """
+        breath-first traverse the graph and "approximate" 
+        - the probability of each node in the corresponding ensemble, it is the product of the probabilities
+        of the edges leading to the node. It should be first-order close to
+        the actual probability of the node, given a particular initial state.
+        For each edge, the probability is the trace of the choi matrix of the
+        process.
+        - the accumulated logical process of each node, it's the product of the
+        process matrix on each edge leading to the node's computational subspace.
         
-    #     The accumulated fidelity of a node is the sum of
-    #     the process fidelity of all the edges leading to the node.
-    #     Here, we perform a breadth-first traversal, and for each node,
-    #     we add its accumulated fidelities with the process fidelity of
-    #     the edges leading to the next layer of nodes, and store the result
-    #     in the accumulated fidelities of the next layer of nodes.
+        the results are stored in the nodes (traj_prob and accum_logical_process)
+        """
+        init_node = self.nodes[0]
+        current_layer = [init_node]
+        next_layer = []
+        init_node.traj_prob = np.array([1.0])
+        init_node._accum_logical_process = np.array([[qt.to_super(qt.qeye(2))]])
         
-    #     Note: it seems that it provides a very loose bound.
-    #     """
-    #     init_node = self.nodes[0]
-    #     current_layer = [init_node]
-    #     next_layer = []
-    #     # init_node.accum_infid = 1 - init_node.fidelity_by_process()
-    #     init_node.accum_dnorm = init_node.process_dnorm()
-        
-    #     assert np.allclose(init_node.fidelity_by_process(), 1), "The initial node is should have fidelity 1, or the code is not tested."
-        
-    #     while current_layer:
-    #         for initial_state in current_layer:
-    #             for edge in initial_state.out_edges:
-    #                 final_state = edge.final_state
-    #                 if final_state.terminated:
-    #                     continue
+        while current_layer:
+            for initial_state in current_layer:
+                for edge in initial_state.out_edges:
+                    final_state = edge.final_state
+                    if final_state.terminated:
+                        continue
                     
-    #                 # wrong! 
-    #                 # final_infid = (
-    #                 #     initial_state.accum_infid
-    #                 #     + (1 - np.sum(edge.process_fidelity(), axis=1))
-    #                 # )
+                    # to get the trajectory probability, it's the trace of the
+                    # process choi matrix times the trajectory probability of
+                    # the initial state
+                    final_state.traj_prob = (
+                        edge.process_choi_trace() / 2    # dim=2
+                        @ initial_state.traj_prob.reshape(-1, 1)
+                    ).reshape(-1)
                     
-    #                 final_dnorm = (
-    #                     initial_state.accum_dnorm
-    #                     + np.sum(edge.process_dnorm(), axis=1)
-    #                 )
+                    # to get the accumulated logical process, it very much
+                    # looks like the matrix multiplication of the effective_logical_process matrix
+                    # but for each element, it's another layer of matrix multiplication
+                    # for each process
+                    edge_process = edge.effective_logical_process(repr = "super")
+                    accum_proc = np.ndarray(
+                        (edge_process.shape[0], 1), 
+                        dtype=object
+                    )
+                    for idx, proc in np.ndenumerate(edge_process):
+                        result_process = (
+                            proc * initial_state._accum_logical_process[idx[1], 0]
+                        )
+                        if idx[1] == 0:
+                            accum_proc[idx[0], 0] = result_process
+                        else:
+                            accum_proc[idx[0], 0] += result_process
+                    final_state._accum_logical_process = accum_proc
                     
-    #                 # if final_state.accum_infid is None:
-    #                 #     final_state.accum_infid = final_infid
-    #                 # else:
-    #                 #     final_state.accum_infid += final_infid
+                    next_layer.append(final_state)
                     
-    #                 if final_state.accum_dnorm is None:
-    #                     final_state.accum_dnorm = final_dnorm
-    #                 else:
-    #                     final_state.accum_dnorm += final_dnorm
-                    
-    #                 next_layer.append(final_state)
-                
-    #         current_layer = next_layer
-    #         next_layer = []
+            current_layer = next_layer
+            next_layer = []

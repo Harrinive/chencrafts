@@ -274,7 +274,7 @@ class StateNode(NodeBase):
     # ideal states, organized in an ndarray, with dimension n*3
     # the first dimension counts the number of correctable errors
     # the second dimension enumerates: logical state 0 and logical state 1
-    ideal_logical_states: np.ndarray[qt.Qobj]
+    _raw_ideal_logical_states: np.ndarray[qt.Qobj]
     _effective_logical_process: np.ndarray[qt.Qobj] | None  # store for efficiency, always a choi matrix representation
 
     # mark that the node will not be further evolved and reduce the compu
@@ -286,21 +286,24 @@ class StateNode(NodeBase):
     # terminated branch
     term_fid_warning_issued = False
     
-    # accumulated fidelity, calculated by the sum of the process
-    # fidelity of all the edges leading to the node. It is an upper bound of
-    # the fidelity of the full process.
-    # accum_infid: np.ndarray[float] | None = None
+    # trajectory probability to get to this node's allowed computational subspaces. 
+    # It's obtained from the product of the trace of choi matrix of each process 
+    # leading to the node.
+    # The sum of the array should be first-order close to the probability 
+    # of the node.
+    traj_prob: np.ndarray[float] | None = None
     
-    # accumulated dnorm, calculated by the sum of the dnorm of all the edges
-    # leading to the node. It is an upper bound of the dnorm of the full process.
-    # accum_dnorm: np.ndarray[float] | None = None
+    # the accumulated logical process.
+    # it's the product of the process matrix on each edge leading to the node's
+    # computational subspaces. 
+    _accum_logical_process: np.ndarray[qt.Qobj] | None = None
 
     def accept(
         self, 
         meas_record: MeasurementRecord,
         state: qt.Qobj,
         prob_amp_01: Tuple[float, float],
-        ideal_logical_states: np.ndarray[qt.Qobj],
+        raw_ideal_logical_states: np.ndarray[qt.Qobj],
         process: qt.Qobj,
         init_encoders: np.ndarray[qt.Qobj],
         **kwargs,
@@ -313,13 +316,13 @@ class StateNode(NodeBase):
         - meas_record: the measurement record
         - state: the state after the evolution
         - prob_amp_01: the probability amplitude of |0> and |1>
-        - ideal_logical_states: N*2 array of the ideal logical states
+        - raw_ideal_logical_states: N*2 array of the ideal logical states (before orthogonalization)
         - process: the process that evolves the initial node to the current node
         - init_encoders: the initial encoders that encode the logical states to the
         initial physical states
         """
         # basic type and validity checks:
-        for ideal_state in ideal_logical_states.ravel():
+        for ideal_state in raw_ideal_logical_states.ravel():
             assert ideal_state.type == "ket"
             assert np.allclose(normalization_factor(ideal_state), 1)
         assert np.allclose(np.sum(np.abs(prob_amp_01)**2), 1)
@@ -328,13 +331,13 @@ class StateNode(NodeBase):
         # shape consistency:
         subsys_dims = state.dims[0]
         assert process.dims == [[subsys_dims] * 2] * 2
-        for ideal_state in ideal_logical_states.ravel():
+        for ideal_state in raw_ideal_logical_states.ravel():
             assert ideal_state.dims[0] == subsys_dims
 
         self.meas_record = meas_record
         self.state = state
         self._prob_amp_01 = prob_amp_01
-        self.ideal_logical_states = ideal_logical_states
+        self._raw_ideal_logical_states = raw_ideal_logical_states
         self.process = process
         self.init_encoders = init_encoders
         
@@ -357,18 +360,18 @@ class StateNode(NodeBase):
             warn("The probability amplitude of |0> and |1> is reset manually. "
                  "Usually it's not allowed for a terminated node. \n")
             return
-        elif self.ideal_logical_states.shape[0] > 1:
+        elif self._raw_ideal_logical_states.shape[0] > 1:
             warn("The probability amplitude of |0> and |1> is reset manually. "
                  "While the state is not reset as the ideal logical states are "
                  "not unique. \n")
             return
-        elif self.ideal_logical_states.shape[0] == 1:
+        elif self._raw_ideal_logical_states.shape[0] == 1:
             warn("The probability amplitude of |0> and |1> and the state are "
                  "reset manually. \n")
             if self.ORTHOGONALIZE_LOGICAL_STATES:
-                logical_states = self._orthogonalize(self.ideal_logical_states)
+                logical_states = self._orthogonalize(self._raw_ideal_logical_states)
             else:
-                logical_states = self.ideal_logical_states
+                logical_states = self._raw_ideal_logical_states
 
             self.state = qt.ket2dm(
                 self._prob_amp_01[0] * logical_states[0, 0] 
@@ -391,9 +394,12 @@ class StateNode(NodeBase):
     @staticmethod
     def _GS_orthogonalize(state_0, state_1):
         """
-        Gram-Schmidt orthogonalization
+        Gram-Schmidt orthogonalization. 
         """
-        new_state_0 = state_0.unit()
+        state_0 = state_0.unit()
+        state_1 = state_1.unit()
+        
+        new_state_0 = state_0
         new_state_1 = (
             state_1 - state_1.overlap(new_state_0) * new_state_0
         ).unit()
@@ -406,9 +412,12 @@ class StateNode(NodeBase):
         A little bit more generalized version of Gram-Schmidt orthogonalization?
         Don't know whether there is a reference.
         """
+        state_0 = state_0.unit()
+        state_1 = state_1.unit()
+        
         overlap = (state_0.overlap(state_1))
         theta = - np.angle(overlap)   # to make the ovrlap real
-        state_1_w_phase= state_1 * np.exp(1j * theta)
+        state_1_w_phase = state_1 * np.exp(1j * theta)
 
         x = 2 * (state_0.overlap(state_1_w_phase)).real
         sq2mx = np.sqrt(2 - x)
@@ -485,7 +494,7 @@ class StateNode(NodeBase):
         """
         Return the ideal state by logical states
         """
-        if len(self.ideal_logical_states) == 0:
+        if len(self._raw_ideal_logical_states) == 0:
             # the states' norm is too small and thrown away
             dim = self.state.dims[0]
             return np.array([qt.Qobj(
@@ -496,7 +505,7 @@ class StateNode(NodeBase):
         # need to be modified as the logical states are not necessarily
         # orthogonal
         if orthogonalize:
-            othogonalized_states = self._orthogonalize(self.ideal_logical_states)
+            othogonalized_states = self._orthogonalize(self._raw_ideal_logical_states)
             return (
                 self._prob_amp_01[0] * othogonalized_states[:, 0]
                 + self._prob_amp_01[1] * othogonalized_states[:, 1]
@@ -506,8 +515,8 @@ class StateNode(NodeBase):
                 self._qobj_unit, otypes = [qt.Qobj]
             )   # apply qobj.unit() to each element in the array
             return qobj_array_unit(
-                self._prob_amp_01[0] * self.ideal_logical_states[:, 0] 
-                + self._prob_amp_01[1] * self.ideal_logical_states[:, 1]
+                self._prob_amp_01[0] * self._raw_ideal_logical_states[:, 0] 
+                + self._prob_amp_01[1] * self._raw_ideal_logical_states[:, 1]
             )
 
     @property
@@ -518,6 +527,13 @@ class StateNode(NodeBase):
         Return the ideal state by logical states
         """
         return self._ideal_states(self.ORTHOGONALIZE_LOGICAL_STATES)
+    
+    @property
+    def ideal_logical_states(self) -> np.ndarray[qt.Qobj]:
+        if self.ORTHOGONALIZE_LOGICAL_STATES:
+            return self._orthogonalize(self._raw_ideal_logical_states)
+        else:
+            return self._raw_ideal_logical_states
     
     @property
     def ideal_projector(self) -> qt.Qobj:
@@ -549,7 +565,7 @@ class StateNode(NodeBase):
         copied_node = StateNode()
         copied_node.meas_record = deepcopy(self.meas_record)
         copied_node.state = deepcopy(self.state)
-        copied_node.ideal_logical_states = deepcopy(self.ideal_logical_states)
+        copied_node._raw_ideal_logical_states = deepcopy(self._raw_ideal_logical_states)
 
         return copied_node
     
@@ -568,16 +584,11 @@ class StateNode(NodeBase):
         # need to be modified as the logical states are not necessarily
         # orthogonal
         if cls.ORTHOGONALIZE_LOGICAL_STATES:
-            othogonalized_states = cls._orthogonalize(logical_state_arr)
-            state = (
-                init_prob_amp_01[0] * othogonalized_states[0, 0]
-                + init_prob_amp_01[1] * othogonalized_states[0, 1]
-            )
-        else:
-            state = (
-                init_prob_amp_01[0] * logical_state_arr[0, 0] 
-                + init_prob_amp_01[1] * logical_state_arr[0, 1]
-            ).unit()
+            logical_state_arr = cls._orthogonalize(logical_state_arr)
+        state = (
+            init_prob_amp_01[0] * logical_state_arr[0, 0] 
+            + init_prob_amp_01[1] * logical_state_arr[0, 1]
+        ).unit()
         state_dm = qt.ket2dm(state)
         
         # initial process is identity
@@ -589,7 +600,7 @@ class StateNode(NodeBase):
             meas_record = [], 
             state = state_dm,
             prob_amp_01 = init_prob_amp_01,
-            ideal_logical_states = logical_state_arr,
+            raw_ideal_logical_states = logical_state_arr,
             process = eye_super,
             init_encoders = np.array([]),  # add in the next line
         )
@@ -620,7 +631,7 @@ class StateNode(NodeBase):
     def clear_evolution_data(self):
         try:
             del self.state
-            del self.ideal_logical_states
+            del self._raw_ideal_logical_states
             del self.fidelity
             del self.meas_record
         except AttributeError:
@@ -651,16 +662,11 @@ class StateNode(NodeBase):
         if self.terminated:
             return np.zeros(4)
 
-        if self.ideal_logical_states.shape[0] > 1:
+        if self._raw_ideal_logical_states.shape[0] > 1:
             warn("The ideal logical states are not unique. Returned nan.\n")
             return np.nan * np.ones(4)
         
-        if self.ORTHOGONALIZE_LOGICAL_STATES:
-            logical_states = self._orthogonalize(self.ideal_logical_states)
-        else:
-            logical_states = self.ideal_logical_states
-        
-        trans = evecs_2_transformation(logical_states[0])
+        trans = evecs_2_transformation(self.ideal_logical_states[0])
 
         X = trans * qt.sigmax() * trans.dag()
         Y = trans * qt.sigmay() * trans.dag()
@@ -683,29 +689,24 @@ class StateNode(NodeBase):
         Note that the state may have multiple logical subspaces, so there
         are multiple possible decoders.
         """
-        len_subspace = self.ideal_logical_states.shape[0]
-        decoders = np.ndarray(len_subspace, dtype=qt.Qobj)
+        ideal_logical_states = self.ideal_logical_states
+        len_subspace = ideal_logical_states.shape[0]
+        encoders = np.ndarray(len_subspace, dtype=qt.Qobj)
         
         # a list like [1, 1, ..., 1], to make the dimensions consistent
-        subsys_ones = self.ideal_logical_states[0, 0].dims[1]
+        subsys_ones = ideal_logical_states[0, 0].dims[1]
         logical_0 = qt.basis(2, 0)
         logical_0.dims = [[2], subsys_ones]
         logical_1 = qt.basis(2, 1)
         logical_1.dims = [[2], subsys_ones]
         
-        # orthogonalize the logical states
-        if self.ORTHOGONALIZE_LOGICAL_STATES:
-            logical_states = self._orthogonalize(self.ideal_logical_states)
-        else:
-            logical_states = self.ideal_logical_states
-        
         for idx in range(len_subspace):
-            decoders[idx] = (
-                logical_states[idx, 0] * logical_0.dag()
-                + logical_states[idx, 1] * logical_1.dag()
+            encoders[idx] = (
+                ideal_logical_states[idx, 0] * logical_0.dag()
+                + ideal_logical_states[idx, 1] * logical_1.dag()
             )
             
-        return decoders
+        return encoders
     
     def effective_logical_process(
         self,
@@ -716,6 +717,8 @@ class StateNode(NodeBase):
         to the current state.
         
         If there is already a cached result, return it.
+        
+        It is always an N*1 array (col vector) of Qobj.
         """
         if self.terminated:
             raise TerminationError("The node is terminated. No effective logical process.")
@@ -744,6 +747,7 @@ class StateNode(NodeBase):
     def fidelity_by_process(
         self, 
         type: Literal["avg", "etg"] = "etg",
+        approx_proc: bool = False,
     ) -> np.ndarray[float]:
         """
         The fidelity of the process since the initial node to the current node.
@@ -751,11 +755,18 @@ class StateNode(NodeBase):
         Type:
             "avg": average fidelity
             "etg": enranglement fidelity
+            
+        approx_proc: bool = False
+            whether to use the effective process from the full numerics
+            or the multiplication of individual truncated processes
         """
         if self.terminated:
             raise TerminationError("The node is terminated. No effective logical process.")
         
-        realized_process = self.effective_logical_process()
+        if not approx_proc:
+            realized_process = self.effective_logical_process(repr="super")
+        else:
+            realized_process = self.accum_logical_process(repr="super")
         
         fidelity = np.zeros(realized_process.shape)
         for idx, proc in np.ndenumerate(realized_process):
@@ -778,6 +789,7 @@ class StateNode(NodeBase):
         
     def process_dnorm(
         self,
+        approx_proc: bool = False,
     ) -> np.ndarray[float]:
         """
         The diamond norm of the processes since the initial node to the current node.
@@ -790,7 +802,11 @@ class StateNode(NodeBase):
         if self.terminated:
             raise TerminationError("The node is terminated. No effective logical process.")
         
-        processes = self.effective_logical_process(repr = "choi")
+        if not approx_proc:
+            processes = self.effective_logical_process(repr = "choi")
+        else:
+            processes = self.accum_logical_process(repr = "choi")
+            
         dnorms = np.zeros(processes.shape)
         for idx, process in np.ndenumerate(processes):
             compare_process = target_process_for_dnorm(process)
@@ -798,19 +814,94 @@ class StateNode(NodeBase):
             
         return dnorms
     
-    def process_choi_trace(self) -> float:
+    def process_choi_trace(
+        self,
+        approx_proc: bool = False,
+    ) -> float:
         """
         The trace of the choi matrix of the effective logical processes
         """
         if self.terminated:
             raise TerminationError("The node is terminated. No effective logical process.")
-        
-        processes = self.effective_logical_process(repr = "choi")
+
+        if not approx_proc:
+            processes = self.effective_logical_process(repr = "choi")
+        else:
+            processes = self.accum_logical_process(repr = "choi")
+            
         traces = np.zeros(processes.shape)
         for idx, process in np.ndenumerate(processes):
             traces[idx] = process.tr()
             
         return traces
+    
+    def outgoing_dnorm(self) -> np.ndarray[float]:
+        """
+        The dnorm of the outgoing edges, for each allowed computational subspace,
+        conditioned on the node & subspace is reached.
+        """
+        if len(self.out_edges) == 0:
+            raise ValueError("The node has no outgoing edges.")
+        
+        dnorms = np.zeros(self._raw_ideal_logical_states.shape[0])
+        for edge in self.out_edges:
+            edge_dnorm = edge.process_dnorm()
+            dnorms += np.sum(edge_dnorm, axis=0)        # sum over destination subspaces
+            
+        return dnorms   
+    
+    def outgoing_infid(
+        self,
+        type: Literal["avg", "etg"] = "etg",
+    ) -> np.ndarray[float]:
+        """
+        The infidelity of the outgoing edges, for each allowed computational subspace,
+        conditioned on the node & subspace is reached.
+        """
+        if len(self.out_edges) == 0:
+            raise ValueError("The node has no outgoing edges.")
+        
+        fid = np.zeros(self._raw_ideal_logical_states.shape[0])
+        for edge in self.out_edges:
+            edge_infid = edge.fidelity_by_process(type)
+            fid += np.sum(edge_infid, axis=0)   # sum over destination subspaces
+            
+        # for each of the initial subspaces, the fidelity should sum up to 1
+        # if not, there is infidelity
+        return 1 - fid
+    
+    def outgoing_leakage_prob(self) -> np.ndarray[float]:
+        """
+        The probability of the leakage process of the outgoing edges, for each
+        allowed computational subspace, conditioned on the node & subspace is reached.
+        """
+        if len(self.out_edges) == 0:
+            raise ValueError("The node has no outgoing edges.")
+        
+        total_trace = np.zeros(self._raw_ideal_logical_states.shape[0])
+        for edge in self.out_edges:
+            total_trace += np.sum(edge.process_choi_trace(), axis=0)
+            
+        # the total trace should be 2, if not, there is leakage
+        return 1 - total_trace / 2
+    
+    def accum_logical_process(
+        self,
+        repr: Literal["super", "choi", "chi", "orth_chi"] = "super",
+    ) -> np.ndarray[qt.Qobj]:
+        """
+        The accumulated logical process since the initial node to the current node.
+        """
+        if repr == "super":
+            return self._accum_logical_process
+        elif repr == "choi":
+            return to_choi_vec(self._accum_logical_process)
+        elif repr == "chi":
+            return to_chi_vec(self._accum_logical_process)
+        elif repr == "orth_chi":
+            return to_orth_chi_vec(self._accum_logical_process)
+        else:
+            raise ValueError(f"The representation {repr} is not supported.")
     
 
 Node = StateNode    # for now, the only node type is StateNode
@@ -894,23 +985,6 @@ class StateEnsemble:
         Calculate the total fidelity
         """
         return sum([node.fidelity for node in self.nodes])
-    
-    # @property
-    # def accum_infid(self) -> np.ndarray[float]:
-    #     """
-    #     The accumulated fidelity of the nodes
-    #     """
-    #     raise NotImplementedError(
-    #         "The current implementation of the accumulated fidelity is wrong."
-    #     )
-    #     # return np.sum(sum([node.accum_infid for node in self.active_nodes()]))
-    
-    # @property
-    # def accum_dnorm(self) -> np.ndarray[float]:
-    #     """
-    #     The accumulated dnorm of the nodes
-    #     """
-    #     return np.sum(sum([node.accum_dnorm for node in self.active_nodes()]))
 
     def deepcopy(self):
         """
@@ -1032,10 +1106,40 @@ class StateEnsemble:
                 processes.append(np.sum(proc))
 
         return sum(processes)
+    
+    def accum_logical_process(
+        self,
+        repr: Literal["super", "choi", "chi", "orth_chi"] = "super",
+        force_sum: bool = False,
+    ) -> qt.Qobj:
+        """
+        Calculate the accumulated logical process since the initial state
+        to the current state.
+        
+        If force_sum is True and the accumulated process is not unique, we will
+        sum over all the accumulated processes, as if they are all accumulated 
+        right after the step.
+        """
+        processes = []
+        for node in self.active_nodes():
+            proc = node.accum_logical_process(repr)
+
+            if proc.shape != (1, 1) and not force_sum:
+                raise ValueError(
+                    "To get the accumulated logical process for an ensemble, "
+                    "the accumulated logical process for each node should be "
+                    "unique / well defined, or in other words, the ideal "
+                    "final decoders should be unique."
+                )
+            else:
+                processes.append(np.sum(proc))
+
+        return sum(processes)
 
     def fidelity_by_process(
         self,
         type: Literal["avg", "etg"] = "etg",
+        approx_proc: bool = False,
         force_sum: bool = False,
     ) -> float:
         """
@@ -1047,7 +1151,10 @@ class StateEnsemble:
         """
         fids = []
         for node in self.active_nodes():
-            fid = node.fidelity_by_process(type)
+            fid = node.fidelity_by_process(
+                type = type,
+                approx_proc = approx_proc,
+            )
 
             if fid.shape != (1, 1) and not force_sum:
                 raise ValueError(
@@ -1060,15 +1167,17 @@ class StateEnsemble:
         ensemble_fid = sum(fids)
         
         # double check, the fidelity calculation is linear w.r.t. the actual process
-        eff_proc = self.effective_logical_process("super", force_sum)
-        fid_compare = qt.process_fidelity(eff_proc, qt.qeye_like(eff_proc))
-        assert np.abs(fid_compare - ensemble_fid) < 1e-6, "The fidelity by process should be equal to the process fidelity."
+        if not approx_proc:
+            eff_proc = self.effective_logical_process("super", force_sum)
+            fid_compare = qt.process_fidelity(eff_proc, qt.qeye_like(eff_proc))
+            assert np.abs(fid_compare - ensemble_fid) < 1e-6, "The fidelity by process should be equal to the process fidelity."
         
         return ensemble_fid
     
     def process_dnorm(
         self,
         force_sum: bool = False,
+        approx_proc: bool = False,
     ) -> float:
         """
         The diamond norm of the processes since the initial node to the 
@@ -1076,12 +1185,22 @@ class StateEnsemble:
         
         dnorm(sum_i E_i - I), where E_i is the process of the i-th node.
         """
-        proc = self.effective_logical_process(repr="super", force_sum=force_sum)
+        if not approx_proc:
+            proc = self.effective_logical_process(
+                repr="super", 
+                force_sum=force_sum,
+            )
+        else:
+            proc = self.accum_logical_process(
+                repr="super", 
+                force_sum=force_sum,
+            )
         return (proc - qt.qeye_like(proc)).dnorm()
     
     def process_choi_trace(
         self,
         force_sum: bool = False,
+        approx_proc: bool = False,
     ) -> float:
         """
         The trace of the choi matrix of the effective logical processes
@@ -1089,7 +1208,9 @@ class StateEnsemble:
         """
         traces = []
         for node in self.active_nodes():
-            tr = node.process_choi_trace()
+            tr = node.process_choi_trace(
+                approx_proc=approx_proc,
+            )
 
             if tr.shape != (1, 1) and not force_sum:
                 raise ValueError(
@@ -1104,6 +1225,7 @@ class StateEnsemble:
     def process_dnorm_by_sum(
         self,
         force_sum: bool = False,
+        approx_proc: bool = False,
     ) -> float:
         """
         The diamond norm of the processes since the initial node to the 
@@ -1120,7 +1242,9 @@ class StateEnsemble:
         """
         dnorms = []
         for node in self.active_nodes():
-            dn = node.process_dnorm()
+            dn = node.process_dnorm(
+                approx_proc=approx_proc,
+            )
 
             if dn.shape != (1, 1) and not force_sum:
                 raise ValueError(
@@ -1134,3 +1258,31 @@ class StateEnsemble:
         p_leak = 1 - self.process_choi_trace(force_sum) / 2
         
         return sum(dnorms) + p_leak
+
+    def outgoing_dnorm(self) -> np.ndarray[float]:
+        """
+        For each node, we have calculated the dnorm of the outgoing edges, for 
+        each allowed computational subspace, conditioned on the node & subspace 
+        is reached.
+        
+        Here we sum over all the active nodes and subspaces with the corresponding
+        weights.
+        
+        We also sum over the leakage probability of each node, as it is missing 
+        in the calculation of the dnorm of the process.
+        """
+        return np.sum([
+            node.outgoing_dnorm() * node.traj_prob + node.outgoing_leakage_prob()
+            for node in self.active_nodes()
+        ])
+
+    def outgoing_infid(self) -> np.ndarray[float]:
+        """
+        The trace of the choi matrix of the outgoing edges, for each allowed 
+        computational subspace, conditioned on the node & subspace is reached.
+        """
+        return np.sum([
+            node.outgoing_infid() * node.traj_prob
+            for node in self.active_nodes()
+        ])
+    
