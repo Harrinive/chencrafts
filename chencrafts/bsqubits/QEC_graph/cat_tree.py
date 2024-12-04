@@ -549,29 +549,6 @@ class FullCatTreeBuilder(CatTreeBuilder):
         self,
         num_cpus: int = 8,
     ):
-        self._gate_p_rot_ideal = cat_ideal.qubit_rot_propagator(
-            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx,
-            angle=np.pi/2, axis=self._gate_axis, superop=False,
-        )   # p stands for angle's sign plus
-        self._qubit_gate_p_ideal = [self.frame_transform(
-            self._gate_p_rot_ideal, 
-            total_time = self.fsweep["tau_p_eff"], 
-            type = "rot2current",
-            # init_time = -self.fsweep["tau_p_eff"] / 2,
-        )]  
-        self._gate_m_rot_ideal = cat_ideal.qubit_rot_propagator(
-            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx,
-            angle=-np.pi/2, axis=self._gate_axis, superop=False,
-        )
-        self._qubit_gate_m_ideal = [self.frame_transform(
-            self._gate_m_rot_ideal, 
-            total_time = self.fsweep["tau_p_eff"], 
-            type = "rot2current",
-            # init_time = -self.fsweep["tau_p_eff"] / 2,
-        )]
-
         self._gate_p_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
@@ -606,6 +583,46 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 # init_time = -self.fsweep["tau_p_eff"] / 2,
             )]
         )
+        
+        # # ideal process: a pi rotation in the rotating frame
+        # self._gate_p_rot_ideal = cat_ideal.qubit_rot_propagator(
+        #     res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+        #     res_mode_idx=self._res_mode_idx,
+        #     angle=np.pi/2, axis=self._gate_axis, superop=False,
+        # )   # p stands for angle's sign plus
+        # self._qubit_gate_p_ideal = np.array([self.frame_transform(
+        #     self._gate_p_rot_ideal, 
+        #     total_time = self.fsweep["tau_p_eff"], 
+        #     type = "rot2current",
+        #     # init_time = -self.fsweep["tau_p_eff"] / 2,
+        # )])
+        # self._gate_m_rot_ideal = cat_ideal.qubit_rot_propagator(
+        #     res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+        #     res_mode_idx=self._res_mode_idx,
+        #     angle=-np.pi/2, axis=self._gate_axis, superop=False,
+        # )
+        # self._qubit_gate_m_ideal = np.array([self.frame_transform(
+        #     self._gate_m_rot_ideal, 
+        #     total_time = self.fsweep["tau_p_eff"], 
+        #     type = "rot2current",
+        #     # init_time = -self.fsweep["tau_p_eff"] / 2,
+        # )])
+
+        # another way to get the ideal gate: try to take into account of
+        # the correctable leakage error during the gate
+        # for the moment, we use the real gate as the ideal one
+        self._qubit_gate_p_ideal = np.array([self.frame_transform(
+            self._gate_p_lab_real, 
+            total_time = self.fsweep["tau_p_eff"], 
+            type = "lab2current",
+            # init_time = -self.fsweep["tau_p_eff"] / 2,
+        )])
+        self._qubit_gate_m_ideal = np.array([self.frame_transform(
+            self._gate_m_lab_real, 
+            total_time = self.fsweep["tau_p_eff"], 
+            type = "lab2current",
+            # init_time = -self.fsweep["tau_p_eff"] / 2,
+        )])
 
     # the qubit gate after parity mapping
     def _qubit_gate_2_map_real(
