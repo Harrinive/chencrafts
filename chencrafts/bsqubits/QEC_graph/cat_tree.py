@@ -672,9 +672,9 @@ class FullCatTreeBuilder(CatTreeBuilder):
     def _average_pm_interaction(self) -> float:
         n_bar = np.abs(self.fsweep["disp"])**2  # TODO: is actually time-dependent
         return float(
-            self.fsweep["chi_sa"] 
-            + (2 * n_bar - 1) * self.fsweep["chi_prime"]
-        )
+            self.fsweep["chi_sa"] * n_bar
+            + n_bar * (n_bar - 1) * self.fsweep["chi_prime"]
+        ) / n_bar   # divide by n_bar to get the frequency shift per photon
 
     @property
     def _parity_mapping_time(self) -> float:
