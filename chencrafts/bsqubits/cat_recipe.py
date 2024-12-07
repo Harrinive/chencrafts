@@ -62,6 +62,7 @@ def cavity_ancilla_me_ingredients(
     res_dim: int = 5, qubit_dim: int = 2, 
     res_me_dim: int = 5, qubit_me_dim: int = 2, 
     in_rot_frame: bool = True,
+    res_n_ref: int = 0,
 ) -> Tuple[qt.Qobj, List[qt.Qobj], Esys, qt.Qobj]:
     """
     Generate hamiltonian and collapse operators for a cavity-ancilla system. The operators
@@ -97,6 +98,9 @@ def cavity_ancilla_me_ingredients(
         resonator and qubit 01 frequency. The collapse operators will be transformed 
         accordingly (though the transformaiton is just a trivial phase factor and get 
         cancelled out).
+    res_n_ref: int
+        To go into the rotating frame, we can rotate at a particular 
+        frequency shifted by res_n_ref of resonator photons.
 
     Returns
     -------
@@ -114,6 +118,11 @@ def cavity_ancilla_me_ingredients(
         raise ValueError("It's a multi-parameter sweep and the slice is not "
                          "specified. Please try a single-parameter sweep or "
                          "specify the slice.")
+        
+    if res_n_ref != 0 and not in_rot_frame:
+        raise ValueError("res_n_ref is only used when in_rot_frame is True.")
+    if not isinstance(res_n_ref, int):
+        raise ValueError("res_n_ref must be an integer.")
     
     hilbertspace = fsweep.hilbertspace
     dims = hilbertspace.subsystem_dims
@@ -145,8 +154,12 @@ def cavity_ancilla_me_ingredients(
     if in_rot_frame:
         # in the dispersice regime, the transformation hamiltonian is 
         # freq * a^dag a * identity_qubit + identity_res * freq_qubit * qubit^dag qubit
-        mode0_freq = truncated_evals[1, 0] - truncated_evals[0, 0]
-        mode1_freq = truncated_evals[0, 1] - truncated_evals[0, 0]
+        if res_mode_idx == 0:
+            mode0_freq = truncated_evals[1, 0] - truncated_evals[0, 0]
+            mode1_freq = truncated_evals[res_n_ref, 1] - truncated_evals[res_n_ref, 0]
+        else:
+            mode0_freq = truncated_evals[1, res_n_ref] - truncated_evals[0, res_n_ref]
+            mode1_freq = truncated_evals[0, 1] - truncated_evals[0, 0]
 
         rot_hamiltonian = (
             qt.tensor(mode0_freq * qt.num(truncated_dims[0]), qt.qeye(truncated_dims[1]))
