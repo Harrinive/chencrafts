@@ -4,6 +4,7 @@ __all__ = [
     'oprt_in_basis',
     'superop_in_basis',
     'basis_of_projector',
+    'trans_by_kets',
     'superop_evolve',
     'projected_superop',
     'evecs_2_transformation',
@@ -19,13 +20,16 @@ __all__ = [
     'leakage_amount',
     
     'Stinespring_to_Kraus',
+    
+    'qobj_sparsity',
 ]
 
 import numpy as np
 import qutip as qt
-from scipy.sparse import csc_matrix
+from scipy.sparse import csr_matrix
 import functools
 
+import warnings
 from typing import Literal, Callable, List, Tuple, overload
 
 # ##############################################################################
@@ -56,7 +60,7 @@ def basis_of_projector(projector: qt.Qobj) -> List[qt.Qobj]:
 
 def trans_by_kets(
     kets: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
-):
+) -> np.ndarray:
     """
     Given a list of kets = [|k1>, |k2>, ...], 
     calculate a transformation matrix that can transform a state in the 
@@ -70,7 +74,7 @@ def trans_by_kets(
     return trans
     
 def ket_in_basis(
-    ket: np.ndarray | qt.Qobj | csc_matrix,
+    ket: np.ndarray | qt.Qobj | csr_matrix,
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
 ):
     """
@@ -92,7 +96,7 @@ def ket_in_basis(
         dim = [ket.shape[0]]
 
     # convert to qobj
-    if isinstance(ket, np.ndarray | csc_matrix):
+    if isinstance(ket, np.ndarray | csr_matrix):
         ket = qt.Qobj(ket, dims=[dim, list(np.ones_like(dim).astype(int))])
     state_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in states]
 
@@ -104,7 +108,7 @@ def ket_in_basis(
     return qt.Qobj(data)
 
 def _oprt_in_basis(
-    oprt: np.ndarray | qt.Qobj | csc_matrix, 
+    oprt: np.ndarray | qt.Qobj | csr_matrix, 
     bra_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
     ket_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None,
     to_sparse: bool = True,
@@ -120,7 +124,7 @@ def _oprt_in_basis(
 
     Parameters
     ----------
-    oprt : np.ndarray | qt.Qobj | csc_matrix
+    oprt : np.ndarray | qt.Qobj | csr_matrix
         operator in matrix form
     bra_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray
         a list of states describing the basis, [<bra1|, <bra2|, ...]. Note that
@@ -141,42 +145,10 @@ def _oprt_in_basis(
     """
     if ket_basis is None:
         ket_basis = bra_basis
-    #     ident_bra_ket_list = True
-    # else:
-    #     # treat the basis as a list of bras
-    #     ident_bra_ket_list = False
-
+        
     # dimension check
     assert oprt.shape[0] == bra_basis[0].shape[0], "Dimension mismatch."
     assert oprt.shape[1] == ket_basis[0].shape[0], "Dimension mismatch."
-
-    # # go through all states and oprt, to find a dimension 
-    # if isinstance(oprt, qt.Qobj):
-    #     dim = oprt.dims[0]
-    # elif isinstance(bra_basis[0], qt.Qobj):
-    #     dim = bra_basis[0].dims[0]
-    # elif isinstance(ket_basis[0], qt.Qobj):
-    #     dim = bra_basis[0].dims[0]
-    # else:
-    #     dim = [oprt.shape[0]]
-
-    # # convert to qobj
-    # if isinstance(oprt, np.ndarray | csc_matrix):
-    #     oprt = qt.Qobj(oprt, dims=[dim, dim])
-    # ket_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in ket_basis]
-    # bra_qobj = [qt.Qobj(state, dims=[dim, list(np.ones_like(dim).astype(int))]) for state in bra_basis]
-
-    # # calculate matrix elements
-    # data = np.zeros((len(bra_basis), len(ket_basis)), dtype=complex)
-    # for j, bra in enumerate(bra_qobj):
-    #     for k, ket in enumerate(ket_qobj):
-    #         if ident_bra_ket_list and oprt.isherm and j > k:
-    #             data[j, k] = data[k, j].conjugate()
-    #             continue
-
-    #         data[j, k] = oprt.matrix_element(bra, ket)
-            
-    # return qt.Qobj(data), bra_qobj, ket_qobj, dim
     
     if isinstance(oprt, qt.Qobj):
         oprt = oprt.full()
@@ -188,12 +160,12 @@ def _oprt_in_basis(
     data = np.conj(bra_trans.T) @ oprt @ ket_trans
     
     if to_sparse:
-        data = csc_matrix(data)
+        data = csr_matrix(data)
         
     return qt.Qobj(data)
 
 def oprt_in_basis(
-    oprt: np.ndarray | qt.Qobj | csc_matrix,
+    oprt: np.ndarray | qt.Qobj | csr_matrix,
     bra_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
     ket_basis: List[np.ndarray] | List[qt.Qobj] | np.ndarray | None = None,
     to_sparse: bool = True,
@@ -206,7 +178,7 @@ def oprt_in_basis(
 
     Parameters
     ----------
-    oprt : np.ndarray | qt.Qobj | csc_matrix
+    oprt : np.ndarray | qt.Qobj | csr_matrix
         operator in matrix form
     bra_basis : List[np.ndarray] | List[qt.Qobj] | np.ndarray
         a list of states describing the basis, [<bra1|, <bra2|, ...].
@@ -225,7 +197,7 @@ def oprt_in_basis(
     return oprt
 
 def superop_in_basis(
-    superop: np.ndarray | qt.Qobj | csc_matrix,
+    superop: np.ndarray | qt.Qobj | csr_matrix,
     states: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
 ):
     """
@@ -250,7 +222,7 @@ def superop_in_basis(
         dim = [[states[0].shape[0]], [states[0].shape[0]]]
 
     # convert to qobj
-    if isinstance(superop, np.ndarray | csc_matrix):
+    if isinstance(superop, np.ndarray | csr_matrix):
         superop = qt.Qobj(superop, dims=[dim, dim])
     state_qobj = [qt.Qobj(state, dims=dim) for state in states] 
 
@@ -584,3 +556,14 @@ def Stinespring_to_Kraus(
     ]
     
     return kraus_ops    
+
+# Sparsity ================================================================
+def qobj_sparsity(oprt: qt.Qobj) -> float:
+    try:
+        return oprt.data.as_scipy().nnz / np.prod(oprt.shape)
+    except:
+        warnings.warn(
+            "The operator is not in sparse format. Return 0.",
+            stacklevel=2,
+        )
+        return 0

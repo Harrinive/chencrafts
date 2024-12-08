@@ -345,8 +345,9 @@ def qubit_relax_from_drive_port(
     f_q : float
         The qubit frequency in GHz.
     chi : ArrayLike
-        The susceptibility of the qubit drive parameter g wrt the input voltage. Unit of g is defined such that
-        g * matelem has dimension of energy.
+        The susceptibility of the qubit drive parameter g wrt the input voltage. 
+        Unit of g is defined such that g * matelem has dimension of energy.
+        So the unit of chi is <energy>/<matelem>/V.
     matelem : ArrayLike
         The matrix element of the qubit operator. The unit of g*matelem is energy.
     S_V : Callable
