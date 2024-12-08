@@ -15,16 +15,16 @@ import scqubits as scq
 
 from chencrafts.cqed import FlexibleSweep, superop_evolve
 
-from chencrafts.bsqubits.QEC_graph.node import StateNode, StateEnsemble, MeasurementRecord
-from chencrafts.bsqubits.QEC_graph.edge import (
-    PropagatorEdge, MeasurementEdge, Edge, CheckPointEdge)
-from chencrafts.bsqubits.QEC_graph.graph import EvolutionGraph, EvolutionTree
-
 import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.cat_recipe as cat_recipe
 import chencrafts.bsqubits.cat_real as cat_real
 import chencrafts.settings as settings
 
+
+from .node import StateNode, StateEnsemble, MeasurementRecord
+from .edge import (
+    PropagatorEdge, MeasurementEdge, Edge, CheckPointEdge)
+from .graph import EvolutionGraph, EvolutionTree
 
 class CatTreeBuilder(ABC):
 
@@ -335,8 +335,11 @@ class FullCatTreeBuilder(CatTreeBuilder):
     qubit_dim: int
     res_me_dim: int
     qubit_me_dim: int
-
-    static_hamiltonian: qt.Qobj
+    
+    # the integer part of the mean photon number
+    # partially determines the frame transformation
+    n_bar_int: int  
+    
     c_ops: List[qt.Qobj]
     esys: Tuple[np.ndarray, np.ndarray]
     frame_hamiltonian: qt.Qobj
@@ -424,6 +427,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 in_rot_frame=True,
             )
         else:
+            self.n_bar_int = int(np.round(np.abs(self.fsweep["disp"])**2))
             (
                 self.static_hamiltonian, self.c_ops, self.esys,
                 self.frame_hamiltonian
@@ -436,6 +440,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 res_me_dim=self.res_me_dim,
                 qubit_me_dim=self.qubit_me_dim,
                 in_rot_frame=True,
+                res_n_ref=self.n_bar_int,
             )
 
         # change unit from GHz to rad / ns
@@ -472,7 +477,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
             res_mode_idx=self._res_mode_idx,
             static_hamiltonian=self.static_hamiltonian,
             time=time,
-            decay_rate=self.fsweep["kappa_s"],
+            decay_rate=self.fsweep["jump_a"] if self.new_recipe else self.fsweep["kappa_s"],
             self_Kerr=self.fsweep["K_s"],
         )
     
@@ -549,29 +554,6 @@ class FullCatTreeBuilder(CatTreeBuilder):
         self,
         num_cpus: int = 8,
     ):
-        self._gate_p_rot_ideal = cat_ideal.qubit_rot_propagator(
-            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx,
-            angle=np.pi/2, axis=self._gate_axis, superop=False,
-        )   # p stands for angle's sign plus
-        self._qubit_gate_p_ideal = [self.frame_transform(
-            self._gate_p_rot_ideal, 
-            total_time = self.fsweep["tau_p_eff"], 
-            type = "rot2current",
-            # init_time = -self.fsweep["tau_p_eff"] / 2,
-        )]  
-        self._gate_m_rot_ideal = cat_ideal.qubit_rot_propagator(
-            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx,
-            angle=-np.pi/2, axis=self._gate_axis, superop=False,
-        )
-        self._qubit_gate_m_ideal = [self.frame_transform(
-            self._gate_m_rot_ideal, 
-            total_time = self.fsweep["tau_p_eff"], 
-            type = "rot2current",
-            # init_time = -self.fsweep["tau_p_eff"] / 2,
-        )]
-
         self._gate_p_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
@@ -606,6 +588,42 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 # init_time = -self.fsweep["tau_p_eff"] / 2,
             )]
         )
+        
+        # ideal process: a pi rotation in the current frame
+        gate_p_ideal = cat_ideal.qubit_rot_propagator(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            angle=np.pi/2, axis=self._gate_axis, superop=False,
+        )   # p stands for angle's sign plus
+        gate_m_ideal = cat_ideal.qubit_rot_propagator(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            angle=-np.pi/2, axis=self._gate_axis, superop=False,
+        )
+        
+        # resonator phase (global phase from the submat gate)
+        assert self._qubit_gate_1_time == self._qubit_gate_2_time
+        gate_res_rot_op = cat_ideal.res_rotation(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            angle=self._average_pm_interaction * self._qubit_gate_1_time / 2,
+        )
+
+        # partial parity mapping (ideal)
+        # note that the angle at submat = 0 is zero, while in the current frame 
+        # submat = n_bar should have zero angle, so it should be corrected by a 
+        # qubit phase gate
+        gate_pm_op = self._construct_parity_mapping_ideal(
+            angle=-self._average_pm_interaction * self._qubit_gate_1_time / 2,
+            pm_qubit_state=0,
+        )
+
+        self._qubit_gate_p_ideal = [
+            gate_res_rot_op * gate_pm_op * gate_p_ideal
+        ]
+        self._qubit_gate_m_ideal = [
+            gate_res_rot_op * gate_pm_op * gate_m_ideal
+        ]
 
     # the qubit gate after parity mapping
     def _qubit_gate_2_map_real(
@@ -656,25 +674,35 @@ class FullCatTreeBuilder(CatTreeBuilder):
     def _build_parity_mapping_process(
         self,
     ):
-        self._parity_mapping_ideal = self._idling_ideal_by_time(self._parity_mapping_time)[:1]
-
         self._parity_mapping_real = self._idling_real_by_time(self._parity_mapping_time)
 
-        # when self.parity_mapping_is_ideal == True, we should switch to the constructed
-        # parity mapping, as the self._parity_mapping_ideal is not TP
-        self._parity_mapping_constructed = [cat_ideal.parity_mapping_propagator(
+        # constructed parity mapping
+        # note that the angle at submat = 0 is zero, while in the current frame 
+        # submat = n_bar should have zero angle, so it should be corrected by a 
+        # qubit phase gate
+        parity_mapping_ideal = self._construct_parity_mapping_ideal(
+            # angle=np.pi,
+            angle=np.pi - (self._average_pm_interaction * self._qubit_gate_1_time / 2),
+        )
+
+        # The resonator evolves at the avarage rate of the 
+        # non-linearity.
+        res_Kerr_op = cat_ideal.res_Kerr_rotation(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            angle=self._parity_mapping_angle,
-            res_mode_idx=self._res_mode_idx, superop=False,
-        )]
+            res_mode_idx=self._res_mode_idx,
+            Kerr=(self.fsweep["K_s"] + self.fsweep["chi_prime"])/2, 
+            time=self._parity_mapping_time,
+        )
+
+        self._parity_mapping_ideal = [res_Kerr_op * parity_mapping_ideal]
 
     @property
     def _average_pm_interaction(self) -> float:
         n_bar = np.abs(self.fsweep["disp"])**2  # TODO: is actually time-dependent
         return float(
-            self.fsweep["chi_sa"] 
-            + (2 * n_bar - 1) * self.fsweep["chi_prime"]
-        )
+            self.fsweep["chi_sa"] * n_bar
+            + n_bar * (n_bar - 1) * self.fsweep["chi_prime"]
+        ) / n_bar   # divide by n_bar to get the frequency shift per photon
 
     @property
     def _parity_mapping_time(self) -> float:
@@ -685,9 +713,9 @@ class FullCatTreeBuilder(CatTreeBuilder):
         """
         t = (
             float(np.abs(np.pi / self._average_pm_interaction))
-            # During the first (ideal) qubit gates we get a phase when 
-            # transfroming to the current frame (linear)
-            - self._qubit_gate_1_time
+            # During the first (ideal) qubit gates we get a partial 
+            # parity mapping, so we need to subtract it
+            - self._qubit_gate_1_time / 2
         )
 
         if t > self.fsweep["T_W"]:
@@ -697,43 +725,71 @@ class FullCatTreeBuilder(CatTreeBuilder):
 
         return t
     
-    @property
-    def _parity_mapping_angle(self) -> float:
-        """
-        Since a bit of phase has been accumulated during the qubit gates,
-        we don't need to apply a full pi rotation.
-
-        This property returns the actual rotation needed.
-        """
-        qubit_gate_time_tot = self._qubit_gate_1_time + self._qubit_gate_2_time
-        return np.pi - self._average_pm_interaction * qubit_gate_time_tot / 2
-    
-    def parity_mapping(
+    def _construct_parity_mapping_ideal(
         self,
-        step: int | str,
-        graph: EvolutionTree,
-        init_nodes: StateEnsemble,
-    ) -> StateEnsemble:
+        angle: float,
+        pm_qubit_state: int = 1,
+    ) -> qt.Qobj:
         """
-        Overwrite the base class parity mapping - as when the parity_mapping_is_ideal 
-        is true, the self._parity_mapping_ideal is not TP and can't serve as the 
-        ideal map for actual process.
+        In the current frame, the pm angle at subsystem with resonator
+        photon = n_bar is zero, while in the constructed propagator, the 
+        angle at photon = 0 is zero.
+        So we need to add a qubit rotation to correct the phase.
         """
-        edge_parity_mapping = PropagatorEdge(
-            name = f"PM ({step})",
-            real_map = (
-                self._parity_mapping_real
-                if not self.parity_mapping_is_ideal 
-                else self._kraus_to_super(self._parity_mapping_constructed)
-            ),
-            ideal_maps = (
-                self._parity_mapping_ideal
-                if not self.parity_mapping_is_ideal
-                else self._parity_mapping_constructed
-            )
+        assert pm_qubit_state in [0, 1]
+        
+        parity_mapping_ideal = cat_ideal.parity_mapping_propagator(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            angle=angle,
+            res_mode_idx=self._res_mode_idx, superop=False,
+            qubit_state=pm_qubit_state,
         )
 
-        return self._add_leaves(graph, init_nodes.active_nodes(), edge_parity_mapping)
+        # transform to the current frame 
+        # equivalently, set the propagator submat at n_bar to be identity
+        extra_phase = - (angle * self.n_bar_int) % (2 * np.pi)
+        qubit_rot_ideal = cat_ideal.qubit_rot_propagator(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            axis="z" if pm_qubit_state == 0 else "-z",  
+            # make 0 or 1 have the lower eigenvalue (-1/2)
+            angle= extra_phase,
+            superop=False,
+        ) * np.exp(
+            -1 *        # cancel out the phase for the ground state
+            -1/2 *      # ground state eigenvalue
+            -1j *       # exp(-1j * phase) natural evolution
+            extra_phase
+        )
+
+        return parity_mapping_ideal * qubit_rot_ideal
+    
+    # def parity_mapping(
+    #     self,
+    #     step: int | str,
+    #     graph: EvolutionTree,
+    #     init_nodes: StateEnsemble,
+    # ) -> StateEnsemble:
+    #     """
+    #     Overwrite the base class parity mapping - as when the parity_mapping_is_ideal 
+    #     is true, the self._parity_mapping_ideal is not TP and can't serve as the 
+    #     ideal map for actual process.
+    #     """
+    #     edge_parity_mapping = PropagatorEdge(
+    #         name = f"PM ({step})",
+    #         real_map = (
+    #             self._parity_mapping_real
+    #             if not self.parity_mapping_is_ideal 
+    #             else self._kraus_to_super(self._parity_mapping_constructed)
+    #         ),
+    #         ideal_maps = (
+    #             self._parity_mapping_ideal
+    #             if not self.parity_mapping_is_ideal
+    #             else self._parity_mapping_constructed
+    #         )
+    #     )
+
+    #     return self._add_leaves(graph, init_nodes.active_nodes(), edge_parity_mapping)
 
     # qubit measurement ################################################
     def _build_qubit_measurement_process(
@@ -834,18 +890,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
     def _build_qubit_reset_process(
         self,
     ):
-        reset_rot_ideal = cat_ideal.qubit_rot_propagator(
-            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
-            res_mode_idx=self._res_mode_idx,
-            angle=np.pi, axis=self._gate_axis, superop=False,
-        )
-        self._qubit_reset_ideal = [self.frame_transform(
-            reset_rot_ideal, 
-            total_time = self.fsweep["tau_p_eff"] * 2, 
-            type = "rot2current",
-            # init_time = -self.fsweep["tau_p_eff"],
-        )]
-
+        reset_gate_time = self.fsweep["tau_p_eff"] * 2
         reset_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
@@ -857,11 +902,35 @@ class FullCatTreeBuilder(CatTreeBuilder):
         self._qubit_reset_real = self._kraus_to_super(
             [self.frame_transform(
                 reset_lab_real, 
-                total_time = self.fsweep["tau_p_eff"] * 2, 
+                total_time = reset_gate_time, 
                 type = "lab2current",
-                # init_time = -self.fsweep["tau_p_eff"],
             )]
         )
+        
+        reset_ideal = cat_ideal.qubit_rot_propagator(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            angle=np.pi, axis=self._gate_axis, superop=False,
+        )
+        # resonator phase (global phase from the submat gate)
+        res_rot_op = cat_ideal.res_rotation(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            angle=self._average_pm_interaction * reset_gate_time / 2,
+        )
+
+        # partial parity mapping (ideal)
+        # note that the angle at submat = 0 is zero, while in the current frame 
+        # submat = n_bar should have zero angle, so it should be corrected by a 
+        # qubit phase gate
+        gate_pm_op = self._construct_parity_mapping_ideal(
+            angle=-self._average_pm_interaction * reset_gate_time / 2,
+            pm_qubit_state=0,
+        )
+        # no need to transform to the current frame
+        self._qubit_reset_ideal = [
+            res_rot_op * gate_pm_op * reset_ideal
+        ]
 
     def _qubit_reset_map_real(
         self,
@@ -974,7 +1043,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
         init_state_node = StateNode.initial_note(
             init_prob_amp_01, logical_0, logical_1,
         )
-        init_state_node.ideal_logical_states = logical_states
+        init_state_node._raw_ideal_logical_states = logical_states
         graph.add_node(init_state_node)
 
         # current ensemble

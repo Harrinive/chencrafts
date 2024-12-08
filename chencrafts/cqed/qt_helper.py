@@ -19,15 +19,17 @@ __all__ = [
     'fid_in_dim',
     'leakage_amount',
     
-    'Stinespring_to_Kraus',
-    
     'qobj_sparsity',
+    'Pauli_twirl',
+    'Pauli_distance',
+    'Pauli_twirled_dnorm',
 ]
 
 import numpy as np
 import qutip as qt
 from scipy.sparse import csr_matrix
 import functools
+from .proc_repr import to_orth_chi, orth_chi_to_choi
 
 import warnings
 from typing import Literal, Callable, List, Tuple, overload
@@ -392,6 +394,9 @@ def process_fidelity(
         process_fidelity * d + 1 = (d + 1) * qt.average_gate_fidelity
     where d is the dimension of the Hilbert space.
     """
+    assert super_propagator_1.type == "super" and super_propagator_2.type == "super", "The input should be superoperators."
+    assert super_propagator_1.superrep == "super" and super_propagator_2.superrep == "super", "The superoperators should be in super operator representation."
+    
     if subspace_basis is not None:
         # write the superoperators in the new basis to reduce the dimension and speed up 
         # the calculation
@@ -458,104 +463,63 @@ def fid_in_dim(fid, d0, d1, type="ave"):
 
     return fid
 
-# #############################################################################
-def leakage_amount(U: qt.Qobj) -> float:
-    """
-    Calculate the leakage of a quantum channel.
-    """
-    dim = U.shape[0]
-    return 1 - np.abs((U * U.dag()).tr()) / dim
-
-
-# #############################################################################
-def _construct_env_state(
-    dims: List[int] | Tuple[int, ...],
-    env_indices: List[int] | Tuple[int, ...],
-    env_state_label: List[int] | Tuple[int, ...],
+def Pauli_twirl(
+    superop: qt.Qobj,
 ) -> qt.Qobj:
     """
-    Construct the environment state vector, tensor product with the system
-    identity operator.
-    
-    Parameters
-    ----------
-    dims: List[int]
-        the dimensions of the composite Hilbert space
-    env_indices: List[int]
-        the indices of the environment in the composite Hilbert space
-    env_state_label: List[int]
-        the state of the environment
+    Given a superoperator, return its Pauli twirl.
     """
-    ingredients = []
-    for idx, dim in enumerate(dims):
-        if idx in env_indices:
-            ingredients.append(qt.basis(dim, env_state_label[env_indices.index(idx)]))
-        else:
-            ingredients.append(qt.qeye(dim))
-    return qt.tensor(*ingredients)
-    
-def Stinespring_to_Kraus(
-    sys_env_prop: qt.Qobj,
-    sys_indices: int | List[int],
-    env_state_label: int | List[int] | Tuple[int, ...] | None = None,
-):
-    """
-    Convert a system-environment unitary to a list of Kraus operators. It's like
-    a partial trace of the propagator.
-    
-    sys_prop(rho) = Tr_env[sys_env_prop * (rho x env_state) * sys_env_prop.dag()]
-    
-    Parameters
-    ----------
-    sys_env_prop: qt.Qobj
-        the propagator acting on the composite Hilbert space of system + environment.
-    sys_indices: int | List[int]
-        the indices of the system in the composite Hilbert space
-    env_state_label: qt.Qobj | int | List[int] | Tuple[int, ...] | None = None
-        the state of the environment. If None, the environment is set to be the 
-        ground state.
+    original_rep = superop.superrep
+    if original_rep == 'orth_chi':
+        # convert to qutip choi representation
+        superop = orth_chi_to_choi(superop)
         
-    Returns
-    -------
-    List[qt.Qobj]
-        a list of Kraus operators
+    chi = qt.to_chi(superop)
+    dims = chi.dims
+    # Pauli twirl can be done by taking the diagonal of the chi matrix
+    chi_diag = np.diag(np.diag(chi.full()))
+    result = qt.Qobj(chi_diag, dims=dims, superrep='chi')
+    
+    if original_rep == 'orth_chi':
+        # convert back to orth_chi representation
+        return to_orth_chi(result)
+    elif original_rep == "super":
+        return qt.to_super(result)
+    elif original_rep == "choi":
+        return qt.to_choi(result)
+    elif original_rep == "chi":
+        return qt.to_chi(result)
+    else:
+        raise ValueError(
+            "The original representation of the superoperator should be "
+            "either 'super', 'choi', 'chi', or 'orth_chi'."
+        )
+
+def Pauli_distance(
+    superop: qt.Qobj,
+) -> float:
     """
-    dims: List[int] = sys_env_prop.dims[0]
+    Calculate the "Pauli distance" of a superoperator, which is 
+    its diamond norm distance to its Pauli twirl.
+    """
+    pauli_twirl = Pauli_twirl(superop)
     
-    if isinstance(sys_indices, int):
-        sys_indices = [sys_indices]
-    all_indices = list(range(len(dims)))
-    env_indices = [idx for idx in all_indices if idx not in sys_indices]
+    if superop.superrep == "orth_chi":
+        superop = orth_chi_to_choi(superop)
+        pauli_twirl = orth_chi_to_choi(pauli_twirl)
+
+    return (superop - pauli_twirl).dnorm()
+
+def Pauli_twirled_dnorm(superop: qt.Qobj) -> float:
+    """
+    Calculate the diamond norm of a Pauli twirled superoperator.
+    """
+    result = Pauli_twirl(superop)
     
-    env_dims = [dims[idx] for idx in env_indices]
+    if superop.superrep == "orth_chi":
+        result = orth_chi_to_choi(result)
     
-    # construct the state of the environment when doing partial trace
-    if env_state_label is None:
-        env_state_label = [0] * len(env_indices)
-    if isinstance(env_state_label, int):
-        env_state_label = [env_state_label]
-    env_state_vec = _construct_env_state(
-        dims = dims,
-        env_indices = env_indices,
-        env_state_label = env_state_label,
-    )
-    
-    # construct an orthonormal basis for the environment
-    env_basis = []
-    for state_label in np.ndindex(tuple(env_dims)):
-        env_basis.append(_construct_env_state(
-            dims = dims,
-            env_indices = env_indices,
-            env_state_label = state_label,
-        ))
-        
-    # calculate the Kraus operators
-    kraus_ops = [
-        basis.dag() * sys_env_prop * env_state_vec 
-        for basis in env_basis
-    ]
-    
-    return kraus_ops    
+    return result.dnorm()
 
 # Sparsity ================================================================
 def qobj_sparsity(oprt: qt.Qobj) -> float:
@@ -567,3 +531,11 @@ def qobj_sparsity(oprt: qt.Qobj) -> float:
             stacklevel=2,
         )
         return 0
+
+# #############################################################################
+def leakage_amount(U: qt.Qobj) -> float:
+    """
+    Calculate the leakage of a quantum channel.
+    """
+    dim = U.shape[0]
+    return 1 - np.abs((U * U.dag()).tr()) / dim

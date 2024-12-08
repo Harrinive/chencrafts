@@ -3,15 +3,16 @@ __all__ = [
     'EvolutionTree',
 ]
 
+import numpy as np
 import qutip as qt
 
-from chencrafts.bsqubits.QEC_graph.node import StateEnsemble
+from .node import StateEnsemble
 
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from chencrafts.bsqubits.QEC_graph.node import Node
-    from chencrafts.bsqubits.QEC_graph.edge import Edge
+    from .node import Node
+    from .edge import Edge
 
 class EvolutionGraph:
     def __init__(self):
@@ -116,7 +117,7 @@ class EvolutionTree(EvolutionGraph):
     def traverse(
         self,
         steps: int,
-        initial_ensemble: StateEnsemble = None,
+        initial_ensemble: StateEnsemble | None = None,
         evolve: bool = True,
     ):
         if initial_ensemble is None:
@@ -174,3 +175,60 @@ class EvolutionTree(EvolutionGraph):
             
         return attr_by_stp
     
+    def traverse_and_approx(self) -> None:
+        """
+        breath-first traverse the graph and "approximate" 
+        - the probability of each node in the corresponding ensemble, it is the product of the probabilities
+        of the edges leading to the node. It should be first-order close to
+        the actual probability of the node, given a particular initial state.
+        For each edge, the probability is the trace of the choi matrix of the
+        process.
+        - the accumulated logical process of each node, it's the product of the
+        process matrix on each edge leading to the node's computational subspace.
+        
+        the results are stored in the nodes (traj_prob and accum_logical_process)
+        """
+        init_node = self.nodes[0]
+        current_layer = [init_node]
+        next_layer = []
+        init_node.traj_prob = np.array([1.0])
+        init_node._accum_logical_process = np.array([[qt.to_super(qt.qeye(2))]])
+        
+        while current_layer:
+            for initial_state in current_layer:
+                for edge in initial_state.out_edges:
+                    final_state = edge.final_state
+                    if final_state.terminated:
+                        continue
+                    
+                    # to get the trajectory probability, it's the trace of the
+                    # process choi matrix times the trajectory probability of
+                    # the initial state
+                    final_state.traj_prob = (
+                        edge.process_choi_trace() / 2    # dim=2
+                        @ initial_state.traj_prob.reshape(-1, 1)
+                    ).reshape(-1)
+                    
+                    # to get the accumulated logical process, it very much
+                    # looks like the matrix multiplication of the effective_logical_process matrix
+                    # but for each element, it's another layer of matrix multiplication
+                    # for each process
+                    edge_process = edge.effective_logical_process(repr = "super")
+                    accum_proc = np.ndarray(
+                        (edge_process.shape[0], 1), 
+                        dtype=object
+                    )
+                    for idx, proc in np.ndenumerate(edge_process):
+                        result_process = (
+                            proc * initial_state._accum_logical_process[idx[1], 0]
+                        )
+                        if idx[1] == 0:
+                            accum_proc[idx[0], 0] = result_process
+                        else:
+                            accum_proc[idx[0], 0] += result_process
+                    final_state._accum_logical_process = accum_proc
+                    
+                    next_layer.append(final_state)
+                    
+            current_layer = next_layer
+            next_layer = []

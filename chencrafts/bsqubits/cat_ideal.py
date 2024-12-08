@@ -92,6 +92,20 @@ def res_rotation(
 
     return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
 
+def res_Kerr_rotation(
+    res_dim: int, qubit_dim: int,
+    res_mode_idx: Literal[0, 1] = 0,
+    Kerr: float = 0.0,
+    time: float = 0.0,
+) -> qt.Qobj:
+    """K * a^\dagger a (a^\dagger a - 1)"""
+    num_op = qt.num(res_dim)
+    kerr_op = num_op * (num_op - 1)
+    res_oprt = (-1j * Kerr * time * kerr_op).expm()
+    qubit_oprt = qt.qeye(qubit_dim)
+
+    return _res_qubit_tensor(res_oprt, qubit_oprt, res_mode_idx)
+
 def res_qubit_basis(
     res_dim: int, qubit_dim: int,
     bare_label: Tuple[int, int] = (0, 0),
@@ -223,12 +237,13 @@ def parity_mapping_propagator(
     res_dim: int, qubit_dim: int,
     angle: float = np.pi,
     res_mode_idx: Literal[0, 1] = 0,
+    qubit_state: int = 1,
     superop: bool = False,
 ) -> qt.Qobj:
     """
     The ideal parity mapping propagator.
     """
-    generator = res_number(res_dim, qubit_dim, res_mode_idx, qubit_state=1)
+    generator = res_number(res_dim, qubit_dim, res_mode_idx, qubit_state)
     unitary = (-1j * angle * generator).expm()
 
     if superop:

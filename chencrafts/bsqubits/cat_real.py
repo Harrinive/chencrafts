@@ -346,6 +346,8 @@ def qubit_gate(
     rotation_angle: float = np.pi / 2,
     gate_params: Dict[str, Any] = {},
     num_cpus: int = 8,
+    t_steps: int | None = None,
+    apply_direct_sum: bool = True,
 ):
     """
     qubit gate propagator in the lab frame.
@@ -358,7 +360,27 @@ def qubit_gate(
         The index of the resonator / qubit mode in the HilbertSpace
     res_truncated_dim: int | None
         The truncated dimension of the resonator mode. If None, the resonator mode will not be truncated unless a nan eigenvalue is found.
+    t_steps: int | None
+        The number of time steps to record the propagator. If None, will 
+        only record the final one. Only for testing purposes.
+    apply_direct_sum: bool
+        If True, will apply direct sum to the propagator and return a 
+        large operator. False is only for testing purposes.
     """
+    
+    # For a testing purpose, we allow the user to record the propagator at 
+    # multiple time steps.
+    if t_steps is not None:
+        warnings.warn(
+            "Recording the propagator at multiple time steps is only supported "
+            "for testing purposes."
+        )
+    if not apply_direct_sum:
+        warnings.warn(
+            "Not applying direct sum to the propagator is only supported "
+            "for testing purposes."
+        )
+    
     qubit = hilbertspace.subsystem_list[qubit_mode_idx]
     qubit_type = qubit.__class__.__name__
 
@@ -428,6 +450,9 @@ def qubit_gate(
             rotation_angle = rotation_angle, 
             tgt_mat_elem = tgt_mat_elem,
         )
+    
+    # only for testing purposes, record the propagator at multiple time steps
+    sim_time = pulse.duration if t_steps is None else np.linspace(0, pulse.duration, t_steps)
 
     # simulate subspace by subspace
     def calculate_prop(basis):
@@ -453,7 +478,7 @@ def qubit_gate(
 
         prop = qt.propagator(
             H = lambda t, args: H0_ss + H1_ss * pulse(t),
-            t = pulse.duration,
+            t = sim_time,
             options = options,
         )
 
@@ -475,10 +500,19 @@ def qubit_gate(
         prop_list = list(map(
             calculate_prop, evec_arr
         ))
+        
+    prop_list = np.array(prop_list, dtype=object)
+    def apply_ds_and_set_dims(prop_list_1d):
+        prop_ds = direct_sum(*prop_list_1d)
+        # may not be correct - two_mode_dressed_esys function may return a 
+        # partial baiss
+        prop_ds.dims = [[res_truncated_dim, qubit_truncated_dim], [res_truncated_dim, qubit_truncated_dim]]
+        return prop_ds
     
-    prop_ds = direct_sum(*prop_list)
-    # may not be correct - two_mode_dressed_esys function may return a 
-    # partial baiss
-    prop_ds.dims = [[res_truncated_dim, qubit_truncated_dim], [res_truncated_dim, qubit_truncated_dim]]
-
-    return prop_ds
+    if apply_direct_sum:
+        if t_steps is None:
+            return apply_ds_and_set_dims(prop_list)
+        else:
+            return [apply_ds_and_set_dims(prop) for prop in prop_list.T]
+    else:
+        return prop_list

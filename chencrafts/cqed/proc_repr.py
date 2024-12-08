@@ -6,25 +6,32 @@ __all__ = [
     'pauli_stru_const',
     'bloch_vec_by_op', 'op_by_bloch_vec',
     'to_orth_chi', 'orth_chi_to_choi', 
+    'Stinespring_to_Kraus',
 ]
 
 import numpy as np
 import qutip as qt
-from typing import List
+from typing import List, Tuple
 
 # Pauli basis, but normalized according to Hilbert-Schmidt inner product
-pauli_basis = np.array([
+pauli_basis: np.ndarray[qt.Qobj] = np.array([
     qt.qeye(2), 
     qt.sigmax(), 
     qt.sigmay(), 
     qt.sigmaz()
 ], dtype=qt.Qobj) / np.sqrt(2)
 
-pauli_col_vec_basis = np.array([qt.operator_to_vector(pauli) for pauli in pauli_basis], dtype=qt.Qobj)
-pauli_row_vec_basis = np.array([qt.operator_to_vector(pauli.trans()) for pauli in pauli_basis], dtype=qt.Qobj)
+pauli_col_vec_basis: np.ndarray[qt.Qobj] = np.array([
+    qt.operator_to_vector(pauli) for pauli in pauli_basis
+], dtype=qt.Qobj)
+pauli_row_vec_basis: np.ndarray[qt.Qobj] = np.array([
+    qt.operator_to_vector(pauli.trans()) for pauli in pauli_basis
+], dtype=qt.Qobj)
 
 # |i><j| basis
-ij_col_vec_basis = [qt.operator_to_vector(qt.basis(2, j) * qt.basis(2, i).dag()) for i in range(2) for j in range(2)]   # column stacking
+ij_col_vec_basis: np.ndarray[qt.Qobj] = np.array([
+    qt.operator_to_vector(qt.basis(2, j) * qt.basis(2, i).dag()) for i in range(2) for j in range(2)
+], dtype=qt.Qobj)   # column stacking
 
 # structure constant, determines the multiplication of Pauli operators
 # \sigma_a \sigma_b = f_{abc} \sigma_c
@@ -102,3 +109,93 @@ def orth_chi_to_choi(
         for j, pauli_j in enumerate(basis):
             choi += (pauli_i * pauli_j.dag() * chi[i, j])
     return choi
+
+
+def _construct_env_state(
+    dims: List[int] | Tuple[int, ...],
+    env_indices: List[int] | Tuple[int, ...],
+    env_state_label: List[int] | Tuple[int, ...],
+) -> qt.Qobj:
+    """
+    Construct the environment state vector, tensor product with the system
+    identity operator.
+    
+    Parameters
+    ----------
+    dims: List[int]
+        the dimensions of the composite Hilbert space
+    env_indices: List[int]
+        the indices of the environment in the composite Hilbert space
+    env_state_label: List[int]
+        the state of the environment
+    """
+    ingredients = []
+    for idx, dim in enumerate(dims):
+        if idx in env_indices:
+            ingredients.append(qt.basis(dim, env_state_label[env_indices.index(idx)]))
+        else:
+            ingredients.append(qt.qeye(dim))
+    return qt.tensor(*ingredients)
+    
+def Stinespring_to_Kraus(
+    sys_env_prop: qt.Qobj,
+    sys_indices: int | List[int],
+    env_state_label: int | List[int] | Tuple[int, ...] | None = None,
+):
+    """
+    Convert a system-environment unitary to a list of Kraus operators. It's like
+    a partial trace of the propagator.
+    
+    sys_prop(rho) = Tr_env[sys_env_prop * (rho x env_state) * sys_env_prop.dag()]
+    
+    Parameters
+    ----------
+    sys_env_prop: qt.Qobj
+        the propagator acting on the composite Hilbert space of system + environment.
+    sys_indices: int | List[int]
+        the indices of the system in the composite Hilbert space
+    env_state_label: qt.Qobj | int | List[int] | Tuple[int, ...] | None = None
+        the state of the environment. If None, the environment is set to be the 
+        ground state.
+        
+    Returns
+    -------
+    List[qt.Qobj]
+        a list of Kraus operators
+    """
+    dims: List[int] = sys_env_prop.dims[0]
+    
+    if isinstance(sys_indices, int):
+        sys_indices = [sys_indices]
+    all_indices = list(range(len(dims)))
+    env_indices = [idx for idx in all_indices if idx not in sys_indices]
+    
+    env_dims = [dims[idx] for idx in env_indices]
+    
+    # construct the state of the environment when doing partial trace
+    if env_state_label is None:
+        env_state_label = [0] * len(env_indices)
+    if isinstance(env_state_label, int):
+        env_state_label = [env_state_label]
+    env_state_vec = _construct_env_state(
+        dims = dims,
+        env_indices = env_indices,
+        env_state_label = env_state_label,
+    )
+    
+    # construct an orthonormal basis for the environment
+    env_basis = []
+    for state_label in np.ndindex(tuple(env_dims)):
+        env_basis.append(_construct_env_state(
+            dims = dims,
+            env_indices = env_indices,
+            env_state_label = state_label,
+        ))
+        
+    # calculate the Kraus operators
+    kraus_ops = [
+        basis.dag() * sys_env_prop * env_state_vec 
+        for basis in env_basis
+    ]
+    
+    return kraus_ops    
