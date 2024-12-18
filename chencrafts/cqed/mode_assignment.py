@@ -63,8 +63,8 @@ def label_convert(
 
 def organize_dressed_esys(
     hilbertspace: HilbertSpace,
-    dressed_indices: np.ndarray | None = None,
-    eigensys = None,
+    dressed_indices: np.ndarray,
+    eigensys: Tuple[np.ndarray, np.ndarray],
     adjust_phase: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -81,8 +81,7 @@ def organize_dressed_esys(
     eigensys:
         The eigenenergies and eigenstates of the bare Hilbert space. Usually given by
         `ParameterSweep["evals"]` and `ParameterSweep["evecs"]`. eigensys and 
-        dressed_indices should be given together. Can also be a string "stored" indicating
-        that the eigensys is stored inside the hilbertspace object.
+        dressed_indices should be given together. 
     adjust_phase:
         If True, the phase of "bare element" of each eigenstate will be adjusted to be 0.
 
@@ -92,19 +91,19 @@ def organize_dressed_esys(
         organized by bare index labels in multi-dimensional arrays.
     """
     if eigensys is None:
-        evals, evecs = hilbertspace.eigensys(hilbertspace.dimension)
-    elif eigensys == "stored":
-        evals, evecs = hilbertspace["evals"][0], hilbertspace["evecs"][0]
+        raise ValueError("eigensys is required, we no longer support diagonalization inside this function.")
+    # elif eigensys == "stored":
+    #     evals, evecs = hilbertspace["evals"][0], hilbertspace["evecs"][0]
     else:
         evals, evecs = eigensys
 
     if dressed_indices is None:
-        hilbertspace.generate_lookup(dressed_esys=(evals, evecs))
-        drs_idx_map = hilbertspace.dressed_index
-    else:
-        def drs_idx_map(bare_index_tuple):
-            flattened_bare_index = label_convert(bare_index_tuple, hilbertspace)
-            return dressed_indices[flattened_bare_index]
+        raise ValueError("dressed_indices is required, we no longer support generating dressed_indices inside this function.")
+    # if dressed_indices == "stored":
+    #     dressed_indices = hilbertspace["dressed_indices"][0]
+    def drs_idx_map(bare_index_tuple):
+        flattened_bare_index = label_convert(bare_index_tuple, hilbertspace)
+        return dressed_indices[flattened_bare_index]
         
     dim_list = hilbertspace.subsystem_dims
 
@@ -309,48 +308,53 @@ def dressed_state_component(
         The number of components to be returned. If None, all components 
         will be returned.
     """
-    if eigensys is None:
-        eigensys = hilbertspace.eigensys(hilbertspace.dimension)
-    elif eigensys == "stored":
-        eigensys = hilbertspace["evals"][0], hilbertspace["evecs"][0]
+    raise NotImplementedError(
+        "This function is deprecated and moved to "
+        "scqubits.HilbertSpace.dressed_state_components."
+    )
+    
+    # if eigensys is None:
+    #     eigensys = hilbertspace.eigensys(hilbertspace.dimension)
+    # elif eigensys == "stored":
+    #     eigensys = hilbertspace["evals"][0], hilbertspace["evecs"][0]
         
-    _, evecs = eigensys
+    # _, evecs = eigensys
 
-    try:
-        hilbertspace.generate_lookup(dressed_esys=eigensys)
-    except TypeError:
-        # TypeError: HilbertSpace.generate_lookup() got an unexpected 
-        # keyword argument 'dressed_esys'
-        # meaning that it's not in danyang branch
-        warn("Not in danyang's branch of scqubits. Generate lookup without "
-             "the eigensys if given.\n")
-        hilbertspace.generate_lookup()
+    # try:
+    #     hilbertspace.generate_lookup(dressed_esys=eigensys)
+    # except TypeError:
+    #     # TypeError: HilbertSpace.generate_lookup() got an unexpected 
+    #     # keyword argument 'dressed_esys'
+    #     # meaning that it's not in danyang branch
+    #     warn("Not in danyang's old branch of scqubits. Generate lookup without "
+    #          "the eigensys if given.\n")
+    #     hilbertspace.generate_lookup()
 
-    if isinstance(state_label, tuple | list): 
-        drs_idx = hilbertspace.dressed_index(tuple(state_label))
-        if drs_idx is None:
-            raise IndexError(f"no dressed state found for bare label {state_label}")
-    elif isinstance(state_label, int):
-        drs_idx = state_label
+    # if isinstance(state_label, tuple | list): 
+    #     drs_idx = hilbertspace.dressed_index(tuple(state_label))
+    #     if drs_idx is None:
+    #         raise IndexError(f"no dressed state found for bare label {state_label}")
+    # elif isinstance(state_label, int):
+    #     drs_idx = state_label
 
-    evec_1 = evecs[drs_idx]
-    largest_occupation_label = np.argsort(np.abs(evec_1.full()[:, 0]))[::-1]
+    # evec_1 = evecs[drs_idx]
+    # largest_occupation_label = np.argsort(np.abs(evec_1.full()[:, 0]))[::-1]
 
-    bare_label_list = []
-    prob_list = []
-    for idx in range(evec_1.shape[0]):
-        drs_label = int(largest_occupation_label[idx])
-        state_label = label_convert(drs_label, hilbertspace)
-        prob = (np.abs(evec_1.full()[:, 0])**2)[drs_label]
+    # bare_label_list = []
+    # prob_list = []
+    # for idx in range(evec_1.shape[0]):
+    #     drs_label = int(largest_occupation_label[idx])
+    #     state_label = label_convert(drs_label, hilbertspace)
+    #     prob = (np.abs(evec_1.full()[:, 0])**2)[drs_label]
 
-        bare_label_list.append(state_label)
-        prob_list.append(prob)
+    #     bare_label_list.append(state_label)
+    #     prob_list.append(prob)
 
-    if truncate is not None:
-        bare_label_list = bare_label_list[:truncate]
-        prob_list = prob_list[:truncate]
+    # if truncate is not None:
+    #     bare_label_list = bare_label_list[:truncate]
+    #     prob_list = prob_list[:truncate]
 
-    return bare_label_list, prob_list
+    # return bare_label_list, prob_list
 
 def _excite_op(
     hilbertspace: HilbertSpace,
