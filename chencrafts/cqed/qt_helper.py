@@ -17,12 +17,17 @@ __all__ = [
     'ave_fid_2_proc_fid',
     'proc_fid_2_ave_fid',
     'fid_in_dim',
-    'leakage_amount',
     
-    'qobj_sparsity',
     'Pauli_twirl',
     'Pauli_distance',
     'Pauli_twirled_dnorm',
+    
+    'leakage_amount',
+    
+    'qobj_sparsity',
+    
+    'gram_schmidt',
+    'complete_basis_set',
 ]
 
 import numpy as np
@@ -241,16 +246,19 @@ def superop_in_basis(
 
 def evecs_2_transformation(evecs: List[qt.Qobj]) -> qt.Qobj:
     """
-    Convert n eigenvectors with length m, convert them to a qobj of size m x n.
+    Convert n eigenvectors |e1>, |e2>, ... with dimension m, convert them to a 
+    qobj of size m x n, which reads as:
+        |e1><1| + |e2><2| + ... + |en><n|
     """
     length = len(evecs)
     dim = evecs[0].shape[0]
 
-    data = np.zeros((dim, length), dtype=complex)
+    transformation = np.zeros((dim, length), dtype=complex)
     for j in range(length):
-        data[:, j] = evecs[j].full().squeeze()
+        transformation[:, j] = evecs[j].full().squeeze()
 
-    return qt.Qobj(data)
+    trans_dims = [evecs[0].dims[0], [length]]
+    return qt.Qobj(transformation, dims=trans_dims)
 
 def qobj_submatrix(self: qt.Qobj, states_inds, normalize=False):
     """
@@ -539,3 +547,34 @@ def leakage_amount(U: qt.Qobj) -> float:
     """
     dim = U.shape[0]
     return 1 - np.abs((U * U.dag()).tr()) / dim
+
+# ##############################################################################
+def gram_schmidt(vectors: List[qt.Qobj]) -> List[qt.Qobj]:
+    """
+    Given a list of vectors, return their orthonormal basis using the 
+    Gram-Schmidt process.
+    """
+    orthonormal_basis = []
+    for vec in vectors:
+        for basis in orthonormal_basis:
+            vec = vec - basis.overlap(vec) * basis
+        orthonormal_basis.append(vec.unit())
+    return orthonormal_basis
+
+def complete_basis_set(basis: List[qt.Qobj]) -> List[qt.Qobj]:
+    """
+    Given a basis that does not span the whole Hilbert space, return a complete 
+    basis set that includes the original basis and spans the whole Hilbert space.
+    """
+    dims = basis[0].dims[0]
+    
+    # the Fock basis
+    Fock_basis = [qt.basis(dims, list(idx)) for idx in np.ndindex(tuple(dims))]
+    
+    # pick out the basis that has the largest overlap with the original basis
+    for original_base in basis:
+        overlaps = [np.abs(original_base.overlap(base)) for base in Fock_basis]
+        max_overlap_idx = np.argmax(overlaps)
+        Fock_basis.pop(max_overlap_idx)
+        
+    return gram_schmidt(basis + Fock_basis)

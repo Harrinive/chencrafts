@@ -341,7 +341,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
     n_bar_int: int  
     
     c_ops: List[qt.Qobj]
-    esys: Tuple[np.ndarray, np.ndarray]
+    partial_esys: Tuple[np.ndarray, np.ndarray]
     frame_hamiltonian: qt.Qobj
 
     _accepted_measurement_outcome_pool = [0, 1]
@@ -407,7 +407,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
         """
         if not self.new_recipe:
             (
-                self.static_hamiltonian, self.c_ops, self.esys,
+                self.static_hamiltonian, self.c_ops, self.partial_esys,
                 self.frame_hamiltonian
             ) = cat_real.cavity_ancilla_me_ingredients(
                 hilbertspace=self.fsweep.hilbertspace,
@@ -429,7 +429,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
         else:
             self.n_bar_int = int(np.round(np.abs(self.fsweep["disp"])**2))
             (
-                self.static_hamiltonian, self.c_ops, self.esys,
+                self.static_hamiltonian, self.c_ops, self.partial_esys,
                 self.frame_hamiltonian
             ) = cat_recipe.cavity_ancilla_me_ingredients(
                 fsweep = self.fsweep, 
@@ -442,6 +442,10 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 in_rot_frame=True,
                 res_n_ref=self.n_bar_int,
             )
+        
+        # esys
+        self.full_esys = (self.fsweep["evals"], self.fsweep["evecs"])
+        self.full_dressed_indices = self.fsweep["dressed_indices"]
 
         # change unit from GHz to rad / ns
         self.static_hamiltonian = self.static_hamiltonian * np.pi * 2
@@ -558,7 +562,8 @@ class FullCatTreeBuilder(CatTreeBuilder):
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
-            # eigensys = self.esys, # self.esys is not full esys
+            eigensys = self.full_esys,
+            dressed_indices = self.full_dressed_indices,
             rotation_angle = np.pi / 2,
             gate_params = self.fsweep,
             num_cpus = num_cpus,
@@ -575,7 +580,8 @@ class FullCatTreeBuilder(CatTreeBuilder):
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
-            # eigensys = self.esys,  # self.esys is not full esys
+            eigensys = self.full_esys,
+            dressed_indices = self.full_dressed_indices,
             rotation_angle = - np.pi / 2,
             gate_params = self.fsweep,
             num_cpus = num_cpus,
@@ -895,7 +901,8 @@ class FullCatTreeBuilder(CatTreeBuilder):
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
             self.res_dim, self.qubit_dim,
-            eigensys = self.esys,
+            eigensys = self.full_esys,
+            dressed_indices = self.full_dressed_indices,
             rotation_angle = np.pi,
             gate_params = self.fsweep,
         )

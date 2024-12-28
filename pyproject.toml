@@ -50,4 +50,4 @@ Repository = "https://github.com/Harrinive/chencrafts"
 
 [project.optional-dependencies]
 cqed = ["torch>=1.7", "multiprocess", "pymablock"]
-bsqubits = ["networkx>=2.4"]
+bsqubits = ["networkx>=2.4", "cvxpy"]

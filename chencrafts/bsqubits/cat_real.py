@@ -409,7 +409,8 @@ def qubit_gate(
         state_label=(0, 0),
         res_truncated_dim=res_truncated_dim,
         qubit_truncated_dim=qubit_truncated_dim,
-        dressed_indices=dressed_indices, eigensys=eigensys,
+        dressed_indices=dressed_indices, 
+        eigensys=eigensys,
     )
 
     evals = evals * np.pi * 2
