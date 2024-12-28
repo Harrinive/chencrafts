@@ -13,6 +13,7 @@ from typing import List, TYPE_CHECKING
 if TYPE_CHECKING:
     from .node import Node
     from .edge import Edge
+    import networkx as nx
 
 class EvolutionGraph:
     def __init__(self):

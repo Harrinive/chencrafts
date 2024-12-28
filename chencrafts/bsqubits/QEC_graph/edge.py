@@ -15,14 +15,13 @@ from typing import List, Tuple, Any, TYPE_CHECKING, Callable, Dict, Literal
 from chencrafts.cqed.qt_helper import (
     superop_evolve,
     normalization_factor,
-    proc_fid_2_ave_fid,
 )
 from . import settings
-from .node import (
+from .utils import (
     effective_logical_process, 
     target_process_for_dnorm, 
-    TerminationError,
 )
+from .node import TerminationError
 
 if TYPE_CHECKING:
     from .node import (
