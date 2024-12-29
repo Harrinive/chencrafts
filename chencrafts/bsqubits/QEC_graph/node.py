@@ -14,15 +14,16 @@ from chencrafts.cqed.qt_helper import (
     evecs_2_transformation,
     evecs_2_transformation,
 )
-from chencrafts.cqed.proc_repr import (
-    to_orth_chi, orth_chi_to_choi
-)
 from .utils import (
     effective_logical_process,
     target_process_for_dnorm,
     leakage_process,
     truncate_leakage_process,
     bound_fidelity,
+    to_choi_vec,
+    to_chi_vec,
+    to_orth_chi_vec,
+    to_super_vec,
 )
 
 from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Literal
@@ -32,14 +33,6 @@ if TYPE_CHECKING:
     from .edge import Edge
 
 MeasurementRecord = List[Tuple[int, ...]]
-
-
-to_choi_vec = np.vectorize(qt.to_choi)
-to_chi_vec = np.vectorize(qt.to_chi)
-to_orth_chi_vec = np.vectorize(to_orth_chi)
-to_super_vec = np.vectorize(qt.to_super)
-orth_chi_to_choi_vec = np.vectorize(orth_chi_to_choi)
-
 
 class TerminationError(Exception):
     """
@@ -181,7 +174,7 @@ class StateNode(NodeBase):
     # probability amplitude of |0> and |1>
     _prob_amp_01: Tuple[float, float]
 
-    # ideal states, organized in an ndarray, with dimension n*3
+    # ideal states, organized in an ndarray, with dimension n*2
     # the first dimension counts the number of correctable errors
     # the second dimension enumerates: logical state 0 and logical state 1
     _raw_ideal_logical_states: np.ndarray[qt.Qobj]

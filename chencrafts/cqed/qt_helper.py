@@ -22,7 +22,10 @@ __all__ = [
     'Pauli_distance',
     'Pauli_twirled_dnorm',
     
-    'leakage_amount',
+    'old_leakage_amount',
+    'state_leakage_amount',
+    'leakage_rate',
+    'seepage_rate',
     
     'qobj_sparsity',
     
@@ -541,12 +544,136 @@ def qobj_sparsity(oprt: qt.Qobj) -> float:
         return 0
 
 # #############################################################################
-def leakage_amount(U: qt.Qobj) -> float:
+def old_leakage_amount(U: qt.Qobj) -> float:
     """
-    Calculate the leakage of a quantum channel.
+    Calculate the leakage of a quantum channel. It seems to have no reference about
+    this definition...
     """
     dim = U.shape[0]
     return 1 - np.abs((U * U.dag()).tr()) / dim
+
+def state_leakage_amount(
+    state: qt.Qobj,
+    subspace_basis: List[qt.Qobj],
+) -> float:
+    """
+    Calculate the leakage of a state (occupation of the leakage space)
+    , according to Eq. (1) in Wood 2018.
+    
+    Parameters
+    ----------
+    state : qt.Qobj
+        the state to be leaked
+    subspace_basis : List[qt.Qobj]
+        the basis of the computational subspace. 
+        
+    Returns
+    -------
+    float
+        the leakage of the state
+    """
+    if state.isket:
+        state = qt.ket2dm(state)
+    
+    eye = qt.qeye_like(state)
+    subspace_projector = projector_w_basis(subspace_basis)
+    leakage_space_projector = eye - subspace_projector
+    
+    return (state * leakage_space_projector).tr().real
+
+def leakage_rate(
+    process: qt.Qobj,
+    init_subspace_basis: List[qt.Qobj],
+    final_subspace_basis: List[qt.Qobj] | None = None,
+    normalize: bool = True,
+) -> float:
+    """
+    Calculate the leakage rate of a process, according to Eq. (2) in Wood 2018.
+    
+    Parameters
+    ----------
+    process : qt.Qobj
+        can be an operator or a superoperator in different representations
+    init_subspace_basis : List[qt.Qobj]
+        the basis of the computational subspace before the process
+    final_subspace_basis : List[qt.Qobj] | None, optional
+        the basis of the computational subspace after the process, by 
+        default None, which means it's the same as the init_subspace_basis
+    normalize : bool, optional
+        whether to normalize the maximally mixed state. If True, the definition
+        is the same as Wood (2018). However, the result is dependent on whether
+        a irrelevant dimension is padded to the computation subspace or leakage
+        space. This padding usually happens when we truncate the Hilbert space
+        differently.
+        If False, we won't normalize the maximally mixed state, making the
+        result indepedent of such padding.
+        
+    Returns
+    -------
+    float
+        the leakage rate of the process
+    """
+    if final_subspace_basis is None:
+        final_subspace_basis = init_subspace_basis
+
+    process = qt.to_super(process)
+    init_subspace_projector = projector_w_basis(init_subspace_basis)
+    max_mixed_state = init_subspace_projector
+    if normalize:
+        max_mixed_state = max_mixed_state.unit()
+    
+    return state_leakage_amount(
+        superop_evolve(process, max_mixed_state),
+        final_subspace_basis,
+    )
+    
+def seepage_rate(
+    process: qt.Qobj,
+    init_subspace_basis: List[qt.Qobj],
+    final_subspace_basis: List[qt.Qobj] | None = None,
+    normalize: bool = True,
+) -> float:
+    """
+    Calculate the seepage rate of a process, according to Eq. (3) in Wood 2018.
+    
+    Parameters
+    ----------
+    process : qt.Qobj
+        can be an operator or a superoperator in different representations
+    init_subspace_basis : List[qt.Qobj]
+        the basis of the computational subspace before the process
+    final_subspace_basis : List[qt.Qobj] | None, optional
+        the basis of the computational subspace after the process, by 
+        default None, which means it's the same as the init_subspace_basis
+    normalize : bool, optional
+        whether to normalize the maximally mixed state. If True, the definition
+        is the same as Wood (2018). However, the result is dependent on whether
+        a irrelevant dimension is padded to the computation subspace or leakage
+        space. This padding usually happens when we truncate the Hilbert space
+        differently.
+        If False, we won't normalize the maximally mixed state, making the
+        result indepedent of such padding.
+        
+    Returns
+    -------
+    float
+        the seepage rate of the process
+    """
+    if final_subspace_basis is None:
+        final_subspace_basis = init_subspace_basis
+
+    process = qt.to_super(process)
+    init_subspace_projector = projector_w_basis(init_subspace_basis)
+    eye = qt.qeye_like(init_subspace_projector)
+    max_mixed_state = (eye - init_subspace_projector)
+    if normalize:
+        max_mixed_state = max_mixed_state.unit()
+    
+    return max_mixed_state.norm() - state_leakage_amount(
+        superop_evolve(process, max_mixed_state),
+        final_subspace_basis,
+    )
+    
 
 # ##############################################################################
 def gram_schmidt(vectors: List[qt.Qobj]) -> List[qt.Qobj]:

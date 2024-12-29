@@ -4,7 +4,7 @@ __all__ = [
 
 import numpy as np
 import qutip as qt
-from chencrafts.cqed.qt_helper import leakage_amount
+from chencrafts.cqed.qt_helper import old_leakage_amount
 from typing import List, Tuple
 
 try:
@@ -45,7 +45,7 @@ class SynthBase:
             target_U if isinstance(target_U, np.ndarray) 
             else target_U.full()
         )
-        self.leakage = leakage_amount(qt.Qobj(self.original_U))
+        self.leakage = old_leakage_amount(qt.Qobj(self.original_U))
 
     @staticmethod
     def _stack_tensor(nd_list: List) -> "torch.Tensor":

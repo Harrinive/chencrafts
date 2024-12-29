@@ -18,6 +18,14 @@ from chencrafts.cqed.proc_repr import (
 
 from typing import List, Tuple, Dict, Literal
 
+
+to_choi_vec = np.vectorize(qt.to_choi)
+to_chi_vec = np.vectorize(qt.to_chi)
+to_orth_chi_vec = np.vectorize(to_orth_chi)
+to_super_vec = np.vectorize(qt.to_super)
+orth_chi_to_choi_vec = np.vectorize(orth_chi_to_choi)
+
+
 def effective_logical_process(
     process: qt.Qobj,
     init_encoders: np.ndarray[qt.Qobj] | List[qt.Qobj],
@@ -345,7 +353,7 @@ def bound_fidelity(
     constr_proc2_fid: float | None
         The fidelity lower bound for the process_2.
     constr_proc2_seepage: float | None
-        The seepage upper bound for the process_2.
+        The (unnormalized) seepage upper bound for the process_2.
         
     Returns:
     Dict[str, float]
@@ -456,15 +464,16 @@ def bound_fidelity(
         )
         
     # 4. (Optional) the seepage rate of the process is less than a threshold
-    # For seepage rate, see Wood (2018)
-    # which is calculated by 1 - sum_(n>2, p>2) choi_2_npnp / leakage_space_dim
+    # The normalized seepage rate is calculated by 1 - sum_(n>2, p>2) choi_2_npnp / leakage_space_dim (Wood (2018))
+    # Since we do truncations to the H_2, so we use the unnormalized seepage rate
+    # seepage_rate = leakage_space_dim - sum_(n>2, p>2) choi_2_npnp
     if constr_proc2_seepage is not None:
         slice_np = [
             n_idx * dim_2 + p_idx 
             for n_idx in range(logical_dim, dim_3)
             for p_idx in range(logical_dim, dim_2)
         ]
-        seepage_rate = cp.real(1 - cp.trace(const_choi[slice_np, :][:, slice_np]) / leakage_space_dim)
+        seepage_rate = cp.real(leakage_space_dim - cp.trace(const_choi[slice_np, :][:, slice_np]))
         constaints.append(seepage_rate <= constr_proc2_seepage)
             
     # solve the problem ------------------------------------------------
