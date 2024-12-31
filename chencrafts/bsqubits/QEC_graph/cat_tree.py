@@ -338,7 +338,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
     
     # the integer part of the mean photon number
     # partially determines the frame transformation
-    n_bar_int: int  
+    n_bar_ref: int  
     
     c_ops: List[qt.Qobj]
     partial_esys: Tuple[np.ndarray, np.ndarray]
@@ -427,7 +427,10 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 in_rot_frame=True,
             )
         else:
-            self.n_bar_int = int(np.round(np.abs(self.fsweep["disp"])**2))
+            self.n_bar = np.abs(self.fsweep["disp"])**2
+            self.n_bar_ref = int(np.round(self.n_bar))  
+            # reference photon number, determining the rotating frame 
+            
             (
                 self.static_hamiltonian, self.c_ops, self.partial_esys,
                 self.frame_hamiltonian
@@ -440,7 +443,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
                 res_me_dim=self.res_me_dim,
                 qubit_me_dim=self.qubit_me_dim,
                 in_rot_frame=True,
-                res_n_ref=self.n_bar_int,
+                res_n_ref=self.n_bar_ref,
             )
         
         # esys
@@ -607,28 +610,43 @@ class FullCatTreeBuilder(CatTreeBuilder):
             angle=-np.pi/2, axis=self._gate_axis, superop=False,
         )
         
-        # resonator phase (global phase from the submat gate)
-        assert self._qubit_gate_1_time == self._qubit_gate_2_time
+        # resonator phase (global phase in the submat gate)
+        assert self._qubit_gate_1_rabi_freq == self._qubit_gate_2_rabi_freq
+        res_angle = self._average_pm_interaction * (
+            self._qubit_gate_1_time - 1 / self._qubit_gate_1_rabi_freq
+        ) / 2
         gate_res_rot_op = cat_ideal.res_rotation(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
-            angle=self._average_pm_interaction * self._qubit_gate_1_time / 2,
-        )
+            angle=res_angle,
+        ) * np.exp(1j * res_angle * self.n_bar_ref)
 
         # partial parity mapping (ideal)
         # note that the angle at submat = 0 is zero, while in the current frame 
         # submat = n_bar should have zero angle, so it should be corrected by a 
         # qubit phase gate
-        gate_pm_op = self._construct_parity_mapping_ideal(
-            angle=-self._average_pm_interaction * self._qubit_gate_1_time / 2,
-            pm_qubit_state=0,
+        gate_pm_op = self._parity_mapping_ideal_n_ref_frame(
+            angle=self._average_pm_interaction / 2 / self._qubit_gate_1_rabi_freq,
+            pm_qubit_state=1,
+        )
+        
+        # Kerr rotation during the qubit gate
+        gate_res_Kerr_op_1 = cat_ideal.res_Kerr_rotation(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            Kerr=self.fsweep["K_s"], time=self._qubit_gate_1_time,
+        )
+        gate_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
+            angle=self.fsweep["chi_prime"]/2 * self._qubit_gate_1_time,
         )
 
         self._qubit_gate_p_ideal = [
-            gate_res_rot_op * gate_pm_op * gate_p_ideal
+            gate_res_Kerr_op_1 * gate_res_Kerr_op_2
+            * gate_res_rot_op * gate_pm_op * gate_p_ideal * gate_pm_op
         ]
         self._qubit_gate_m_ideal = [
-            gate_res_rot_op * gate_pm_op * gate_m_ideal
+            gate_res_Kerr_op_1 * gate_res_Kerr_op_2
+            * gate_res_rot_op * gate_pm_op * gate_m_ideal * gate_pm_op
         ]
 
     # the qubit gate after parity mapping
@@ -675,6 +693,14 @@ class FullCatTreeBuilder(CatTreeBuilder):
         """Currently the gate time is the same for both ideal and real cases."""
         return float(self.fsweep["tau_p_eff"])
         # return float(self.fsweep["tau_p_eff"] * (1 - self.gate_2_is_ideal))
+        
+    @property
+    def _qubit_gate_1_rabi_freq(self) -> float:
+        return np.pi / 4 / self._qubit_gate_1_time
+    
+    @property
+    def _qubit_gate_2_rabi_freq(self) -> float:
+        return np.pi / 4 / self._qubit_gate_2_time
 
     # parity mapping ###################################################
     def _build_parity_mapping_process(
@@ -686,43 +712,68 @@ class FullCatTreeBuilder(CatTreeBuilder):
         # note that the angle at submat = 0 is zero, while in the current frame 
         # submat = n_bar should have zero angle, so it should be corrected by a 
         # qubit phase gate
-        parity_mapping_ideal = self._construct_parity_mapping_ideal(
-            # angle=np.pi,
-            angle=np.pi - (self._average_pm_interaction * self._qubit_gate_1_time / 2),
+        parity_mapping_ideal = self._parity_mapping_ideal_n_ref_frame(
+            angle=self._parity_mapping_angle,
+            pm_qubit_state=1,
         )
 
-        # The resonator evolves at the avarage rate of the 
-        # non-linearity.
-        res_Kerr_op = cat_ideal.res_Kerr_rotation(
+        # add resonator non-linearity, induced from Kerr and chi_prime
+        pm_res_Kerr_op_1 = cat_ideal.res_Kerr_rotation(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
-            Kerr=(self.fsweep["K_s"] + self.fsweep["chi_prime"])/2, 
-            time=self._parity_mapping_time,
+            Kerr=self.fsweep["K_s"], time=self._parity_mapping_time,
         )
-
-        self._parity_mapping_ideal = [res_Kerr_op * parity_mapping_ideal]
+        pm_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
+            angle=self.fsweep["chi_prime"]/2 * self._parity_mapping_time,
+        )
+        self._parity_mapping_ideal = [
+            pm_res_Kerr_op_1 * pm_res_Kerr_op_2 * parity_mapping_ideal
+        ]
 
     @property
     def _average_pm_interaction(self) -> float:
-        n_bar = np.abs(self.fsweep["disp"])**2  # TODO: is actually time-dependent
+        """
+        Current implementation:
+        we compute the local dispersive shift per photon at n = n_bar.
+        """
+        # dispersive shift = chi * n + chi_prime * n * (n - 1)
+        # we take the average by the local derivative at n_bar
         return float(
-            self.fsweep["chi_sa"] * n_bar
-            + n_bar * (n_bar - 1) * self.fsweep["chi_prime"]
-        ) / n_bar   # divide by n_bar to get the frequency shift per photon
+            self.fsweep["chi_sa"] 
+            + (2 * self.n_bar - 1) * self.fsweep["chi_prime"]
+        )
+        
+        # # another option:
+        # # take the dispersive shift difference between n = n_bar and n = n_bar - 0
+        # return float(
+        #     self.fsweep["chi_sa"] * n_bar
+        #     + n_bar * (n_bar - 1) * self.fsweep["chi_prime"]
+        # ) / n_bar   # divide by n_bar to get the frequency shift per photon
+
+    @property
+    def _parity_mapping_angle(self) -> float:
+        """
+        The angle has the same sign as the _average_pm_interaction,
+        the partial angle accumulated in the qubit gate is subtracted.
+        """
+        if self._average_pm_interaction >= 0:
+            full_angle = np.pi
+        else:
+            full_angle = -np.pi
+            
+        # calculate the angle of the partial parity mapping from the qubit gate
+        partial_angle = (
+            self._average_pm_interaction / 2 / self._qubit_gate_1_rabi_freq
+            + self._average_pm_interaction / 2 / self._qubit_gate_2_rabi_freq
+        )
+        return full_angle - partial_angle
 
     @property
     def _parity_mapping_time(self) -> float:
         """
         Either real or ideal, the parity mapping takes the same amount of time.
-
-        TODO: why is time = time - qubit_gate_time / 2?
         """
-        t = (
-            float(np.abs(np.pi / self._average_pm_interaction))
-            # During the first (ideal) qubit gates we get a partial 
-            # parity mapping, so we need to subtract it
-            - self._qubit_gate_1_time / 2
-        )
+        t = float(self._parity_mapping_angle / self._average_pm_interaction)
 
         if t > self.fsweep["T_W"]:
             # usually because a unreasonable parameter is set, making the chi_sa too small
@@ -731,16 +782,25 @@ class FullCatTreeBuilder(CatTreeBuilder):
 
         return t
     
-    def _construct_parity_mapping_ideal(
+    def _parity_mapping_ideal_n_ref_frame(
         self,
         angle: float,
         pm_qubit_state: int = 1,
     ) -> qt.Qobj:
         """
+        Construct the parity mapping operator with arbitrary angle:
+        exp (
+            -1j * angle 
+            * (adag * a - n_bar_ref) 
+            * |pm_qubit_state><pm_qubit_state|
+        )
+        
         In the current frame, the pm angle at subsystem with resonator
-        photon = n_bar is zero, while in the constructed propagator, the 
+        photon = n_bar_int is zero, while in the constructed propagator, the 
         angle at photon = 0 is zero.
         So we need to add a qubit rotation to correct the phase.
+        
+        The phase accumulated is put on states with qubit state = pm_qubit_state.
         """
         assert pm_qubit_state in [0, 1]
         
@@ -752,8 +812,8 @@ class FullCatTreeBuilder(CatTreeBuilder):
         )
 
         # transform to the current frame 
-        # equivalently, set the propagator submat at n_bar to be identity
-        extra_phase = - (angle * self.n_bar_int) % (2 * np.pi)
+        # equivalently, set the propagator submat at n_bar_int to be identity
+        extra_phase = - (angle * self.n_bar_ref) % (2 * np.pi)
         qubit_rot_ideal = cat_ideal.qubit_rot_propagator(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
@@ -770,6 +830,26 @@ class FullCatTreeBuilder(CatTreeBuilder):
 
         return parity_mapping_ideal * qubit_rot_ideal
     
+    def _Kerr_rotation_n_ref_frame(
+        self,
+        angle: float,
+    ) -> qt.Qobj:
+        """
+        Construct the operator:
+        exp (
+            -1j * angle 
+            * (adag * a - n_bar_ref)**2 
+        )
+        """
+        res_num_op = cat_ideal.res_number(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+        ) - self.n_bar_ref
+        return (
+            -1j * angle 
+            * (res_num_op)**2
+        ).expm()
+        
     # def parity_mapping(
     #     self,
     #     step: int | str,
@@ -896,7 +976,6 @@ class FullCatTreeBuilder(CatTreeBuilder):
     def _build_qubit_reset_process(
         self,
     ):
-        reset_gate_time = self.fsweep["tau_p_eff"] * 2
         reset_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
             self._res_mode_idx, self._qubit_mode_idx,
@@ -909,7 +988,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
         self._qubit_reset_real = self._kraus_to_super(
             [self.frame_transform(
                 reset_lab_real, 
-                total_time = reset_gate_time, 
+                total_time = self._qubit_reset_time, 
                 type = "lab2current",
             )]
         )
@@ -923,20 +1002,21 @@ class FullCatTreeBuilder(CatTreeBuilder):
         res_rot_op = cat_ideal.res_rotation(
             res_dim=self.res_dim, qubit_dim=self.qubit_dim,
             res_mode_idx=self._res_mode_idx,
-            angle=self._average_pm_interaction * reset_gate_time / 2,
+            angle=self._average_pm_interaction * self._qubit_reset_time / 2,
         )
-
-        # partial parity mapping (ideal)
-        # note that the angle at submat = 0 is zero, while in the current frame 
-        # submat = n_bar should have zero angle, so it should be corrected by a 
-        # qubit phase gate
-        gate_pm_op = self._construct_parity_mapping_ideal(
-            angle=-self._average_pm_interaction * reset_gate_time / 2,
-            pm_qubit_state=0,
+        # resonator non-linearity, induced from Kerr and chi_prime
+        gate_res_Kerr_op_1 = cat_ideal.res_Kerr_rotation(
+            res_dim=self.res_dim, qubit_dim=self.qubit_dim,
+            res_mode_idx=self._res_mode_idx,
+            Kerr=self.fsweep["K_s"], time=self._qubit_reset_time,
+        )
+        gate_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
+            angle=self.fsweep["chi_prime"]/2 * self._qubit_reset_time,
         )
         # no need to transform to the current frame
         self._qubit_reset_ideal = [
-            res_rot_op * gate_pm_op * reset_ideal
+            gate_res_Kerr_op_1 * gate_res_Kerr_op_2 * res_rot_op 
+            * reset_ideal
         ]
 
     def _qubit_reset_map_real(

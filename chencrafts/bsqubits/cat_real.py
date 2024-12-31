@@ -9,7 +9,10 @@ from scqubits.core.namedslots_array import NamedSlotsNdarray
 
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
 from chencrafts.cqed.qt_helper import oprt_in_basis, direct_sum
-from chencrafts.cqed.pulses import DRAGGaussian, Gaussian
+from chencrafts.cqed.pulses import (
+    GeneralPulse,
+    DRAGGaussian, Gaussian
+)
 from chencrafts.settings import QUTIP_VERSION
 
 from typing import Dict, List, Tuple, Callable, Any, Literal
@@ -425,6 +428,8 @@ def qubit_gate(
     
     # "normalize" Hamiltonian
     H0 = H0 - evals[0, 0]
+    if np.abs(tgt_mat_elem.imag) > 1e-10:
+        raise ValueError("Target matrix element is complex. Check H1 is still hermitian.")
     H1 = H1 / (tgt_mat_elem / np.abs(tgt_mat_elem))     # remove phase factor
 
     # scale the pulse duration for different rotation angle
@@ -443,6 +448,15 @@ def qubit_gate(
             leaking_mat_elem = leaking_mat_elem,
             dynamic_drive_freq = False,
         )
+        
+        # # square pulse
+        # pulse = GeneralPulse(
+        #     base_angular_freq = bare_angular_freq,
+        #     duration = duration,
+        #     rotation_angle = rotation_angle, 
+        #     tgt_mat_elem = tgt_mat_elem,
+        #     with_freq_shift = False,
+        # )
     elif qubit_type == "Fluxonium":
         pulse = Gaussian(
             base_angular_freq = bare_angular_freq,
