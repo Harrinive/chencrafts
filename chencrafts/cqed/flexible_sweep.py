@@ -19,12 +19,6 @@ from warnings import warn
 from typing import Dict, List, Tuple, Callable, Any, Literal, Optional, overload
 
 class FlexibleSweep():   
-    """
-    FlexibleSweep is a wrapper of scq.ParameterSweep. 
-        - It allows for flexible parameter sweeping by defining fixed and swept 
-            parameters. 
-        - It will take `update_hilbertspace_by_keyword` as an input of the sweep
-    """
     def __init__(
         self,
         hilbertspace: HilbertSpace,
@@ -35,6 +29,9 @@ class FlexibleSweep():
         num_cpus: int = 1,
         subsys_update_info: Dict[str, Any] = {},
         default_update_info: List | Literal["all"] | None = "all",
+        lookup_scheme: Literal["DE", "LX", "BE"] = "DE",
+        lookup_subsys_priority: List[int] | None = None,
+        lookup_BEs_count: int | None = None,
         **kwargs,
     ):
         """
@@ -77,6 +74,16 @@ class FlexibleSweep():
             If a parameter is not included in the `subsys_update_info` dictionary, then
             the parameter's <subsys update info> is the `subsys_update_default_info`. Can 
             also be "all", which means all subsystems will be updated.
+        lookup_scheme:
+            the scheme of genenrating the dressed state labeling in lookup table.
+
+            * "DE" (Dressed Energy): traverse the eigenstates in the order of their dressed energy, and find the corresponding bare state label by overlaps (default)
+            * "LX" (Lexical ordering): traverse the bare states in lexical order_, and perform the branch analysis generalized from Dumas et al. (2024).
+            * "BE" (Bare Energy): traverse the bare states in the order of their energy before coupling and perform label assignment. This is particularly useful when the Hilbert space is too large and not all the eigenstates need to be labeled.
+        lookup_subsys_priority:
+            a permutation of the subsystem indices and bare labels. If it is provided, lexical ordering is performed on the permuted labels. A "branch" is defined as a series of eigenstates formed by putting excitations into the last subsystem in the list.
+        lookup_BEs_count:
+            the number of dressed states to be labeled, for "BE" scheme only.
         """
         # Parameters
         self.para = para
@@ -104,6 +111,11 @@ class FlexibleSweep():
             deepcopy=False,
             num_cpus=num_cpus,
             autorun=True,
+            
+            # branch analysis
+            labeling_scheme = lookup_scheme,
+            labeling_subsys_priority = lookup_subsys_priority,
+            labeling_BEs_count = lookup_BEs_count,
         )   
 
     def _check_valid_var_name(self):
@@ -320,29 +332,29 @@ def update(ps, {arg_name_str}):
         raveled_idx = np.ravel_multi_index(bare_indices, self.hilbertspace.subsystem_dims)
         return self["dressed_indices"][..., raveled_idx]
     
-    def branch_analysis(
-        self, 
-        mode: Literal["DF", "EF"] = "EF",
-        mode_priority: Optional[List[int]] = None,
-        truncate: int | None = None,
-        check_all_prev_states: bool = False,
-    ):
-        branch_indices = branch_analysis(
-            self.sweep,
-            mode = mode,
-            mode_priority = mode_priority, 
-            transpose = False,
-            truncate = truncate,
-            check_all_prev_states = check_all_prev_states,
-        )
-        self.sweep.store_data(
-            dressed_indices = branch_indices.reshape(
-                *(self.sweep.parameters.counts + (-1,))
-            )
-        )
-        (
-            self.sweep._data["lamb"],
-            self.sweep._data["chi"],
-            self.sweep._data["kerr"],
-            self.sweep._data["chi_prime"],      # only in Danyang's branch of scqubits
-        ) = self.sweep._dispersive_coefficients()
+    # def branch_analysis(
+    #     self, 
+    #     mode: Literal["DF", "EF"] = "EF",
+    #     mode_priority: Optional[List[int]] = None,
+    #     truncate: int | None = None,
+    #     check_all_prev_states: bool = False,
+    # ):
+    #     branch_indices = branch_analysis(
+    #         self.sweep,
+    #         mode = mode,
+    #         mode_priority = mode_priority, 
+    #         transpose = False,
+    #         truncate = truncate,
+    #         check_all_prev_states = check_all_prev_states,
+    #     )
+    #     self.sweep.store_data(
+    #         dressed_indices = branch_indices.reshape(
+    #             *(self.sweep.parameters.counts + (-1,))
+    #         )
+    #     )
+    #     (
+    #         self.sweep._data["lamb"],
+    #         self.sweep._data["chi"],
+    #         self.sweep._data["kerr"],
+    #         self.sweep._data["chi_prime"],      # only in Danyang's branch of scqubits
+    #     ) = self.sweep._dispersive_coefficients()
