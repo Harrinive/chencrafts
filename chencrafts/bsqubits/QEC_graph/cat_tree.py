@@ -18,7 +18,8 @@ from chencrafts.cqed import FlexibleSweep, superop_evolve
 import chencrafts.bsqubits.cat_ideal as cat_ideal
 import chencrafts.bsqubits.cat_recipe as cat_recipe
 import chencrafts.bsqubits.cat_real as cat_real
-import chencrafts.settings as settings
+import chencrafts.settings as global_settings
+import chencrafts.bsqubits.QEC_graph.settings as graph_settings
 
 
 from .node import StateNode, StateEnsemble, MeasurementRecord
@@ -777,7 +778,8 @@ class FullCatTreeBuilder(CatTreeBuilder):
 
         if t > self.fsweep["T_W"]:
             # usually because a unreasonable parameter is set, making the chi_sa too small
-            warn("The parity mapping time is longer than the waiting time. Set the time to be the waiting time.\n")
+            if graph_settings.ISSUE_WARNING:
+                warn("The parity mapping time is longer than the waiting time. Set the time to be the waiting time.\n")
             t = self.fsweep["T_W"]
 
         return t
@@ -922,8 +924,9 @@ class FullCatTreeBuilder(CatTreeBuilder):
             if len(self._measurement_outcome_pool) != len(set(self._measurement_outcome_pool)):
                 raise ValueError("The measurement outcome pool should not contain duplicate values.")
             else:
-                warn("The number of accepted measurement outcomes is not equal to"
-                    f"defined projectors, use {self._measurement_outcome_pool} instead.\n")
+                if graph_settings.ISSUE_WARNING:
+                    warn("The number of accepted measurement outcomes is not equal to"
+                        f"defined projectors, use {self._measurement_outcome_pool} instead.\n")
         else:
             self._measurement_outcome_pool = self._accepted_measurement_outcome_pool
 
@@ -975,6 +978,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
     # qubit reset ######################################################
     def _build_qubit_reset_process(
         self,
+        num_cpus: int = 8,
     ):
         reset_lab_real = cat_real.qubit_gate(
             self.fsweep.hilbertspace,
@@ -984,6 +988,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
             dressed_indices = self.full_dressed_indices,
             rotation_angle = np.pi,
             gate_params = self.fsweep,
+            num_cpus = num_cpus,
         )
         self._qubit_reset_real = self._kraus_to_super(
             [self.frame_transform(
@@ -1050,6 +1055,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
     # overall generation ###############################################
     def build_all_processes(
         self,
+        num_cpus: int = 8,
     ):
         
         builds = [
@@ -1060,8 +1066,15 @@ class FullCatTreeBuilder(CatTreeBuilder):
             self._build_qubit_reset_process,
         ]
 
-        for build in tqdm(builds, disable=settings.PROGRESSBAR_DISABLED):
-            build()
+        for build in tqdm(builds, disable=global_settings.PROGRESSBAR_DISABLED):
+            try:
+                build(num_cpus=num_cpus)
+            except TypeError as e:
+                if "num_cpus" in str(e):
+                    # unexpected keyword argument num_cpus
+                    build()
+                else:
+                    raise e
 
     def generate_tree(
         self,
@@ -1195,7 +1208,7 @@ class KerrTreeBuilder(CatTreeBuilder):
             self._build_parity_measurement_process,
         ]
 
-        for build in tqdm(builds, disable=settings.PROGRESSBAR_DISABLED):
+        for build in tqdm(builds, disable=global_settings.PROGRESSBAR_DISABLED):
             build()
 
     # idling ###########################################################

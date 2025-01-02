@@ -6,6 +6,7 @@ import scqubits as scq
 from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.param_sweep import ParameterSweep
 from scqubits.core.namedslots_array import NamedSlotsNdarray
+from scqubits.utils.cpu_switch import get_map_method
 
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
 from chencrafts.cqed.qt_helper import oprt_in_basis, direct_sum
@@ -500,17 +501,22 @@ def qubit_gate(
         return prop
     
     if num_cpus > 1:
-        try:
-            from multiprocess import Pool
-        except ImportError:
-            raise ImportError(
-                "multiprocess is a optional dependency for bsqubits module."
-                "Please install it via 'pip install multiprocess' or 'conda install multiprocess'."
-            )
-        with Pool(num_cpus) as pool:
-            prop_list = list(pool.map(
-                calculate_prop, evec_arr
-            ))
+        # try:
+        #     from multiprocess import Pool
+        # except ImportError:
+        #     raise ImportError(
+        #         "multiprocess is a optional dependency for bsqubits module."
+        #         "Please install it via 'pip install multiprocess' or 'conda install multiprocess'."
+        #     )
+        # with Pool(num_cpus) as pool:
+        #     prop_list = list(pool.map(
+        #         calculate_prop, evec_arr
+        #     ))
+        
+        # use the scqubits cpu_switch
+        map_method = get_map_method(num_cpus, cpu_per_node=1)
+        prop_list = list(map_method(calculate_prop, evec_arr))
+        
     else:
         prop_list = list(map(
             calculate_prop, evec_arr

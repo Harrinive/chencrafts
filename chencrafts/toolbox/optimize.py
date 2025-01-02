@@ -567,11 +567,14 @@ class MultiTraj():
                 fixed_para_file_name=f"{path}/fixed.csv"
             )
 
-    def sort_traj(self, select_num=1) -> "MultiTraj":
+    def sort_traj(self, select_num: int | None = None) -> "MultiTraj":
         """
         Sort the trajectories by the final target function value, from small to large,
         and return the top select_num trajectories as a new instance of MultiTraj.
         """
+        if select_num is None:
+            select_num = self.length
+
         if select_num > self.length:
             raise ValueError(f"Do not have enough data to sort. ")
 
@@ -1198,7 +1201,8 @@ class MultiOpt():
         check_func: Callable = lambda x: True,
         check_kwargs: dict = {},
         save_path: str | None = None,
-        cpu_num: int = 1,
+        node_num: int = 1,
+        cpu_per_node: int = 1,
     ) -> MultiTraj:
         """
         Run the optimization multiple times.
@@ -1225,8 +1229,11 @@ class MultiOpt():
         save_path : str, optional
             The path to save the MultiTraj object, by default None. If not None, the
             result will be saved as the optimization goes.
-        cpu_num : int, optional
-            The number of CPUs to use for the optimization, by default 1.
+        node_num : int, optional
+            The number of nodes to use for the optimization, by default 1.
+        cpu_per_node : int, optional
+            The number of CPUs per node to use for the optimization, by default 1.
+            It is used when the scqubits.settings.MULTIPROC is set to "ray".
         """
         if save_path is not None:
             save_path = os.path.normpath(save_path)
@@ -1235,7 +1242,7 @@ class MultiOpt():
         init_x_list = [self.optimize.opt_init({}) for _ in range(run_num)]
 
         # Use multiprocessing to execute the worker function in parallel
-        map_method = get_map_method(cpu_num)
+        map_method = get_map_method(node_num, cpu_per_node=cpu_per_node)
         results = map_method(self._worker, 
             [(idx, call_back, check_func, check_kwargs, save_path, init_x_list[idx]) for idx in range(run_num)])
 

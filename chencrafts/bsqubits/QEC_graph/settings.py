@@ -1,8 +1,12 @@
 __all__ = [
     'IDEAL_STATE_THRESHOLD_0',
     'IDEAL_STATE_THRESHOLD_1',
+    'ISSUE_WARNING',
+    'CVX_SOLVER',
 ]
 
+from typing import Literal
 IDEAL_STATE_THRESHOLD_0 = 1e-10
 IDEAL_STATE_THRESHOLD_1 = 2e-2
-
+ISSUE_WARNING = True
+CVX_SOLVER: Literal["MOSEK", "SCS"] = "MOSEK"

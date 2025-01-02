@@ -17,7 +17,7 @@ from chencrafts.cqed.proc_repr import (
 )
 
 from typing import List, Tuple, Dict, Literal
-
+from . import settings
 
 to_choi_vec = np.vectorize(qt.to_choi)
 to_chi_vec = np.vectorize(qt.to_chi)
@@ -484,7 +484,7 @@ def bound_fidelity(
 
     # Define and solve the problem
     problem = cp.Problem(objective, constaints)
-    result = problem.solve(solver=cp.MOSEK)
+    result = problem.solve(solver=settings.CVX_SOLVER)
 
     if problem.status != 'optimal':
         raise ValueError(f"The result is not optimal: {problem.status}")

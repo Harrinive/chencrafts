@@ -25,6 +25,7 @@ from .utils import (
     to_orth_chi_vec,
     to_super_vec,
 )
+from . import settings
 
 from typing import List, Tuple, Any, TYPE_CHECKING, Dict, Literal
 from abc import ABC, abstractmethod
@@ -260,17 +261,20 @@ class StateNode(NodeBase):
         self._prob_amp_01 = prob_amp_01 / np.sqrt(np.sum(np.abs(prob_amp_01)**2))
 
         if self.terminated:
-            warn("The probability amplitude of |0> and |1> is reset manually. "
-                 "Usually it's not allowed for a terminated node. \n")
+            if settings.ISSUE_WARNING:
+                warn("The probability amplitude of |0> and |1> is reset manually. "
+                    "Usually it's not allowed for a terminated node. \n")
             return
         elif self._raw_ideal_logical_states.shape[0] > 1:
-            warn("The probability amplitude of |0> and |1> is reset manually. "
-                 "While the state is not reset as the ideal logical states are "
-                 "not unique. \n")
+            if settings.ISSUE_WARNING:
+                warn("The probability amplitude of |0> and |1> is reset manually. "
+                    "While the state is not reset as the ideal logical states are "
+                    "not unique. \n")
             return
         elif self._raw_ideal_logical_states.shape[0] == 1:
-            warn("The probability amplitude of |0> and |1> and the state are "
-                 "reset manually. \n")
+            if settings.ISSUE_WARNING:
+                warn("The probability amplitude of |0> and |1> and the state are "
+                    "reset manually. \n")
             if self.ORTHOGONALIZE_LOGICAL_STATES:
                 logical_states = self._orthogonalize(self._raw_ideal_logical_states)
             else:
@@ -281,8 +285,9 @@ class StateNode(NodeBase):
                 + self._prob_amp_01[1] * logical_states[0, 1]
             ).unit()
         else:
-            warn("The probability amplitude of |0> and |1> is reset manually, "
-                 "but the situation is not expected. \n")
+            if settings.ISSUE_WARNING:
+                warn("The probability amplitude of |0> and |1> is reset manually, "
+                    "but the situation is not expected. \n")
             return 
 
     def join(self, **kwargs):
@@ -446,7 +451,7 @@ class StateNode(NodeBase):
     def fidelity(self) -> float:
         fid = ((self.state * self.ideal_projector).tr()).real
 
-        if not self.term_fid_warning_issued:
+        if not self.term_fid_warning_issued and settings.ISSUE_WARNING:
             # term_fid_warning_issued is to avoid infinite fidelity calculation
             # as print out self requires fidelity calculation as well
             if self.terminated and fid > 1e-10:
@@ -566,7 +571,8 @@ class StateNode(NodeBase):
             return np.zeros(4)
 
         if self._raw_ideal_logical_states.shape[0] > 1:
-            warn("The ideal logical states are not unique. Returned nan.\n")
+            if settings.ISSUE_WARNING:
+                warn("The ideal logical states are not unique. Returned nan.\n")
             return np.nan * np.ones(4)
         
         trans = evecs_2_transformation(self.ideal_logical_states[0])
@@ -990,8 +996,9 @@ class StateEnsemble:
                 raise AttributeError(f"A node {node} has not been evolved.")
 
         if not self.is_trace_1():
-            warn("The total trace is not 1. The averaged state is not "
-                 "physical. \n")
+            if settings.ISSUE_WARNING:  
+                warn("The total trace is not 1. The averaged state is not "
+                    "physical. \n")
         return sum([node.state for node in self.nodes])
 
     @property

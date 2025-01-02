@@ -184,8 +184,9 @@ class EvolutionEdge(EdgeBase):
                     # that has some small components. (For exmaple, the parity
                     # mapping with chi_prime can never be perfect, but we 
                     # still want to keep track of the chi_prime during evolution)
-                    warn("Non-negligible small components are found in the ideal "
-                         "states, for simplicity, they are ignored.\n")
+                    if settings.ISSUE_WARNING:
+                        warn("Non-negligible small components are found in the ideal "
+                             "states, for simplicity, they are ignored.\n")
                     continue
 
                 new_ideal_logical_states.append(
@@ -197,7 +198,8 @@ class EvolutionEdge(EdgeBase):
         # 2. the state is in a branch where talking about ideal state is not
         #    meaningful anymore (failures like leakage)
         if len(new_ideal_logical_states) == 0:
-            warn("Can't find ideal logical states. Use the previous ideal logical states.\n")
+            if settings.ISSUE_WARNING:
+                warn("Can't find ideal logical states. Use the previous ideal logical states.\n")
             new_ideal_logical_states = copy.deepcopy(self.init_state.ideal_logical_states)
             self.final_state.terminated = True
 
@@ -319,9 +321,9 @@ class EvolutionEdge(EdgeBase):
         The trace of the choi matrix of the effective logical processes
         """
         processes = self.effective_logical_process(repr = "choi")
-        traces = np.zeros(processes.shape)
+        traces = np.zeros(processes.shape, dtype=float)
         for idx, process in np.ndenumerate(processes):
-            traces[idx] = process.tr()
+            traces[idx] = process.tr().real
             
         return traces
     
