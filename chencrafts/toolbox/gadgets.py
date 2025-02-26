@@ -17,10 +17,12 @@ __all__ = [
     'display_expr',
     'mod_c',
     'perturbative_inverse',
+    'p_norm',
 ]
 
 import numpy as np
 import sympy as sp
+import qutip as qt
 from scipy.constants import (
     h, hbar, pi, e, 
 )
@@ -259,3 +261,29 @@ def perturbative_inverse(
         result.append(term)
     
     return result
+
+# ======================================================================
+def p_norm(
+    A: np.ndarray | np.matrix | qt.Qobj, 
+    p: float,
+):
+    """
+    Compute the Schatten p-norm of a matrix A.
+    
+    Parameters
+    ----------
+    A: np.ndarray | np.matrix | qt.Qobj
+        The matrix to be normed.
+    p: float
+        The order of the norm.
+    """
+    if isinstance(A, qt.Qobj):
+        A = A.full()
+        
+    # Compute the singular values of the matrix A
+    singular_values = np.linalg.svd(A, compute_uv=False)
+    
+    if p == np.inf:
+        return np.max(singular_values)
+    else:
+        return np.sum(singular_values ** p) ** (1 / p)

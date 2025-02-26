@@ -38,6 +38,10 @@ class CatTreeBuilder(ABC):
     gate_2_is_ideal: bool = True
     qubit_measurement_is_ideal: bool = False
     qubit_reset_is_ideal: bool = True
+    
+    # ideal_process_type
+    use_improved_gate: bool = True
+    use_improved_parity_mapping: bool = True
 
     # utils ############################################################
     @staticmethod
@@ -641,14 +645,18 @@ class FullCatTreeBuilder(CatTreeBuilder):
             angle=self.fsweep["chi_prime"]/2 * self._qubit_gate_1_time,
         )
 
-        self._qubit_gate_p_ideal = [
-            gate_res_Kerr_op_1 * gate_res_Kerr_op_2
-            * gate_res_rot_op * gate_pm_op * gate_p_ideal * gate_pm_op
-        ]
-        self._qubit_gate_m_ideal = [
-            gate_res_Kerr_op_1 * gate_res_Kerr_op_2
-            * gate_res_rot_op * gate_pm_op * gate_m_ideal * gate_pm_op
-        ]
+        if self.use_improved_gate:
+            self._qubit_gate_p_ideal = [
+                gate_res_Kerr_op_1 * gate_res_Kerr_op_2
+                * gate_res_rot_op * gate_pm_op * gate_p_ideal * gate_pm_op
+            ]
+            self._qubit_gate_m_ideal = [
+                gate_res_Kerr_op_1 * gate_res_Kerr_op_2
+                * gate_res_rot_op * gate_pm_op * gate_m_ideal * gate_pm_op
+            ]
+        else:
+            self._qubit_gate_p_ideal = [gate_p_ideal]
+            self._qubit_gate_m_ideal = [gate_m_ideal]
 
     # the qubit gate after parity mapping
     def _qubit_gate_2_map_real(
@@ -727,9 +735,18 @@ class FullCatTreeBuilder(CatTreeBuilder):
         pm_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
             angle=self.fsweep["chi_prime"]/2 * self._parity_mapping_time,
         )
-        self._parity_mapping_ideal = [
-            pm_res_Kerr_op_1 * pm_res_Kerr_op_2 * parity_mapping_ideal
-        ]
+        
+        if self.use_improved_parity_mapping:
+            self._parity_mapping_ideal = [
+                pm_res_Kerr_op_1 * pm_res_Kerr_op_2 * parity_mapping_ideal
+            ]
+        else:
+            self._parity_mapping_ideal = [
+                self._parity_mapping_ideal_n_ref_frame(
+                    angle=np.pi,
+                    pm_qubit_state=1,
+                )
+            ]
 
     @property
     def _average_pm_interaction(self) -> float:
@@ -1018,11 +1035,15 @@ class FullCatTreeBuilder(CatTreeBuilder):
         gate_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
             angle=self.fsweep["chi_prime"]/2 * self._qubit_reset_time,
         )
-        # no need to transform to the current frame
-        self._qubit_reset_ideal = [
-            gate_res_Kerr_op_1 * gate_res_Kerr_op_2 * res_rot_op 
-            * reset_ideal
-        ]
+        
+        if self.use_improved_gate:
+            # no need to transform to the current frame
+            self._qubit_reset_ideal = [
+                gate_res_Kerr_op_1 * gate_res_Kerr_op_2 * res_rot_op 
+                * reset_ideal
+            ]
+        else:
+            self._qubit_reset_ideal = [reset_ideal]
 
     def _qubit_reset_map_real(
         self,
