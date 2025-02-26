@@ -7,6 +7,7 @@ from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.param_sweep import ParameterSweep
 from scqubits.core.namedslots_array import NamedSlotsNdarray
 from scqubits.utils.cpu_switch import get_map_method
+from qutip.solver.integrator.integrator import IntegratorException
 
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
 from chencrafts.cqed.qt_helper import oprt_in_basis, direct_sum
@@ -486,18 +487,24 @@ def qubit_gate(
             pass
 
         options = dict(
-            nsteps=1000000,
-            atol=1e-10,
+            nsteps=10000000,
+            atol=1e-6,
         )
         if QUTIP_VERSION[0] < 5:
             options = qt.Options(**options)
 
-        prop = qt.propagator(
-            H = lambda t, args: H0_ss + H1_ss * pulse(t),
-            t = sim_time,
-            options = options,
-        )
-
+        try:
+            prop = qt.propagator(
+                H = lambda t, args: H0_ss + H1_ss * pulse(t),
+                t = sim_time,
+                options = options,
+            )
+        except IntegratorException as e:
+            raise IntegratorException(
+                f"Qutip solver failes due to {e}. "
+                f"Current gate time is {pulse.duration}. "
+                f"Please try to increase the number of time steps."
+            )
         return prop
     
     if num_cpus > 1:

@@ -306,7 +306,11 @@ def batched_sweep_total_decoherence(
     )
 
 def batched_sweep_pulse(
-    sweep: ParameterSweep, res_mode_idx = 0, qubit_mode_idx = 1, **kwargs
+    sweep: ParameterSweep, res_mode_idx = 0, qubit_mode_idx = 1, 
+    sigma_exists = False,
+    bound_by_nonlin = True, bound_by_freq = True,
+    min_sigma = 2.0, max_sigma = 50.0,
+    **kwargs
 ):
     """
     Should be called after calling
@@ -315,19 +319,33 @@ def batched_sweep_pulse(
     # some parameters for use
     params = sweep.parameters.meshgrid_by_name() | kwargs
 
-    # find sigma based on:
-    # 1. should be larger than (1 / non_lin) to reduce leakage
-    # 2. should be larger than (1 / freq) to reduce non-RWA error
-    # 3. should be larger than a minimum value (2) empirically
-    min_sigma_by_nonlin = np.abs(params["sigma_2_K_a"] / sweep["non_lin"])
-    min_sigma_by_freq = np.abs(params["sigma_omega"] / sweep["omega_a_GHz"] / np.pi / 2)
-    min_sigma = np.ones_like(sweep["omega_a_GHz"]) * 2.0
-    sigma = np.max([
-        min_sigma, min_sigma_by_nonlin, min_sigma_by_freq
-    ], axis=0)
-    sweep.store_data(
-        sigma = sigma,
-    )
+    if not sigma_exists:
+        # find sigma based on:
+        # 1. should be larger than (1 / non_lin) to reduce leakage
+        # 2. should be larger than (1 / freq) to reduce non-RWA error
+        # 3. should be larger than a minimum value (2) empirically
+        # 4. should be smaller than a maximum value (200) empirically
+        min_bounds = [np.ones_like(sweep["omega_a_GHz"]) * min_sigma]
+        if bound_by_nonlin:
+            min_sigma_by_nonlin = np.abs(params["sigma_2_K_a"] / sweep["non_lin"])
+            min_bounds.append(min_sigma_by_nonlin)
+        if bound_by_freq:
+            min_sigma_by_freq = np.abs(params["sigma_omega"] / sweep["omega_a_GHz"] / np.pi / 2)
+            min_bounds.append(min_sigma_by_freq)
+        sigma = np.max(min_bounds, axis=0)
+        
+        max_bounds = [
+            sigma, np.ones_like(sweep["omega_a_GHz"]) * max_sigma
+        ]
+        sigma = np.min(max_bounds, axis=0)
+        sweep.store_data(
+            sigma = sigma,
+        )
+    else:
+        sweep.store_data(
+            sigma = params["sigma"],
+        )
+
     sweep.store_data(
         tau_p = sweep["sigma"] * np.abs(params["tau_p_by_sigma"]),
         tau_p_eff = sweep["sigma"] * np.abs(params["tau_p_eff_by_sigma"])
