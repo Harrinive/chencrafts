@@ -7,8 +7,11 @@ from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.param_sweep import ParameterSweep
 from scqubits.core.namedslots_array import NamedSlotsNdarray
 from scqubits.utils.cpu_switch import get_map_method
-from qutip.solver.integrator.integrator import IntegratorException
-
+try:
+    from qutip.solver.integrator.integrator import IntegratorException
+except ImportError:
+    # it seems that the IntegratorException is not available in qutip<5
+    IntegratorException = Exception
 from chencrafts.cqed.mode_assignment import two_mode_dressed_esys
 from chencrafts.cqed.qt_helper import oprt_in_basis, direct_sum
 from chencrafts.cqed.pulses import (
