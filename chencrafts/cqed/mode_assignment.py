@@ -747,7 +747,8 @@ def visualize_branches(
             identity_wrap(
                 qt.num(subsys.truncated_dim), 
                 subsys, 
-                self.hilbertspace.subsystem_list
+                self.hilbertspace.subsystem_list,
+                op_in_eigenbasis = True
             )
             for subsys in self.hilbertspace.subsystem_list
             if subsys != primary_mode
