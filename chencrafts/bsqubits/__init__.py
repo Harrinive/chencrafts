@@ -3,6 +3,7 @@ from .error_rates import *
 from .systems import *
 from .batched_custom_sweeps import *
 from .batched_sweeps_recipe import *
+from .cost_function import *
 
 import chencrafts.bsqubits.cat_real as cat_real
 import chencrafts.bsqubits.cat_recipe as cat_recipe

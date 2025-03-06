@@ -18,7 +18,11 @@ import qutip as qt
 import copy
 import warnings
 
-from qutip.solver.integrator.integrator import IntegratorException
+try:
+    from qutip.solver.integrator.integrator import IntegratorException
+except ImportError:
+    # it seems that the IntegratorException is not available in qutip<5
+    IntegratorException = Exception
 from chencrafts.cqed.floquet import FloquetBasis
 from chencrafts.cqed.qt_helper import oprt_in_basis, qobj_submatrix
 from chencrafts.cqed.proc_repr import Stinespring_to_Kraus

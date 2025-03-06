@@ -49,7 +49,11 @@ import sympy as sp
 from chencrafts.cqed.qt_helper import oprt_in_basis, process_fidelity
 from chencrafts.cqed.floquet import FloquetBasis
 from chencrafts.toolbox.gadgets import mod_c
-from qutip.solver.integrator.integrator import IntegratorException
+try:
+    from qutip.solver.integrator.integrator import IntegratorException
+except ImportError:
+    # it seems that the IntegratorException is not available in qutip<5
+    IntegratorException = Exception
 from typing import List, Tuple, Dict
 
 # static properties ====================================================
