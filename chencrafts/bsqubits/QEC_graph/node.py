@@ -812,7 +812,7 @@ class StateNode(NodeBase):
         else:
             raise ValueError(f"The representation {repr} is not supported.")
         
-    def leakage_process(
+    def leakage_process_deprecated(
         self,
         truncate_init_space: bool = True,
         reorder_final_space: bool = True,
@@ -844,7 +844,7 @@ class StateNode(NodeBase):
             reorder_final_space = reorder_final_space,
         )
             
-    def leakage_fidelity_bound(
+    def leakage_fidelity_bound_deprecated(
         self,
         return_full_result: bool = False,
         final_space_trunc_threshold: float | None = None,
@@ -871,7 +871,7 @@ class StateNode(NodeBase):
         # get the leakage process. We must reorder the final space
         # as the truncation, constraints etc. rely on the computational
         # subspace being the first part of the final space.
-        processes = self.leakage_process(
+        processes = self.leakage_process_deprecated(
             truncate_init_space = True,
             reorder_final_space = True, 
         )
