@@ -31,6 +31,8 @@ __all__ = [
     
     'gram_schmidt',
     'complete_basis_set',
+    
+    'sparsify_qobj',
 ]
 
 import numpy as np
@@ -705,3 +707,14 @@ def complete_basis_set(basis: List[qt.Qobj]) -> List[qt.Qobj]:
         Fock_basis.pop(max_overlap_idx)
         
     return gram_schmidt(basis + Fock_basis)
+
+# misc ########################################################################
+def sparsify_qobj(qobj: qt.Qobj) -> qt.Qobj:
+    """
+    Given a Qobj, return its sparse representation.
+    """
+    return qt.Qobj(
+        csr_matrix(qobj.full()),
+        dims=qobj.dims,
+        superrep=qobj.superrep,
+    )

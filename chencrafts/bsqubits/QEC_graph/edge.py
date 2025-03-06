@@ -20,6 +20,8 @@ from . import settings
 from .utils import (
     effective_logical_process, 
     target_process_for_dnorm, 
+    _subspace_types,
+    process_block_dnorm,
 )
 from .node import TerminationError
 
@@ -327,6 +329,48 @@ class EvolutionEdge(EdgeBase):
             
         return traces
     
+    def process_block_dnorm(
+        self,
+        init_subspace: Tuple[_subspace_types, _subspace_types] | Literal["C"], 
+        final_subspace: Tuple[_subspace_types, _subspace_types] | Literal["C"],
+    ):
+        """
+        Return the diamond norm of P_final * self.real_map * P_init, 
+        where P_init and P_final are projector maps determined by the initial 
+        and final subspaces.
+        
+        The init_subspace (final_subspace) can be a tuple of two elements a and b,
+        denoting the subspaces of the hilbert space.
+        That defines a projector superoperator by
+        P_ab (.) = P_a (.) P_b, if a = b
+        P_ab (.) = P_a (.) P_b + h.c., if a != b
+        where P_a and P_b are projector operators to the corresponding subspaces.
+        The allowed subspace indices (a) are:
+        - int: the index of the correctable subspaces (node.ideal_logical_states[a])
+        - "L": the total correctable subspace (sum of all correctable subspaces)
+        - "p": the leakage subspace
+        
+        The init_subspace (final_subspace) can also be a single string
+        - "LD", which stands for the sum_a P_a (.) P_a
+        - "LC", which stands for the sum_{a!=b} P_a (.) P_b + h.c.
+        here a and b run over all indices of the logical subspaces.
+        """
+        init_encoders = self.init_state.ideal_encoders()
+        final_encoders = self.final_state.ideal_encoders()
+        
+        if isinstance(self.real_map, qt.Qobj):
+            map_superop = self.real_map
+        else:
+            map_superop = self.real_map(self.init_state.meas_record) 
+            
+        return process_block_dnorm(
+            process = map_superop,
+            init_subspace = init_subspace,
+            final_subspace = final_subspace,
+            init_encoders = init_encoders,
+            final_encoders = final_encoders,
+        )
+        
 
 class PropagatorEdge(EvolutionEdge):
     pass
