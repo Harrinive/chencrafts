@@ -230,7 +230,7 @@ if isinstance(QUTIP_VERSION[0], int) and QUTIP_VERSION[0] >= 5:
 
             return prop_kick_ * prop_floquet
 
-else:
-    class FloquetBasis:
-        def __init__(self, *args, **kwargs):
-            raise NotImplementedError("FloquetBasis is not supported in qutip < 5.0")
+# else:
+#     class FloquetBasis: 
+#         def __init__(self, *args, **kwargs):
+#             raise NotImplementedError("FloquetBasis is not supported in qutip < 5.0")

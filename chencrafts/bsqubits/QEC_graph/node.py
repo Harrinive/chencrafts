@@ -1307,4 +1307,3 @@ class StateEnsemble:
             node.outgoing_infid() * node.traj_prob
             for node in self.active_nodes()
         ])
-    
