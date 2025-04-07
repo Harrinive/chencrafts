@@ -214,8 +214,9 @@ def sweep_coupling_strength(
     Qr_mat_eigbasis = oprt_in_basis(Qr_oprt, evecs.T)
     
     return np.abs(
-        Qq_mat_eigbasis[*qubit_mat_elem] * Qr_mat_eigbasis[0, 1] * g
-    )
+        Qq_mat_eigbasis[qubit_mat_elem[0], qubit_mat_elem[1]] * Qr_mat_eigbasis[0, 1] * g
+        # Qq_mat_eigbasis[*qubit_mat_elem] * Qr_mat_eigbasis[0, 1] * g
+    )   # Unpack operator in subscript requires Python 3.11 or newer
 
 def batched_sweep_static(
     ps: scq.ParameterSweep,
@@ -952,7 +953,8 @@ def sweep_spurious_phase(
         for q_spec_i, q_spec_val in enumerate(q_spec_idx):
             slc[q_spec[q_spec_i]] = q_spec_val
 
-        phase_4lvl = ac_stark_shifts[*slc] * gate_time
+        phase_4lvl = ac_stark_shifts[tuple(slc)] * gate_time
+        # phase_4lvl = ac_stark_shifts[*slc] * gate_time    # Unpack operator in subscript requires Python 3.11 or newer
         ZZ_phase = (
             phase_4lvl[0, 0] - phase_4lvl[0, 1] 
             - phase_4lvl[1, 0] + phase_4lvl[1, 1]

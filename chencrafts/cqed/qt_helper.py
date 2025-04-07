@@ -79,10 +79,17 @@ def trans_by_kets(
     basis of kets.
     """
     if isinstance(kets[0], qt.Qobj):
+        dim = kets[0].dims[0]
         kets = [ket.full().ravel() for ket in kets]
+    else:
+        dim = None
     
     # stack all column vectors 
     trans = np.stack(kets, axis=-1)
+    
+    if dim is not None:
+        trans = qt.Qobj(trans, dims=[dim, [len(kets)]])
+    
     return trans
     
 def ket_in_basis(
@@ -162,19 +169,19 @@ def _oprt_in_basis(
     assert oprt.shape[0] == bra_basis[0].shape[0], "Dimension mismatch."
     assert oprt.shape[1] == ket_basis[0].shape[0], "Dimension mismatch."
     
-    if isinstance(oprt, qt.Qobj):
-        oprt = oprt.full()
+    if isinstance(oprt, np.ndarray):
+        oprt = qt.Qobj(oprt)
     
     # convert bra_list and ket list to transformation matrix
     bra_trans = trans_by_kets(bra_basis)
     ket_trans = trans_by_kets(ket_basis)
     
-    data = np.conj(bra_trans.T) @ oprt @ ket_trans
+    data = bra_trans.dag() * oprt * ket_trans
     
     if to_sparse:
-        data = csr_matrix(data)
-        
-    return qt.Qobj(data)
+        data = sparsify_qobj(data)
+    
+    return data
 
 def oprt_in_basis(
     oprt: np.ndarray | qt.Qobj | csr_matrix,

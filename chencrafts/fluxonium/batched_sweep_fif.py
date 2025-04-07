@@ -200,34 +200,49 @@ def batched_sweep_CR_static(
         ps.add_sweep(sweep_sym_hamiltonian, "sym_ham")
         
         for q_idx in range(num_q):
-            ps.add_sweep(sweep_1q_ham_params, f"ham_param_Q{q_idx}", q_idx = q_idx)
+            ps.add_sweep(
+                sweep_1q_ham_params, 
+                sweep_name = f"ham_param_Q{q_idx}", 
+                q_idx = q_idx, 
+                update_hilbertspace = False
+            )
 
         for q1_idx in range(num_q):
             for q2_idx in range(q1_idx + 1, num_q):
-                ps.add_sweep(sweep_2q_ham_params, f"ham_param_Q{q1_idx}_Q{q2_idx}", q1_idx = q1_idx, q2_idx = q2_idx)
+                ps.add_sweep(
+                    sweep_2q_ham_params, 
+                    f"ham_param_Q{q1_idx}_Q{q2_idx}", 
+                    q1_idx = q1_idx, 
+                    q2_idx = q2_idx,
+                    update_hilbertspace = False
+                )
             
     if "comp_drs_indices" not in ps.keys():
         ps.add_sweep(
             sweep_comp_drs_indices,
             sweep_name = 'comp_drs_indices',
             comp_labels = comp_labels,
+            update_hilbertspace = False,
         )
     if "hybridization" not in ps.keys():
         ps.add_sweep(
             sweep_hybridization,
             sweep_name = 'hybridization',
+            update_hilbertspace = False,
         )
     if "comp_bare_overlap" not in ps.keys():
         ps.add_sweep(
             sweep_comp_bare_overlap,
             sweep_name = 'comp_bare_overlap',
             comp_labels = comp_labels,
+            update_hilbertspace = False,
         )
     if "static_zzz" not in ps.keys():
         ps.add_sweep(
             sweep_static_zzz,
             sweep_name = 'static_zzz',
             comp_labels = comp_labels,
+            update_hilbertspace = False,
         )
     
     for q_idx in range(num_q):
@@ -237,6 +252,7 @@ def batched_sweep_CR_static(
             q_idx = q_idx,
             num_q = num_q,
             num_r = num_r,  
+            update_hilbertspace = False,
         )
 
     for q1_idx, q2_idx in CR_bright_map.keys():
@@ -246,6 +262,7 @@ def batched_sweep_CR_static(
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             mode = "dressed",
+            update_hilbertspace = False,
         )
         
     # find all three-qubit chains
@@ -272,6 +289,7 @@ def batched_sweep_CR_static(
                             q2_idx = q_l,
                             q3_idx = q_r,
                             mode = "dressed",
+                            update_hilbertspace = False,
                         )
                     
                     if not (
@@ -287,6 +305,7 @@ def batched_sweep_CR_static(
                             q2_idx = q_r,
                             q3_idx = q_l,
                             mode = "dressed",
+                            update_hilbertspace = False,
                         )
 
 # Gate ingredients =====================================================
@@ -625,6 +644,7 @@ def batched_sweep_CR_ingredients(
         standardize_evec_sign,
         sweep_name = "evecs",
         state_labels = comp_labels,
+        update_hilbertspace = False,
     )
     
     for q_idx in range(num_q):
@@ -635,6 +655,7 @@ def batched_sweep_CR_ingredients(
             num_q = num_q,
             num_r = num_r,
             trunc = trunc,
+            update_hilbertspace = True, # this is special, we need extract the operator from the circuit
         )
         
     for (q1_idx, q2_idx), bright_state_label in CR_bright_map.items():
@@ -647,6 +668,7 @@ def batched_sweep_CR_ingredients(
                 bright_state_label = bright_state_label,
                 num_q = num_q,
                 num_r = num_r,
+                update_hilbertspace = False,
             )
         
         ps.add_sweep(
@@ -654,12 +676,14 @@ def batched_sweep_CR_ingredients(
             sweep_name = f'drs_target_trans_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_target_freq,
             sweep_name = f'target_freq_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         
         target_freq = ps[f'target_freq_{q1_idx}_{q2_idx}']
@@ -672,6 +696,7 @@ def batched_sweep_CR_ingredients(
             sweep_name = f'drive_mat_elem_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         
         ps.add_sweep(
@@ -679,18 +704,21 @@ def batched_sweep_CR_ingredients(
             sweep_name = f'drive_amp_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_sum_drive_op,
             sweep_name = f'sum_drive_op_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_drive_freq,
             sweep_name = f'drive_freq_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )           
 
 # single qubit gate =======================================================
@@ -1429,6 +1457,7 @@ def batched_sweep_CR(
                 q2_idx = q2_idx,
                 trunc = trunc,
                 gate_time_by_sigma = 4,
+                update_hilbertspace = False,
             )
             
             grab_gate_time = np.vectorize(lambda d: d['gate_time'])
@@ -1442,6 +1471,7 @@ def batched_sweep_CR(
                 q1_idx = q1_idx,
                 q2_idx = q2_idx,
                 trunc = trunc,
+                update_hilbertspace = False,
             )
         elif not gaussian_pulse and lab_frame:
             ps.add_sweep(
@@ -1450,6 +1480,7 @@ def batched_sweep_CR(
                 q1_idx = q1_idx,
                 q2_idx = q2_idx,
                 trunc = trunc,
+                update_hilbertspace = False,
             )
             
             ps.store_data(**{
@@ -1465,6 +1496,7 @@ def batched_sweep_CR(
                 num_q = num_q,
                 trunc = trunc, 
                 ratio_threshold = RWA_ratio_threshold,
+                update_hilbertspace = False,
             )
             ps.add_sweep(
                 sweep_CR_propagator_RWA,
@@ -1472,6 +1504,7 @@ def batched_sweep_CR(
                 q1_idx = q1_idx,
                 q2_idx = q2_idx,
                 trunc = trunc,
+                update_hilbertspace = False,
             )
             ps.store_data(**{
                 f"gate_time_{q1_idx}_{q2_idx}": ps[f"CR_RWA_results_{q1_idx}_{q2_idx}"][..., 0].astype(float),
@@ -1484,6 +1517,7 @@ def batched_sweep_CR(
             sweep_name = f'CR_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_pure_CR,
@@ -1491,6 +1525,7 @@ def batched_sweep_CR(
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             num_q = num_q,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_target_unitary,
@@ -1498,6 +1533,7 @@ def batched_sweep_CR(
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             num_q = num_q,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_fidelity,
@@ -1505,12 +1541,14 @@ def batched_sweep_CR(
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             ignore_phase = ignore_phase,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_unitarity,
             f"unitarity_{q1_idx}_{q2_idx}",
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_reduced_CR,
@@ -1518,12 +1556,14 @@ def batched_sweep_CR(
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             num_q = 3,
+            update_hilbertspace = False,
         )
         ps.add_sweep(
             sweep_reduced_unitarity,
             f"reduced_unitarity_{q1_idx}_{q2_idx}",
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
         
         # synthesize a better 2-qubit gate with 4 single-qubit gates and 
@@ -1534,6 +1574,7 @@ def batched_sweep_CR(
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             num_q = num_q,
+            update_hilbertspace = False,
         )
         grab_leakage = np.vectorize(
             lambda synth: synth.leakage 
@@ -1559,6 +1600,7 @@ def batched_sweep_CR(
             sweep_name = f'synth_params_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
             
 # Cost function... =====================================================
@@ -1639,6 +1681,7 @@ def batched_sweep_incoh_infid_CR(
         Q_cap = Q_cap,
         Q_ind = Q_ind,
         T = T,
+        update_hilbertspace = True,     # need circuit object to be updated
     )
     ps.add_sweep(
         sweep_1Q_gate_time,
@@ -1660,6 +1703,7 @@ def batched_sweep_incoh_infid_CR(
             sweep_name = f'CR_incoh_infid_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
+            update_hilbertspace = False,
         )
     
     # summarize

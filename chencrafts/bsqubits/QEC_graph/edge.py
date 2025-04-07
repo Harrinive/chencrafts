@@ -331,8 +331,8 @@ class EvolutionEdge(EdgeBase):
     
     def process_block_dnorm(
         self,
-        init_subspace: Tuple[_subspace_types, _subspace_types] | Literal["C"], 
-        final_subspace: Tuple[_subspace_types, _subspace_types] | Literal["C"],
+        init_subspace: Tuple[_subspace_types, _subspace_types] | Literal["LC", "LD"], 
+        final_subspace: Tuple[_subspace_types, _subspace_types] | Literal["LC", "LD"],
     ):
         """
         Return the diamond norm of P_final * self.real_map * P_init, 

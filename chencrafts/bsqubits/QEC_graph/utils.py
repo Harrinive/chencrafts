@@ -151,7 +151,7 @@ def _constr_enc_by_subspace(
 
 def _constr_enc_superop_by_subspace(
     encoders: np.ndarray[qt.Qobj] | List[qt.Qobj],
-    subspace_type: Tuple[_subspace_types, _subspace_types] | Literal["C"], 
+    subspace_type: Tuple[_subspace_types, _subspace_types] | Literal["LC", "LD"], 
     return_type: Literal["enc", "proj", "dec"] = "enc",
     enc_from_error_space_if_possible: bool = False,
 ) -> qt.Qobj:
@@ -175,8 +175,9 @@ def _constr_enc_superop_by_subspace(
     - "LC", which stands for the sum_{a!=b} P_a (.) P_b + h.c.
     here a and b run over all indices of the logical subspaces.
     
-    If return_type is "enc", it maps the logical space (or error space, if 
-    enc_from_error_space_if_possible is True) to the physical space.
+    If return_type is "enc", it maps the logical space (or error space, 
+    the sum of all correctable subspaces, if enc_from_error_space_if_possible is True) 
+    to the physical space.
     If return_type is "proj", its dimensionality is the same as the physical space.
     If return_type is "dec", it maps the physical space to the logical space 
     (or error space, if enc_from_error_space_if_possible is True).
