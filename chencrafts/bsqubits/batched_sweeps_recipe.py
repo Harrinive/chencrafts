@@ -56,6 +56,7 @@ def sweep_organized_evecs(
         dressed_indices=sweep["dressed_indices"][idx],
         eigensys=(sweep["evals"][idx], sweep["evecs"][idx]),
         adjust_phase=True,
+        keep_resonator_first_mode=False,
     )
     
     if np.prod(evecs.shape) < res_trunc_dim * qubit_trunc_dim:
@@ -402,7 +403,7 @@ def sweep_spectral_density(
         - kappa_s_phi   (dephasing rate, unit: ns-1)
     """
     params = {
-        key: val[idx] for key, val in sweep.parameters.meshgrid_by_name().items()
+        key: val[idx] for key, val in sweep.parameters.meshgrids_by_paramname().items()
     } | kwargs
     qubit = sweep.hilbertspace.subsystem_list[qubit_mode_idx]
     
@@ -550,6 +551,7 @@ def compute_rate_by_a_m_adag(
     qubit_mode_idx = 1,
     res_trunc_dim = 5,
     qubit_trunc_dim = 2,
+    res_ref_state = 0,
     **kwargs
 ):
     """
@@ -563,6 +565,15 @@ def compute_rate_by_a_m_adag(
     
     Up to the second order of the dispersive approximation, the jump operators
     are a, adag and qubit ij.
+    
+    Parameters
+    ----------
+    res_ref_state: int
+        The reference state of the resonator.
+        The jump rate of the a operator is extracted from the level 
+        res_ref_state + 1 -> res_ref_state. And any qubit i->j transition
+        is extracted when the resonator is at res_ref_state. Any adag_a operator
+        is extracted when the resonator is at res_ref_state + 1.
     """
 
     for idx in np.ndindex(sweep.parameters.counts):
@@ -572,6 +583,7 @@ def compute_rate_by_a_m_adag(
         except KeyError:
             return
         sys_bath_inter_op = sweep["res_a_m_adag"][idx]
+        
         # set <00|op|00> to 0
         sys_bath_inter_op = (
             sys_bath_inter_op 
@@ -582,12 +594,12 @@ def compute_rate_by_a_m_adag(
         state_kwargs = dict(
             res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
             res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-            res_state_1 = 0, qubit_state_1 = 0,
-            res_state_2 = 1, qubit_state_2 = 0,
+            res_state_1 = res_ref_state, qubit_state_1 = 0,
+            res_state_2 = res_ref_state + 1, qubit_state_2 = 0,
         )
         a_mat_elem = calc_mat_elem(
             sys_bath_inter_op, **state_kwargs
-        )
+        ) / np.sqrt(res_ref_state + 1)  # extracted at high level, normalize (a op has this factor)
         a_freq_diff = calc_freq_diff(
             sweep, idx, **state_kwargs
         )
@@ -598,12 +610,12 @@ def compute_rate_by_a_m_adag(
         state_kwargs = dict(
             res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
             res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-            res_state_1 = 1, qubit_state_1 = 0,
-            res_state_2 = 0, qubit_state_2 = 0,
+            res_state_1 = res_ref_state + 1, qubit_state_1 = 0,
+            res_state_2 = res_ref_state, qubit_state_2 = 0,
         )
         adag_mat_elem = calc_mat_elem(
             sys_bath_inter_op, **state_kwargs
-        )
+        ) / np.sqrt(res_ref_state + 1)  # extracted at high level, normalize (adag op has this factor)
         adag_freq_diff = calc_freq_diff(
             sweep, idx, **state_kwargs
         )
@@ -619,12 +631,12 @@ def compute_rate_by_a_m_adag(
             state_kwargs = dict(
                 res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
                 res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-                res_state_1 = 0, qubit_state_1 = i,
-                res_state_2 = 0, qubit_state_2 = j,
+                res_state_1 = res_ref_state, qubit_state_1 = i,
+                res_state_2 = res_ref_state, qubit_state_2 = j,
             )
             q_mat_elem = calc_mat_elem(
                 sys_bath_inter_op, **state_kwargs
-            )
+            )   # don't need to normalize, |i><j| op is supposed to be the same across resonator levels
             q_freq_diff = calc_freq_diff(
                 sweep, idx, **state_kwargs
             )
@@ -640,6 +652,7 @@ def compute_rate_by_adag_a(
     qubit_mode_idx = 1,
     res_trunc_dim = 5,
     qubit_trunc_dim = 2,
+    res_ref_state = 0,
     **kwargs
 ):
     """
@@ -653,6 +666,15 @@ def compute_rate_by_adag_a(
     
     Up to the second order of the dispersive approximation, the jump operators
     are adag_a and a/adag * qubit ij.
+    
+    Parameters
+    ----------
+    res_ref_state: int
+        The reference state of the resonator.
+        The jump rate of the a operator is extracted from the level 
+        res_ref_state + 1 -> res_ref_state. And any qubit i->j transition
+        is extracted when the resonator is at res_ref_state. Any adag_a operator
+        is extracted when the resonator is at res_ref_state + 1.
     """
 
     for idx in np.ndindex(sweep.parameters.counts):
@@ -675,12 +697,12 @@ def compute_rate_by_adag_a(
         state_kwargs = dict(
             res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
             res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-            res_state_1 = 1, qubit_state_1 = 0,
-            res_state_2 = 1, qubit_state_2 = 0,
+            res_state_1 = res_ref_state + 1, qubit_state_1 = 0,
+            res_state_2 = res_ref_state + 1, qubit_state_2 = 0,
         )
         adag_a_mat_elem = calc_mat_elem(
             sys_bath_inter_op, **state_kwargs
-        )
+        ) / (res_ref_state + 1)  # extracted at high level, normalize (adag_a op has this factor)
         adag_a_freq_diff = calc_freq_diff(
             sweep, idx, **state_kwargs
         )
@@ -708,40 +730,40 @@ def compute_rate_by_adag_a(
             a_q_state_kwargs = dict(
                 res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
                 res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-                res_state_1 = 0, qubit_state_1 = i,
-                res_state_2 = 1, qubit_state_2 = j,
+                res_state_1 = res_ref_state, qubit_state_1 = i,
+                res_state_2 = res_ref_state + 1, qubit_state_2 = j,
             )
             a_q_freq_diff = calc_freq_diff(
                 sweep, idx, **a_q_state_kwargs
             )
             a_q_mat_elem = calc_mat_elem(
                 sys_bath_inter_op, **a_q_state_kwargs
-            )
+            ) / np.sqrt(res_ref_state + 1)  # extracted at high level, normalize (a op has this factor)
             a_q_freq_diffs[i, j] = a_q_freq_diff
             a_q_matelems[i, j] = a_q_mat_elem
             
             adag_q_state_kwargs = dict(
                 res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
                 res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-                res_state_1 = 1, qubit_state_1 = i,
-                res_state_2 = 0, qubit_state_2 = j,
+                res_state_1 = res_ref_state + 1, qubit_state_1 = i,
+                res_state_2 = res_ref_state, qubit_state_2 = j,
             )
             adag_q_freq_diff = calc_freq_diff(
                 sweep, idx, **adag_q_state_kwargs
             )
             adag_q_mat_elem = calc_mat_elem(
                 sys_bath_inter_op, **adag_q_state_kwargs
-            )
+            ) / np.sqrt(res_ref_state + 1)  # extracted at high level, normalize (adag op has this factor)
             adag_q_freq_diffs[i, j] = adag_q_freq_diff
             adag_q_matelems[i, j] = adag_q_mat_elem
         
-        # identity component: a / adag
+        # identity component: a / adag (add to jump_a and jump_adag)
         jump_a = spec_dens(a_q_freq_diffs[0, 0]) * np.abs(a_q_matelems[0, 0])**2
         jump_adag = spec_dens(adag_q_freq_diffs[0, 0]) * np.abs(adag_q_matelems[0, 0])**2
         sweep[f"jump_a"][idx] = sweep[f"jump_a"][idx] + np.real(jump_a)
         sweep[f"jump_adag"][idx] = sweep[f"jump_adag"][idx] + np.real(jump_adag)
         
-        # other: correlated jumps
+        # the rest: correlated jumps
         a_q_matelems = (
             a_q_matelems 
             - np.eye(qubit_trunc_dim) * a_q_matelems[0, 0]
@@ -766,6 +788,7 @@ def compute_rate_by_qubit_ops(
     res_trunc_dim = 5,
     qubit_trunc_dim = 2,
     op_name: str = "n_operator",
+    res_ref_state = 0,
     **kwargs
 ):
     """
@@ -779,6 +802,15 @@ def compute_rate_by_qubit_ops(
     
     Up to the second order of the dispersive approximation, the jump operators
     are adag_a and a/adag * qubit ij.
+    
+    Parameters
+    ----------
+    res_ref_state: int
+        The reference state of the resonator.
+        The jump rate of the a operator is extracted from the level 
+        res_ref_state + 1 -> res_ref_state. And any qubit i->j transition
+        is extracted when the resonator is at res_ref_state. Any adag_a operator
+        is extracted when the resonator is at res_ref_state + 1.
     """
 
     for idx in np.ndindex(sweep.parameters.counts):
@@ -804,12 +836,12 @@ def compute_rate_by_qubit_ops(
             state_kwargs = dict(
                 res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
                 res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-                res_state_1 = 0, qubit_state_1 = i,
-                res_state_2 = 0, qubit_state_2 = j,
+                res_state_1 = res_ref_state, qubit_state_1 = i,
+                res_state_2 = res_ref_state, qubit_state_2 = j,
             )
             q_mat_elem = calc_mat_elem(
                 sys_bath_inter_op, **state_kwargs
-            )
+            )   # don't need to normalize, |i><j| op is supposed to be the same across resonator levels
             q_freq_diff = calc_freq_diff(
                 sweep, idx, **state_kwargs
             )
@@ -840,40 +872,40 @@ def compute_rate_by_qubit_ops(
             a_q_state_kwargs = dict(
                 res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
                 res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-                res_state_1 = 0, qubit_state_1 = i,
-                res_state_2 = 1, qubit_state_2 = j,
+                res_state_1 = res_ref_state, qubit_state_1 = i,
+                res_state_2 = res_ref_state + 1, qubit_state_2 = j,
             )
             a_q_freq_diff = calc_freq_diff(
                 sweep, idx, **a_q_state_kwargs
             )
             a_q_mat_elem = calc_mat_elem(
                 sys_bath_inter_op, **a_q_state_kwargs
-            )
+            ) / np.sqrt(res_ref_state + 1)  # extracted at high level, normalize (a op has this factor)
             a_q_freq_diffs[i, j] = a_q_freq_diff
             a_q_matelems[i, j] = a_q_mat_elem
             
             adag_q_state_kwargs = dict(
                 res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
                 res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
-                res_state_1 = 1, qubit_state_1 = i,
-                res_state_2 = 0, qubit_state_2 = j,
+                res_state_1 = res_ref_state + 1, qubit_state_1 = i,
+                res_state_2 = res_ref_state, qubit_state_2 = j,
             )
             adag_q_freq_diff = calc_freq_diff(
                 sweep, idx, **adag_q_state_kwargs
             )
             adag_q_mat_elem = calc_mat_elem(
                 sys_bath_inter_op, **adag_q_state_kwargs
-            )
+            ) / np.sqrt(res_ref_state + 1)  # extracted at high level, normalize (adag op has this factor)
             adag_q_freq_diffs[i, j] = adag_q_freq_diff
             adag_q_matelems[i, j] = adag_q_mat_elem
         
-        # identity component: a / adag
+        # identity component: a / adag (add to jump_a and jump_adag)
         jump_a = spec_dens(a_q_freq_diffs[0, 0]) * np.abs(a_q_matelems[0, 0])**2
         jump_adag = spec_dens(adag_q_freq_diffs[0, 0]) * np.abs(adag_q_matelems[0, 0])**2
         sweep[f"jump_a"][idx] = sweep[f"jump_a"][idx] + np.real(jump_a)
         sweep[f"jump_adag"][idx] = sweep[f"jump_adag"][idx] + np.real(jump_adag)
         
-        # other: correlated jumps
+        # the rest: correlated jumps (add to jump_a_ij and jump_adag_ij)
         a_q_matelems = (
             a_q_matelems 
             - np.eye(qubit_trunc_dim) * a_q_matelems[0, 0]
@@ -898,6 +930,7 @@ def batched_sweep_jump_rates(
     qubit_trunc_dim = 2,
     qubit_op_names: List[str] = [],
     res_op_names: List[str] = [],
+    res_ref_state = 0,
     **kwargs
 ):
     zeros = np.zeros(
@@ -932,11 +965,13 @@ def batched_sweep_jump_rates(
         sweep,
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
         res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
+        res_ref_state = res_ref_state,
     )
     compute_rate_by_adag_a(
         sweep,
         res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
         res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
+        res_ref_state = res_ref_state,
     )
     for op_name in qubit_op_names:
         compute_rate_by_qubit_ops(
@@ -944,6 +979,7 @@ def batched_sweep_jump_rates(
             res_mode_idx = res_mode_idx, qubit_mode_idx = qubit_mode_idx,
             res_trunc_dim = res_trunc_dim, qubit_trunc_dim = qubit_trunc_dim,
             op_name = op_name,
+            res_ref_state = res_ref_state,
         )
         
     # for fitting into `cat_tree.py`, we need to store some dict values 
