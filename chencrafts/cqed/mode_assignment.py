@@ -203,6 +203,7 @@ def two_mode_dressed_esys(
     dressed_indices: np.ndarray | None = None,
     eigensys = None,
     adjust_phase: bool = True,
+    keep_resonator_first_mode: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     It will return a truncated eigenenergies and dressed states, organized by the bare
@@ -262,20 +263,23 @@ def two_mode_dressed_esys(
     truncated_evals = organized_evals[tuple(trunc_slice_1)]
     truncated_evecs = organized_evecs[tuple(trunc_slice_1)]
 
-    # order the modes
-    if res_mode_idx > qubit_mode_idx:
+    # order the modes to keep the resonator first
+    if res_mode_idx > qubit_mode_idx and keep_resonator_first_mode:
         truncated_evals = truncated_evals.T
         truncated_evecs = truncated_evecs.T
+        qubit_mode_idx, res_mode_idx = res_mode_idx, qubit_mode_idx
 
     # res mode further truncation: detect nan eigenvalues
-    futher_truncated_dim = res_truncated_dim
+    futher_truncation_slice = [slice(None), slice(None)] 
+    slice_2: List[Any] = list(state_label).copy()
     for idx in range(res_truncated_dim):
-        if np.any(np.isnan(organized_evals[idx, :])):
-            futher_truncated_dim = idx
+        slice_2[res_mode_idx] = idx
+        slice_2[qubit_mode_idx] = slice(None)
+        if np.any(np.isnan(organized_evals[tuple(slice_2)])):
+            futher_truncation_slice[res_mode_idx] = slice(0, idx)
             break
-    trunc_slice_2 = (slice(0, futher_truncated_dim), slice(None))
-    truncated_evals = truncated_evals[trunc_slice_2]
-    truncated_evecs = truncated_evecs[trunc_slice_2]
+    truncated_evals = truncated_evals[tuple(futher_truncation_slice)]
+    truncated_evecs = truncated_evecs[tuple(futher_truncation_slice)]
 
     return truncated_evals, truncated_evecs
 
