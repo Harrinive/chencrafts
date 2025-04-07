@@ -570,7 +570,7 @@ def sweep_drive_amp(
     """
     Must be saved with key f'drive_amp_{q1_idx}_{q2_idx}'.
     """
-    param_mesh = ps.parameters.meshgrid_by_name()
+    param_mesh = ps.parameters.meshgrids_by_paramname()
     
     try:
         amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
@@ -922,7 +922,7 @@ def sweep_Gaussian_params(
     # Since we specify the gate parameter using amp for a square pulse, 
     # we borrow it to the Gaussian. We first calculate what is the gate 
     # time for a square pulse and fix it.
-    param_mesh = ps.parameters.meshgrid_by_name()
+    param_mesh = ps.parameters.meshgrids_by_paramname()
     try:
         amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
         if "amp" in param_mesh.keys():

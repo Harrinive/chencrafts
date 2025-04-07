@@ -725,7 +725,7 @@ def sweep_ac_stark_shift(
     comp_labels: List[Tuple[int, ...]],
     trunc: int = 30,
 ):
-    param_mesh = ps.parameters.meshgrid_by_name()
+    param_mesh = ps.parameters.meshgrids_by_paramname()
     if "r_idx" in param_mesh.keys():
         # We are in a mode to sweep over different ways to do gates
         # only do the calculation when r_idx is the same as the current swept
@@ -1040,7 +1040,7 @@ def calc_CZ_propagator(
     # "normalize" the drive operator with one of its mat elem
     target_mat_elem = drive_op[drs_trans[0][0], drs_trans[0][1]]    
 
-    param_mesh = ps.parameters.meshgrid_by_name()
+    param_mesh = ps.parameters.meshgrids_by_paramname()
     try:
         amp = param_mesh[f"amp_{q1_idx}_{q2_idx}"][idx]
     except KeyError:

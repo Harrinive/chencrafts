@@ -642,7 +642,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
             Kerr=self.fsweep["K_s"], time=self._qubit_gate_1_time,
         )
         gate_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
-            angle=self.fsweep["chi_prime"]/2 * self._qubit_gate_1_time,
+            angle=self.fsweep["chi_prime_sa"]/2 * self._qubit_gate_1_time,
         )
 
         if self.use_improved_gate:
@@ -733,7 +733,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
             Kerr=self.fsweep["K_s"], time=self._parity_mapping_time,
         )
         pm_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
-            angle=self.fsweep["chi_prime"]/2 * self._parity_mapping_time,
+            angle=self.fsweep["chi_prime_sa"]/2 * self._parity_mapping_time,
         )
         
         if self.use_improved_parity_mapping:
@@ -758,14 +758,14 @@ class FullCatTreeBuilder(CatTreeBuilder):
         # we take the average by the local derivative at n_bar
         return float(
             self.fsweep["chi_sa"] 
-            + (2 * self.n_bar - 1) * self.fsweep["chi_prime"]
+            + (2 * self.n_bar - 1) * self.fsweep["chi_prime_sa"]
         )
         
         # # another option:
         # # take the dispersive shift difference between n = n_bar and n = n_bar - 0
         # return float(
         #     self.fsweep["chi_sa"] * n_bar
-        #     + n_bar * (n_bar - 1) * self.fsweep["chi_prime"]
+        #     + n_bar * (n_bar - 1) * self.fsweep["chi_prime_sa"]
         # ) / n_bar   # divide by n_bar to get the frequency shift per photon
 
     @property
@@ -1033,7 +1033,7 @@ class FullCatTreeBuilder(CatTreeBuilder):
             Kerr=self.fsweep["K_s"], time=self._qubit_reset_time,
         )
         gate_res_Kerr_op_2 = self._Kerr_rotation_n_ref_frame(
-            angle=self.fsweep["chi_prime"]/2 * self._qubit_reset_time,
+            angle=self.fsweep["chi_prime_sa"]/2 * self._qubit_reset_time,
         )
         
         if self.use_improved_gate:

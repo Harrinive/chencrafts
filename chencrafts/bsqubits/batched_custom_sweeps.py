@@ -54,7 +54,7 @@ def batched_sweep_general(
             - sweep["bare_evals"][res_mode_idx][..., 0]),
         chi_sa = sweep["chi"][qubit_mode_idx, res_mode_idx][..., 1] * PI2,
         K_s = sweep["kerr"][res_mode_idx, res_mode_idx] * PI2,
-        chi_prime = sweep["chi_prime"][qubit_mode_idx, res_mode_idx][..., 1] * PI2,
+        chi_prime_sa = sweep["chi_prime"][qubit_mode_idx, res_mode_idx][..., 1] * PI2,
     )
 
     # non-linearities
@@ -84,7 +84,7 @@ def batched_sweep_bare_decoherence(
     """
     # some parameters for use
     qubit_dim = sweep.hilbertspace.subsystem_dims[qubit_mode_idx]
-    params = kwargs | sweep.parameters.meshgrid_by_name() 
+    params = kwargs | sweep.parameters.meshgrids_by_paramname() 
     
     # cavity relaxation
     sweep.store_data(
@@ -189,7 +189,7 @@ def batched_sweep_readout(
     """
     # some parameters for use
     qubit = sweep.hilbertspace.subsystem_list[qubit_mode_idx]
-    params = kwargs | sweep.parameters.meshgrid_by_name()
+    params = kwargs | sweep.parameters.meshgrids_by_paramname()
 
     # some assupmtions should be made for a readout resonator
     detuning_ar = 2 * PI2   
@@ -317,7 +317,7 @@ def batched_sweep_pulse(
     batched_sweep_general,
     """
     # some parameters for use
-    params = sweep.parameters.meshgrid_by_name() | kwargs
+    params = sweep.parameters.meshgrids_by_paramname() | kwargs
 
     if not sigma_exists:
         # find sigma based on:
@@ -367,7 +367,7 @@ def batched_sweep_cat_code(
 
     # other parameters ralated to cat code's failure rate
 
-    params = kwargs | sweep.parameters.meshgrid_by_name() 
+    params = kwargs | sweep.parameters.meshgrids_by_paramname() 
 
     sweep.store_data(
         n_bar_s = sweep["purcell_factor_cat"][..., 0]
