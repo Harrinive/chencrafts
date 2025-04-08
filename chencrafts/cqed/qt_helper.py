@@ -72,7 +72,7 @@ def basis_of_projector(projector: qt.Qobj) -> List[qt.Qobj]:
 
 def trans_by_kets(
     kets: List[np.ndarray] | List[qt.Qobj] | np.ndarray,
-) -> np.ndarray:
+) -> np.ndarray | qt.Qobj:
     """
     Given a list of kets = [|k1>, |k2>, ...], 
     calculate a transformation matrix that can transform a state in the 
@@ -169,12 +169,12 @@ def _oprt_in_basis(
     assert oprt.shape[0] == bra_basis[0].shape[0], "Dimension mismatch."
     assert oprt.shape[1] == ket_basis[0].shape[0], "Dimension mismatch."
     
-    if isinstance(oprt, np.ndarray):
+    if not isinstance(oprt, qt.Qobj):
         oprt = qt.Qobj(oprt)
     
     # convert bra_list and ket list to transformation matrix
-    bra_trans = trans_by_kets(bra_basis)
-    ket_trans = trans_by_kets(ket_basis)
+    bra_trans = qt.Qobj(trans_by_kets(bra_basis))
+    ket_trans = qt.Qobj(trans_by_kets(ket_basis))
     
     data = bra_trans.dag() * oprt * ket_trans
     
