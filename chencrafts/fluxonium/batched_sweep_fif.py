@@ -720,6 +720,14 @@ def batched_sweep_CR_ingredients(
             q2_idx = q2_idx,
             update_hilbertspace = False,
         )           
+        ps.add_sweep(
+            sweep_target_unitary,
+            sweep_name = f'target_CR_{q1_idx}_{q2_idx}',
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+            num_q = num_q,
+            update_hilbertspace = False,
+        )
 
 # single qubit gate =======================================================
 def sweep_single_qubit_gate(
@@ -884,20 +892,37 @@ def CR_Gaussian_solve(
     max_rabi_amp,
     trunc: int = 30,
     return_type: Literal["pop", "U"] = "pop",
+    lab_frame: bool = True,
+    num_q: int = 2,
 ):
     drs_trans = ps[f"drs_target_trans_{q1_idx}_{q2_idx}"][idx]
+    evals = ps["evals"][idx][:trunc]
 
     # pulse parameters -------------------------------------------------
-    ham = qt.qdiags(ps["evals"][idx][:trunc], 0) * np.pi * 2
-    drive_freq = ps[f"drive_freq_{q1_idx}_{q2_idx}"][idx]
-    sum_drive_op = ps[f"sum_drive_op_{q1_idx}_{q2_idx}"][idx]
+    if lab_frame:
+        ham = qt.qdiags(ps["evals"][idx][:trunc], 0) * np.pi * 2
+        drive_freq = ps[f"drive_freq_{q1_idx}_{q2_idx}"][idx] + detuning
+        sum_drive_op = ps[f"sum_drive_op_{q1_idx}_{q2_idx}"][idx]
+    else:
+        (
+            ham, sum_drive_op, _, _, frame_omega_vec
+        ) = sweep_RWA_ops(
+            ps = ps,
+            idx = idx,
+            q1_idx = q1_idx,
+            q2_idx = q2_idx,
+            num_q = num_q,
+            trunc = trunc,
+            detuning = detuning,
+        )
+        drive_freq = 1.0    # useless
     
     # we just pick one of the bright transition that's going to be driven
     init_drs_idx, final_drs_idx = drs_trans[0][0]
 
     # construct a time-dependent hamiltonian
     pulse = Gaussian(
-        base_angular_freq = drive_freq + detuning,
+        base_angular_freq = drive_freq,
         duration = gate_time,
         sigma = gate_time / gate_time_by_sigma,
         rotation_angle = np.pi,
@@ -905,8 +930,14 @@ def CR_Gaussian_solve(
     )
     pulse.rabi_amp = max_rabi_amp    # rabi_amp ~ drive_amp * tgt_mat_elem
     
-    ham_t = lambda t, *args: ham + pulse(t) * sum_drive_op
+    t_scale = 1     # useless, just for numerical stability check
     
+    if lab_frame:
+        ham_t = lambda t, *args: ham + pulse(t) * sum_drive_op
+    else:
+        ham_t = lambda t, *args: (
+            ham + pulse.envelope_I(t*t_scale) * sum_drive_op
+        ) * t_scale
     # Time dynamical simulation ----------------------------------------
     
     if return_type == "pop":
@@ -929,14 +960,20 @@ def CR_Gaussian_solve(
         # return the propagator, for verification
         res = qt.propagator(
             H = ham_t,
-            t = gate_time,
-            options = {"nsteps": 1000000}
+            t = gate_time / t_scale,
+            options = {"nsteps": 1000000, "rtol": 1e-10, "atol": 1e-10}
         )
         
         # rotating frame
-        rot_unit = (-1j * ham * gate_time).expm()
-        rot_prop = rot_unit.dag() * res
-        
+        if lab_frame:
+            rot_unit = (-1j * ham * gate_time).expm()
+            rot_prop = rot_unit.dag() * res
+        else:
+            rot_unit = qt.qdiags(np.exp(
+                -1j * (evals * np.pi * 2 - frame_omega_vec) * gate_time
+            ), 0)
+            rot_prop = rot_unit.dag() * res
+            
         return rot_prop
 
 def sweep_Gaussian_params(
@@ -946,6 +983,8 @@ def sweep_Gaussian_params(
     q2_idx,
     gate_time_by_sigma = 4,
     trunc: int = 30,
+    lab_frame: bool = True,
+    num_q: int = 2,
 ):
     # Since we specify the gate parameter using amp for a square pulse, 
     # we borrow it to the Gaussian. We first calculate what is the gate 
@@ -970,6 +1009,8 @@ def sweep_Gaussian_params(
         rotation_angle = np.pi,
     )
     approx_gaussian_amp = temp_pulse.rabi_amp
+    if not lab_frame:
+        approx_gaussian_amp /= 2
     
     # construct optimization parameters
     fixed_param = {
@@ -992,9 +1033,11 @@ def sweep_Gaussian_params(
             gate_time = gate_time, 
             gate_time_by_sigma = gate_time_by_sigma, 
             trunc = trunc,
+            lab_frame = lab_frame,
             max_rabi_amp = params["max_rabi_amp"],
             detuning = params["detuning"],
             return_type = "pop",
+            num_q = num_q,
         )
     
     opt = Optimization(
@@ -1015,6 +1058,8 @@ def sweep_CR_propagator_Gaussian(
     idx,
     q1_idx,
     q2_idx,
+    lab_frame: bool = True,
+    num_q: int = 2,
     trunc: int = 30,
 ):
     g_param = ps[f"gaussian_params_{q1_idx}_{q2_idx}"][idx]
@@ -1025,6 +1070,8 @@ def sweep_CR_propagator_Gaussian(
         q2_idx = q2_idx, 
         return_type = "U",
         trunc = trunc,
+        lab_frame = lab_frame,
+        num_q = num_q,
         **g_param
     )
 
@@ -1037,6 +1084,7 @@ def sweep_RWA_ops(
     q2_idx,
     num_q,
     trunc: int = 4,
+    detuning: float = 0,
     ratio_threshold: float = 30,
 ):
     """
@@ -1059,8 +1107,7 @@ def sweep_RWA_ops(
     sum_drive_op = ps[f"sum_drive_op_{q1_idx}_{q2_idx}"][idx]
     drive_op_q1 = ps[f"drive_op_{q1_idx}"][idx]
     drive_op_q2 = ps[f"drive_op_{q2_idx}"][idx]
-    drive_freq = ps[f"drive_freq_{q1_idx}_{q2_idx}"][idx]
-    
+    drive_freq = ps[f"drive_freq_{q1_idx}_{q2_idx}"][idx] + detuning
     
     # use frame_omega_vec to specify the rotating frame transformation
     # for the control and target qubits, rotate at the drive frequency
@@ -1072,23 +1119,18 @@ def sweep_RWA_ops(
         bare_label = bare_label + (0,) * num_r
         raveled_bare_label = np.ravel_multi_index(bare_label, dims)
         drs_label = ps["dressed_indices"][idx][raveled_bare_label]
-        
-        if bare_label[q1_idx] == 0 and bare_label[q2_idx] == 0:
+
+        if np.all(np.array(bare_label) == 0):
             # it's a reference level
             frame_omega_vec[drs_label] = evals[drs_label]
             continue
-        
-        reference_level = list(bare_label)
-        reference_level[q1_idx] = 0
-        reference_level[q2_idx] = 0
+
+        reference_level = (0,) * (num_q + num_r)
         raveled_reference_level = np.ravel_multi_index(reference_level, dims)
         reference_drs_level = ps["dressed_indices"][idx][raveled_reference_level]
-        
+
         frame_omega_vec[drs_label] = evals[reference_drs_level] 
-        if bare_label[q1_idx] == 1:
-            frame_omega_vec[drs_label] += drive_freq
-        if bare_label[q2_idx] == 1:
-            frame_omega_vec[drs_label] += drive_freq
+        frame_omega_vec[drs_label] += drive_freq * np.sum(bare_label)
             
     frame_omega_vec = np.array(frame_omega_vec, dtype=float)
     
@@ -1278,6 +1320,80 @@ def CR_phase_correction(
 
     return unitary
 
+def CR_phase_correction_full(
+    unitary: qt.Qobj,
+    target_unitary: qt.Qobj,
+    q0_idx: int,    # control qubit
+    q1_idx: int,    # target qubit
+    num_q: int,
+):
+    """
+    The code above can't handle the dynamical ZZ phases. We now truncate the unitary
+    to 4*4 and solve the linear equation set to cancel all the phases.
+    """
+
+    assert unitary.shape == target_unitary.shape
+    assert unitary.shape[0] == 2**num_q
+
+    eye_full = qt.tensor([single_q_eye] * num_q)
+    phase_ops = [eye2_wrap(qt.projection(2, 1, 1), q_idx, num_q) for q_idx in range(num_q)]
+
+    sub_matrix_idx = []
+    zero_idx = [0] * num_q
+    for q0_state in range(2):
+        for q1_state in range(2):
+            copy_zero_idx = zero_idx.copy()
+            copy_zero_idx[q0_idx] = q0_state
+            copy_zero_idx[q1_idx] = q1_state
+            sub_matrix_idx.append(np.ravel_multi_index(copy_zero_idx, (2,) * num_q))
+            
+    sub_matrix = unitary.full()[np.ix_(sub_matrix_idx, sub_matrix_idx)]
+    target_sub_matrix = target_unitary.full()[np.ix_(sub_matrix_idx, sub_matrix_idx)]
+
+    # we use 4 degree of freedom to cancel the phases
+    # global phase (theta_0), e^(-i theta_1 |1><1|_1) before the gate, 
+    # e^(-i theta_2 |1><1|_0) and e^(-i theta_3 |1><1|_1) after the gate -> a length-4 vector theta
+    # we construct a linear equation set to solve the vector
+    matrix_solve = np.zeros((4, 4))
+    vec_solve = np.zeros(4)
+    for idx_row in range(4):
+        # for each row, we identify the largest element
+        idx_col = np.argmax(np.abs(target_sub_matrix[idx_row]))
+        idx_row_unraveled = np.unravel_index(idx_row, (2, 2))
+        idx_col_unraveled = np.unravel_index(idx_col, (2, 2))
+        
+        phase_submat = np.angle(sub_matrix[idx_row, idx_col])
+        phase_target_submat = np.angle(target_sub_matrix[idx_row, idx_col])
+
+        # consider e^(-i theta_3 |1><1|_1) * e^(-i theta_2 |1><1|_0) * submat * e^(-i theta_1 |1><1|_1) * e^(-i theta_0) = target_submat
+        # we have sub_mat_phase - theta_0 - theta_1? - theta_2? - theta_3? = target_submat_phase
+        vec_solve[idx_row] = phase_submat - phase_target_submat
+        
+        # global phase
+        matrix_solve[idx_row, 0] = 1
+        
+        # e^(-i theta_1 |1><1|_1) before the gate
+        if idx_col_unraveled[1] == 1:
+            matrix_solve[idx_row, 1] = 1
+            
+        # e^(-i theta_2 |1><1|_0) and e^(-i theta_3 |1><1|_1) after the gate
+        if idx_row_unraveled[0] == 1:
+            matrix_solve[idx_row, 2] = 1
+        if idx_row_unraveled[1] == 1:
+            matrix_solve[idx_row, 3] = 1
+            
+    # solve the linear equation set
+    theta = np.linalg.solve(matrix_solve, vec_solve)
+
+    corrected_unitary = (
+        (-1j * theta[0] * eye_full).expm()  # global phase
+        * ((-1j * theta[2] * phase_ops[q0_idx]).expm())  # e^(-i theta_2 |1><1|_0) after the gate
+        * ((-1j * theta[3] * phase_ops[q1_idx]).expm())  # e^(-i theta_3 |1><1|_1) after the gate
+        * unitary
+        * (-1j * theta[1] * phase_ops[q1_idx]).expm()  # e^(-i theta_1 |1><1|_1) before the gate
+    )
+    return corrected_unitary
+
 def sweep_pure_CR(
     ps: scq.ParameterSweep, 
     idx, 
@@ -1286,12 +1402,15 @@ def sweep_pure_CR(
     num_q,
 ):
     unitary = ps[f"CR_{q1_idx}_{q2_idx}"][idx]
+    target_unitary = ps[f"target_CR_{q1_idx}_{q2_idx}"][idx]
     if unitary is None:
         # some error occured in fbasis calculation
         return None
     
     unitary.dims = [[2] * num_q] * 2
-    unitary = CR_phase_correction(unitary, num_q)
+    unitary = CR_phase_correction_full(
+        unitary, target_unitary, q1_idx, q2_idx, num_q
+    )
     
     return unitary
 
@@ -1302,6 +1421,9 @@ def sweep_target_unitary(
     q2_idx,
     num_q,
 ):
+    """
+    Stored with "target_CR_{q1_idx}_{q2_idx}"
+    """
     bare_trans = ps[f"target_transitions_{q1_idx}_{q2_idx}"][idx]
     
     # let's contruct the target matrix element by matrix element
@@ -1456,7 +1578,9 @@ def batched_sweep_CR(
                 q1_idx = q1_idx,
                 q2_idx = q2_idx,
                 trunc = trunc,
+                num_q = num_q,
                 gate_time_by_sigma = 4,
+                lab_frame = True,
                 update_hilbertspace = False,
             )
             
@@ -1471,6 +1595,46 @@ def batched_sweep_CR(
                 q1_idx = q1_idx,
                 q2_idx = q2_idx,
                 trunc = trunc,
+                num_q = num_q,
+                lab_frame = True,
+                update_hilbertspace = False,
+            )
+        elif gaussian_pulse and not lab_frame:
+            ps.add_sweep(
+                sweep_RWA_ops,
+                sweep_name = f'RWA_ops_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                num_q = num_q,
+                trunc = trunc, 
+                ratio_threshold = RWA_ratio_threshold,
+                update_hilbertspace = False,
+            )
+            ps.add_sweep(
+                sweep_Gaussian_params,
+                sweep_name = f'gaussian_params_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                trunc = trunc,
+                num_q = num_q,
+                gate_time_by_sigma = 4,
+                lab_frame = False,
+                update_hilbertspace = False,
+            )
+            
+            grab_gate_time = np.vectorize(lambda d: d['gate_time'])
+            ps.store_data(**{
+                f"gate_time_{q1_idx}_{q2_idx}": grab_gate_time(ps[f"gaussian_params_{q1_idx}_{q2_idx}"])
+            })
+            
+            ps.add_sweep(
+                sweep_CR_propagator_Gaussian,
+                sweep_name = f'full_CR_{q1_idx}_{q2_idx}',
+                q1_idx = q1_idx,
+                q2_idx = q2_idx,
+                trunc = trunc,
+                num_q = num_q,
+                lab_frame = False,
                 update_hilbertspace = False,
             )
         elif not gaussian_pulse and lab_frame:
@@ -1487,7 +1651,7 @@ def batched_sweep_CR(
                 f"gate_time_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 0].astype(float),
                 f"full_CR_{q1_idx}_{q2_idx}": ps[f"CR_results_{q1_idx}_{q2_idx}"][..., 2],
             })
-        elif not gaussian_pulse and not lab_frame:
+        else: # not gaussian_pulse and not lab_frame
             ps.add_sweep(
                 sweep_RWA_ops,
                 sweep_name = f'RWA_ops_{q1_idx}_{q2_idx}',
@@ -1522,14 +1686,6 @@ def batched_sweep_CR(
         ps.add_sweep(
             sweep_pure_CR,
             sweep_name = f'pure_CR_{q1_idx}_{q2_idx}',
-            q1_idx = q1_idx,
-            q2_idx = q2_idx,
-            num_q = num_q,
-            update_hilbertspace = False,
-        )
-        ps.add_sweep(
-            sweep_target_unitary,
-            sweep_name = f'target_CR_{q1_idx}_{q2_idx}',
             q1_idx = q1_idx,
             q2_idx = q2_idx,
             num_q = num_q,
