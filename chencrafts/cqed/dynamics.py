@@ -106,9 +106,9 @@ def find_rotating_frame(
 def H_in_rotating_frame(
     evals, drive_op, drive_freq, 
     manual_constraints: Dict[Tuple[int, int], float] = None,
-    frame_omega_vec = None,
-    ratio_threshold = 20,
-    slow_term_threshold = 1e-6,
+    frame_omega_vec: np.ndarray | None = None,
+    ratio_threshold: float = 20,
+    slow_term_threshold: float = 1e-6,
 ) -> Tuple[qt.Qobj, qt.Qobj, np.ndarray]:
     """
     Transform the Hamiltonian and drive operator into the rotating frame.

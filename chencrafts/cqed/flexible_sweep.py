@@ -8,8 +8,7 @@ from scqubits.core.hilbert_space import HilbertSpace
 from scqubits.core.param_sweep import ParameterSweep, StateLabel
 from scqubits.core.namedslots_array import NamedSlotsNdarray, Parameters
 from scqubits.core.storage import SpectrumData
-
-from chencrafts.cqed.mode_assignment import branch_analysis
+from chencrafts.toolbox.data_processing import guess_key
 
 import numpy as np
 from numpy.typing import NDArray
@@ -260,7 +259,16 @@ def update(ps, {arg_name_str}):
             # scq.ParameterSweep usually requires multiple slicing
             para_name = key[0]
             further_slice = key[1:]
-            return self.sweep[para_name][further_slice][self.fixed_dim_slice]
+            try:
+                return self.sweep[para_name][further_slice][self.fixed_dim_slice]
+            except KeyError:
+                # try to guess the key
+                suggestions = guess_key(key, self.sweep.keys())
+                if len(suggestions) > 0:
+                    raise KeyError(f"Key {key} is not found in the sweep. "
+                                   f"Did you mean {suggestions}?")
+                else:
+                    raise KeyError(f"Key {key} is not found in the sweep.")
 
         if key in self.sweep.keys():
             arr = self.sweep[key]
@@ -281,7 +289,12 @@ def update(ps, {arg_name_str}):
             )
         
         else:
-            raise KeyError(f"Key {key} is not found in the sweep.")
+            suggestions = guess_key(key, self.sweep.keys())
+            if len(suggestions) > 0:
+                raise KeyError(f"Key {key} is not found in the sweep. "
+                               f"Did you mean {suggestions}?")
+            else:
+                raise KeyError(f"Key {key} is not found in the sweep.")
 
     def keys(self, sort: bool = True) -> List[str]:
         key_set = set(self._all_param_names())

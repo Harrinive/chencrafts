@@ -491,7 +491,7 @@ def qubit_gate(
 
         options = dict(
             nsteps=10000000,
-            atol=1e-6,
+            atol=1e-8,
         )
         if QUTIP_VERSION[0] < 5:
             options = qt.Options(**options)

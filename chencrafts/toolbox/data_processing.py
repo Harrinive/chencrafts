@@ -5,6 +5,7 @@ __all__ = [
     'scatter_to_mesh',    
     'find_envelope',
     'decay_rate',
+    'guess_key',
 ]
 
 from typing import Callable, List, Union, Dict, Tuple
@@ -354,3 +355,48 @@ def decay_rate(
 
     # return the sum of the two decay rates
     return a, b, c
+
+def guess_key(
+    key: str, 
+    available_keys: List[str], 
+    max_suggestions: int = 5, 
+    threshold: float = 0.6,
+    case_sensitive: bool = False,
+) -> List[str]:
+    """
+    Suggest possible keys that are similar to the input key.
+    
+    Parameters
+    ----------
+    key : str
+        The key that was not found
+    available_keys : List[str]
+        List of all available keys to match against
+    max_suggestions : int, optional
+        Maximum number of suggestions to return, by default 5
+    threshold : float, optional
+        Similarity threshold (0-1), higher means more similar, by default 0.6
+    case_sensitive : bool, optional
+        Whether the key is case sensitive, by default False
+        
+    Returns
+    -------
+    List[str]
+        List of possible keys that are similar to the input key
+    """
+    import difflib
+    
+    # Find similar keys using sequence matcher
+    similarities = []
+    for available_key in available_keys:
+        if case_sensitive:
+            similarity = difflib.SequenceMatcher(None, key, available_key).ratio()
+        else:
+            similarity = difflib.SequenceMatcher(None, key.lower(), available_key.lower()).ratio()
+        if similarity >= threshold:
+            similarities.append((available_key, similarity))
+    
+    # Sort by similarity (highest first) and take top matches
+    suggestions = [k for k, _ in sorted(similarities, key=lambda x: x[1], reverse=True)[:max_suggestions]]
+    
+    return suggestions
