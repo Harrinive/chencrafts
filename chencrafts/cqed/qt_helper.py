@@ -78,17 +78,28 @@ def trans_by_kets(
     calculate a transformation matrix that can transform a state in the 
     basis of kets.
     """
-    if isinstance(kets[0], qt.Qobj):
+    if isinstance(kets[0], qt.Qobj):        
         dim = kets[0].dims[0]
+        if kets[0].type == "ket":
+            new_dim = [dim, [len(kets)]] 
+        elif kets[0].type == "operator-ket":
+            new_dim = [dim, [[len(kets)], [1]]]
+            # Without the last [1], I will get the following error:
+            # NotImplementedError: Operator with both space and 
+            # superspace dimensions are not supported
+        else:
+            raise ValueError("Only ket and operator-ket are supported.")
+        
+        # turn them into ndarray for stacking purposes
         kets = [ket.full().ravel() for ket in kets]
     else:
-        dim = None
+        new_dim = None
     
     # stack all column vectors 
     trans = np.stack(kets, axis=-1)
     
-    if dim is not None:
-        trans = qt.Qobj(trans, dims=[dim, [len(kets)]])
+    if new_dim is not None:
+        trans = qt.Qobj(trans, dims=new_dim)
     
     return trans
     
