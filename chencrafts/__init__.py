@@ -54,6 +54,21 @@ scq.settings.PROGRESSBAR_DISABLED = True
 scq.settings.FUZZY_SLICING = True
 scq.settings.OVERLAP_THRESHOLD = 0.853
 
+# reload all modules
+def reload_all():
+    """Dynamically reload all chencrafts modules."""
+    import sys
+    import importlib
+    # Get all loaded chencrafts modules
+    modules = [m for m in sys.modules if m.startswith('chencrafts.')]
+    # Sort by dependency (deeper modules first)
+    modules.sort(key=lambda m: m.count('.'), reverse=True)
+    # Reload each module
+    for module_name in modules:
+        if module_name in sys.modules:
+            importlib.reload(sys.modules[module_name])
+    print(f"Reloaded {len(modules)} modules!")
+
 # public modules
 __all__ = [
     "bsq", "cqed", "prj", "sf", "tb", "fx",
