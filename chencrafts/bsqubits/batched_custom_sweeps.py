@@ -54,15 +54,30 @@ def batched_sweep_general(
             - sweep["bare_evals"][res_mode_idx][..., 0]),
         chi_sa = sweep["chi"][qubit_mode_idx, res_mode_idx][..., 1] * PI2,
         K_s = sweep["kerr"][res_mode_idx, res_mode_idx] * PI2,
-        chi_prime_sa = sweep["chi_prime"][qubit_mode_idx, res_mode_idx][..., 1] * PI2,
     )
+    
+    # in case the "resonator" has only 2 levels
+    try:
+        sweep.store_data(
+            chi_prime_sa = sweep["chi_prime"][qubit_mode_idx, res_mode_idx][..., 1] * PI2,
+        )
+    except IndexError:
+        sweep.store_data(
+            chi_prime_sa = np.zeros_like(sweep["chi_sa"]) * np.nan,
+        )
 
     # non-linearities
-    non_lin = np.min(np.abs([
-        qubit_evals[..., 2:] - qubit_evals[..., 0:1] - sweep["omega_a_GHz"][..., None],
-        qubit_evals[..., 2:] - qubit_evals[..., 1:2] - sweep["omega_a_GHz"][..., None],
-    ]), axis=(0, -1)) * PI2
-    sweep.store_data(non_lin = NamedSlotsNdarray(non_lin, sweep.param_info))
+    # in case the "qubit" has only 2 levels
+    try:
+        non_lin = np.min(np.abs([
+            qubit_evals[..., 2:] - qubit_evals[..., 0:1] - sweep["omega_a_GHz"][..., None],
+            qubit_evals[..., 2:] - qubit_evals[..., 1:2] - sweep["omega_a_GHz"][..., None],
+        ]), axis=(0, -1)) * PI2
+        sweep.store_data(non_lin = NamedSlotsNdarray(non_lin, sweep.param_info))
+    except IndexError:
+        sweep.store_data(
+            non_lin = np.ones_like(sweep["chi_sa"]) * np.nan,
+        )
 
     # convergence
     sweep.add_sweep(
