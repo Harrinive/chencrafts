@@ -6,6 +6,8 @@ __all__ = [
     'load_variable_dict',
     'dill_dump',
     'dill_load',
+    'h5_dump',
+    'h5_load',
 ]
 
 import time
@@ -14,6 +16,7 @@ import os
 import dill
 import numpy as np
 import pandas as pd
+import h5py
 
 from typing import Any, Dict, Literal
 
@@ -147,3 +150,63 @@ def dill_load(filename: str) -> Any:
 
     return obj
 
+# Save data to HDF5 file
+def h5_dump(
+    data_dict: Dict[str, Any],
+    file_name: str, 
+):
+    """
+    Dump a dictionary to a HDF5 file.
+
+    Parameters
+    ----------
+    filename : str
+        The filename of the HDF5 file.
+    data_dict : Dict[str, Any]
+    """
+    with h5py.File(file_name, 'w') as f:
+        # Create groups and datasets
+        for key, value in data_dict.items():
+            if isinstance(value, dict):
+                # Create a group for nested data
+                group = f.create_group(key)
+                for subkey, subvalue in value.items():
+                    group.create_dataset(subkey, data=subvalue)
+            else:
+                # Create a dataset for direct data
+                f.create_dataset(key, data=value)
+        
+# Load data from HDF5 file
+def h5_load(
+    file_name: str,
+) -> Dict[str, Any]:
+    """
+    Load a dictionary from a HDF5 file.
+
+    Parameters
+    ----------
+    file_name : str
+        The filename of the HDF5 file.
+
+    Returns
+    -------
+    data_dict : Dict[str, Any]
+        The dictionary loaded from the HDF5 file.
+    """
+    data_dict = {}
+    with h5py.File(file_name, 'r') as f:
+        # Helper function to read all items
+        def extract_data(name, obj):
+            if isinstance(obj, h5py.Dataset):
+                data_dict[name] = obj[()]
+            
+        # Visit all items in the file
+        f.visititems(extract_data)
+        
+        # Print file structure
+        print("File structure:")
+        def print_info(name, obj):
+            print(f"{name}, shape: {obj.shape}" if isinstance(obj, h5py.Dataset) else name)
+        f.visititems(print_info)
+    
+    return data_dict
