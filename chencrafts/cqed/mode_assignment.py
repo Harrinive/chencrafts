@@ -317,48 +317,48 @@ def dressed_state_component(
         "scqubits.HilbertSpace.dressed_state_components."
     )
     
-    # if eigensys is None:
-    #     eigensys = hilbertspace.eigensys(hilbertspace.dimension)
-    # elif eigensys == "stored":
-    #     eigensys = hilbertspace["evals"][0], hilbertspace["evecs"][0]
+    if eigensys is None:
+        eigensys = hilbertspace.eigensys(hilbertspace.dimension)
+    elif eigensys == "stored":
+        eigensys = hilbertspace["evals"][0], hilbertspace["evecs"][0]
         
-    # _, evecs = eigensys
+    _, evecs = eigensys
 
-    # try:
-    #     hilbertspace.generate_lookup(dressed_esys=eigensys)
-    # except TypeError:
-    #     # TypeError: HilbertSpace.generate_lookup() got an unexpected 
-    #     # keyword argument 'dressed_esys'
-    #     # meaning that it's not in danyang branch
-    #     warn("Not in danyang's old branch of scqubits. Generate lookup without "
-    #          "the eigensys if given.\n")
-    #     hilbertspace.generate_lookup()
+    try:
+        hilbertspace.generate_lookup(dressed_esys=eigensys)
+    except TypeError:
+        # TypeError: HilbertSpace.generate_lookup() got an unexpected 
+        # keyword argument 'dressed_esys'
+        # meaning that it's not in danyang branch
+        warn("Not in danyang's old branch of scqubits. Generate lookup without "
+             "the eigensys if given.\n")
+        hilbertspace.generate_lookup()
 
-    # if isinstance(state_label, tuple | list): 
-    #     drs_idx = hilbertspace.dressed_index(tuple(state_label))
-    #     if drs_idx is None:
-    #         raise IndexError(f"no dressed state found for bare label {state_label}")
-    # elif isinstance(state_label, int):
-    #     drs_idx = state_label
+    if isinstance(state_label, tuple | list): 
+        drs_idx = hilbertspace.dressed_index(tuple(state_label))
+        if drs_idx is None:
+            raise IndexError(f"no dressed state found for bare label {state_label}")
+    elif isinstance(state_label, int):
+        drs_idx = state_label
 
-    # evec_1 = evecs[drs_idx]
-    # largest_occupation_label = np.argsort(np.abs(evec_1.full()[:, 0]))[::-1]
+    evec_1 = evecs[drs_idx]
+    largest_occupation_label = np.argsort(np.abs(evec_1.full()[:, 0]))[::-1]
 
-    # bare_label_list = []
-    # prob_list = []
-    # for idx in range(evec_1.shape[0]):
-    #     drs_label = int(largest_occupation_label[idx])
-    #     state_label = label_convert(drs_label, hilbertspace)
-    #     prob = (np.abs(evec_1.full()[:, 0])**2)[drs_label]
+    bare_label_list = []
+    prob_list = []
+    for idx in range(evec_1.shape[0]):
+        drs_label = int(largest_occupation_label[idx])
+        state_label = label_convert(drs_label, hilbertspace)
+        prob = (np.abs(evec_1.full()[:, 0])**2)[drs_label]
 
-    #     bare_label_list.append(state_label)
-    #     prob_list.append(prob)
+        bare_label_list.append(state_label)
+        prob_list.append(prob)
 
-    # if truncate is not None:
-    #     bare_label_list = bare_label_list[:truncate]
-    #     prob_list = prob_list[:truncate]
+    if truncate is not None:
+        bare_label_list = bare_label_list[:truncate]
+        prob_list = prob_list[:truncate]
 
-    # return bare_label_list, prob_list
+    return bare_label_list, prob_list
 
 def _excite_op(
     hilbertspace: HilbertSpace,
@@ -688,6 +688,10 @@ def branch_analysis(
     
     ... Docstrings ...
     """
+    raise NotImplementedError(
+        "This function is deprecated and moved to "
+        "scqubits.HilbertSpace.generate_lookup() and scqubits.ParameterSweep()."
+    )
     dressed_indices = np.empty(shape=self._parameters.counts, dtype=object)
 
     param_indices = itertools.product(*map(range, self._parameters.counts))
@@ -712,30 +716,31 @@ def branch_analysis(
 def visualize_branches(
     self: SpectrumLookupMixin,   # hilbertspace, parametersweep
     primary_mode_idx: int,
-    y_mode: Literal["E", "N", "EM"] = "E",
+    observable: Literal["E", "N", "EM"] = "E",
     param_ndindices: Tuple[int | slice, ...] = None,
 ):
     """
-    Visualize spectrum from branch analysis. X axis will be the branch index
-    for the primary mode (the last mode in mode_priority). The y-axis will be
-    the energy / occupation number / energy modulo the energy of the primary mode.
+    Helper function for branch analysis. It computes relevant observables
+    for each eigenstates, and organize them by bare labels. Before it is called,
+    eigenstate labeling by branch analysis should be performed, either by
+    `HilbertSpace.generate_lookup(ordering='LX')` or
+    `ParameterSweep(labeling_scheme='LX')`.
+    
+    The observables computed will be the energy / occupation number / energy
+    modulo the energy of the resonator mode (we refer to it as the primary mode).
 
     Parameters
     ----------
-    branch_indices: np.ndarray
-        Array of branch indices from branch_analysis. 
     primary_mode_idx: int
-        The index of the primary mode (the mode that forms the branches).
-    y_mode: Literal["E", "N", "EM"]
-        The y-axis of the plot. 
-        "E" for energy, "N" for occupation number, "EM" for energy modulo
-        the energy of the primary mode.
+        The index of the primary mode (the mode whose eigenstates form the branches, e.g. the resonator mode).
+    observable: Literal["E", "N", "EM"]
+        The observable to be computed. 
+        "E" for eigenenergy, "N" for total occupation number other than the primary mode, "EM" for eigenenergy modulo the 0-1 energy of the primary mode.
 
     Returns
     -------
     array
-        The y values of the eigenstates organized by the branch indices.
-
+        The expectation values of the observable organized by the bare state labels.
     """
     if not self.all_params_fixed(param_ndindices):
         raise ValueError("Not all parameters are fixed.")
@@ -746,7 +751,7 @@ def visualize_branches(
 
     # necessary ingredients
     primary_mode = self.hilbertspace.subsystem_list[primary_mode_idx]
-    if y_mode == "N":
+    if observable == "N":
         N_ops = [
             identity_wrap(
                 qt.num(subsys.truncated_dim), 
@@ -758,22 +763,28 @@ def visualize_branches(
             if subsys != primary_mode
         ]
         N_op = sum(N_ops)
-    elif y_mode == "EM":
+    elif observable == "EM":
         E_mod_arr = self["bare_evals"][primary_mode_idx][param_ndindices]
         E_mod = E_mod_arr[1] - E_mod_arr[0]
 
-    # calculate y values
-    y_list = np.zeros_like(branch_indices, dtype=float)
+    # eigenenergies and eigenstates are precomputed in the HilbertSpace object
+    # as well as the ParameterSweep object
     evals = self["evals"][param_ndindices]
     evecs = self["evecs"][param_ndindices]
+
+    # calculate observable values
+    obs_list = np.zeros_like(branch_indices, dtype=float)
     for idx, drs_idx in np.ndenumerate(branch_indices):
-        if y_mode == "E":
-            y_value = evals[drs_idx]
-        elif y_mode == "N":
-            y_value = qt.expect(N_op, evecs[drs_idx])
-        elif y_mode == "EM":
-            y_value = evals[drs_idx] % E_mod
+        
+        if observable == "E":
+            obs = evals[drs_idx]
+            
+        elif observable == "N":
+            obs = qt.expect(N_op, evecs[drs_idx])
+            
+        elif observable == "EM":
+            obs = evals[drs_idx] % E_mod
 
-        y_list[idx] = y_value
+        obs_list[idx] = obs
 
-    return y_list
+    return obs_list

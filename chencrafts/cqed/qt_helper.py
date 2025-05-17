@@ -75,8 +75,8 @@ def trans_by_kets(
 ) -> np.ndarray | qt.Qobj:
     """
     Given a list of kets = [|k1>, |k2>, ...], 
-    calculate a transformation matrix that can transform a state in the 
-    basis of kets.
+    calculate a unitary operator that can perform basis transformation 
+    from the current basis to the basis of kets.
     """
     if isinstance(kets[0], qt.Qobj):        
         dim = kets[0].dims[0]

@@ -37,8 +37,8 @@ color_palettes = dict(
     blue_to_red = [
         "#e63946", "#a8dadc", "#457b9d", "#a7bb40", "#3d1645"],
     colorblind_1 = [    # from https://arxiv.org/abs/2107.02270
-        "#3f90da", "#ffa90e", "#bd1f01", "#832db6", "#94a4a2", "#a96b59", 
-        "#e76300", "#b9ac70", "#717581", "#92dadd",],
+        "#3f90da", "#ffa90e", "#bd1f01", "#832db6", "#94a4a2", 
+        "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd",],
     C2QA = [
         '#007A86', '#F9B211', '#A12731', '#78C0E0', '#4A0E4E'
     ],
